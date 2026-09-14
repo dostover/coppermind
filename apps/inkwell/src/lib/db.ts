@@ -15,6 +15,10 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, "inkwell.sqlite"));
 db.pragma("journal_mode = WAL");
+// SQLite doesn't enforce foreign keys unless told to per-connection - without
+// this, the `ON DELETE CASCADE` below on handwriting_examples is silently a
+// no-op and deleting a note would leave its examples orphaned.
+db.pragma("foreign_keys = ON");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS notes (
@@ -120,6 +124,13 @@ export const notesRepo = {
   getById(id: string): Note | undefined {
     const row = db.prepare(`SELECT * FROM notes WHERE id = ?`).get(id) as NoteRow | undefined;
     return row ? rowToNote(row) : undefined;
+  },
+
+  // Deletes the note row and (via ON DELETE CASCADE) its handwriting_examples.
+  // Does not touch the uploaded image file - callers are responsible for that,
+  // since this module doesn't otherwise deal in filesystem paths.
+  delete(id: string): void {
+    db.prepare(`DELETE FROM notes WHERE id = ?`).run(id);
   },
 
   listAll(query?: string): Note[] {
