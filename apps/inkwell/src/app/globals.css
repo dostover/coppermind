@@ -1,0 +1,165 @@
+:root {
+  --bg: #faf8f4;
+  --ink: #22201c;
+  --muted: #6b6558;
+  --accent: #7a4f2b;
+  --flag-bg: #fff3d6;
+  --flag-border: #e0ac2b;
+  --card-border: #e4ddd0;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+}
+
+.nav {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.nav .brand {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.nav a {
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.nav a:hover {
+  color: var(--accent);
+}
+
+main {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.card {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  background: white;
+}
+
+.button {
+  display: inline-block;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.field {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--flag-border);
+  background: var(--flag-bg);
+  color: #7a5a10;
+}
+
+.transcription {
+  margin-bottom: 1rem;
+}
+
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.flow input.segment-input {
+  border: none;
+  background: transparent;
+  font: inherit;
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  field-sizing: content;
+  min-width: 1.5ch;
+}
+
+.flow input.segment-input:focus {
+  outline: 2px solid var(--accent);
+  background: white;
+}
+
+.flow input.segment-input.flagged {
+  background: var(--flag-bg);
+  border: 1px solid var(--flag-border);
+}
+
+h2.segment-heading {
+  margin: 0 0 0.75rem;
+}
+
+h2.segment-heading input.segment-input {
+  font-size: 1.3rem;
+  font-weight: 600;
+  width: 100%;
+}
+
+.note-image {
+  max-width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--card-border);
+  margin-bottom: 1.5rem;
+}
+
+.note-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 1rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
