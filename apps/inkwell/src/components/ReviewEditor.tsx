@@ -22,6 +22,7 @@ export function ReviewEditor({ noteId, imagePath, initialTitle, initialSegments,
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const flaggedCount = segments.filter((s) => s.reviewRequired).length;
+  const crossedOutCount = segments.filter((s) => s.crossedOut).length;
 
   function updateSegment(id: string, text: string) {
     setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, text } : s)));
@@ -122,6 +123,14 @@ export function ReviewEditor({ noteId, imagePath, initialTitle, initialSegments,
           can save without resolving them.
         </p>
       )}
+      {crossedOutCount > 0 && (
+        <p className="muted">
+          <span className="crossed-out-sample">abc</span> {crossedOutCount} word
+          {crossedOutCount === 1 ? "" : "s"} shown with a strikethrough were crossed out in the
+          original - kept for reference, but feel free to delete them if you don&apos;t want them
+          in the note.
+        </p>
+      )}
 
       <div className="transcription">
         {lines.map((line, i) =>
@@ -135,15 +144,27 @@ export function ReviewEditor({ noteId, imagePath, initialTitle, initialSegments,
             </h2>
           ) : (
             <p key={i} className="flow">
-              {line.segments.map((segment) => (
-                <input
-                  key={segment.id}
-                  className={`segment-input ${segment.reviewRequired ? "flagged" : ""}`}
-                  title={segment.reviewRequired ? "Needs review - AI wasn't confident here" : undefined}
-                  value={segment.text}
-                  onChange={(e) => updateSegment(segment.id, e.target.value)}
-                />
-              ))}
+              {line.segments.map((segment) => {
+                const titleParts = [
+                  segment.crossedOut ? "Crossed out in the original - kept here, delete if you don't want it" : null,
+                  segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
+                ].filter(Boolean);
+                return (
+                  <input
+                    key={segment.id}
+                    className={[
+                      "segment-input",
+                      segment.reviewRequired ? "flagged" : "",
+                      segment.crossedOut ? "crossed-out" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    title={titleParts.length ? titleParts.join(" — ") : undefined}
+                    value={segment.text}
+                    onChange={(e) => updateSegment(segment.id, e.target.value)}
+                  />
+                );
+              })}
             </p>
           )
         )}

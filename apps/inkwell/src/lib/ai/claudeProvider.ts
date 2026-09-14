@@ -122,6 +122,14 @@ export class ClaudeAIProvider implements AIProvider {
         "do not correct grammar or spelling, do not summarize, do not add interpretation. Preserve structure " +
         "(paragraphs, headings, lists, dialogue) and mark crossed-out text and emphasis rather than omitting " +
         "or silently normalizing it. " +
+        "IMPORTANT - crossed-out text: never mark crossedOut on a whole segment that also contains text that " +
+        "was NOT crossed out, and never invent your own in-text notation (like strikethrough symbols, brackets, " +
+        "or the words \"crossed out\") inside the transcribed text itself. Instead, split the crossed-out " +
+        "word or phrase out into its own separate segment with crossedOut: true and only that struck-through " +
+        "text as its content, and put the surrounding not-crossed-out text into their own separate " +
+        "crossedOut: false segment(s) - the same way you would split out a single misread word. This keeps " +
+        "every segment either entirely crossed-out or entirely not, so the app can render the distinction " +
+        "instead of you describing it in prose. " +
         "Difficult or ambiguous cursive is expected - when a word is not clearly legible, do not guess a " +
         "different, fluent-sounding real word just because it fits the sentence grammatically or semantically. " +
         "A plausible invented word is a worse answer than an honest low-confidence best guess: transcribe your " +
