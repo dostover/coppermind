@@ -1,6 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
+import { prepareImageForVision } from "@/lib/imagePrep";
 import type {
   AIProvider,
   LearningEvalInput,
@@ -17,7 +18,13 @@ import type {
 // built but not the default provider yet - MockAIProvider is, until an
 // ANTHROPIC_API_KEY is supplied and the pipeline mechanics are proven.
 
-const MODEL = "claude-sonnet-4-5";
+// claude-opus-5 is the current flagship model (the previously-hardcoded
+// "claude-sonnet-4-5" is a stale/invalid model ID and, separately, was never
+// eligible for Claude's high-resolution vision tier). Accuracy on small,
+// difficult cursive matters more than latency for this low-volume,
+// single-user app, so we default to the strongest model rather than
+// optimizing for speed/cost.
+const MODEL = "claude-opus-5";
 
 const TRANSCRIBE_TOOL: Anthropic.Tool = {
   name: "record_transcription",
@@ -74,13 +81,6 @@ const EVALUATE_TOOL: Anthropic.Tool = {
   },
 };
 
-function mimeTypeFor(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".png") return "image/png";
-  if (ext === ".webp") return "image/webp";
-  return "image/jpeg";
-}
-
 export class ClaudeAIProvider implements AIProvider {
   private client: Anthropic;
 
@@ -90,8 +90,12 @@ export class ClaudeAIProvider implements AIProvider {
 
   async transcribe(input: TranscribeInput): Promise<TranscribeOutput> {
     const absolutePath = path.join(process.cwd(), "public", input.imagePath);
-    const imageBytes = await readFile(absolutePath);
-    const mediaType = mimeTypeFor(absolutePath);
+    const rawBytes = await readFile(absolutePath);
+    // Auto-orient from EXIF and downscale to the vision model's
+    // high-resolution-tier ceiling ourselves, with a high-quality resampler,
+    // rather than letting the API auto-downscale a full uncropped photo -
+    // see src/lib/imagePrep.ts for why this matters for small cursive.
+    const { buffer: imageBytes, mediaType } = await prepareImageForVision(rawBytes);
 
     const hints = input.handwritingContext;
     const hintText =
@@ -117,7 +121,14 @@ export class ClaudeAIProvider implements AIProvider {
         "You transcribe handwritten page images faithfully and only. Reproduce exactly what is written: " +
         "do not correct grammar or spelling, do not summarize, do not add interpretation. Preserve structure " +
         "(paragraphs, headings, lists, dialogue) and mark crossed-out text and emphasis rather than omitting " +
-        "or silently normalizing it. Report your own genuine per-segment confidence (0-1); do not inflate it. " +
+        "or silently normalizing it. " +
+        "Difficult or ambiguous cursive is expected - when a word is not clearly legible, do not guess a " +
+        "different, fluent-sounding real word just because it fits the sentence grammatically or semantically. " +
+        "A plausible invented word is a worse answer than an honest low-confidence best guess: transcribe your " +
+        "best literal reading of the actual letter shapes, even if the result looks unusual or is not a " +
+        "dictionary word, and drop your confidence score accordingly rather than silently substituting " +
+        "something that reads more naturally. Confidence should reflect how certain you actually are that the " +
+        "letters on the page say what you transcribed, not how natural the resulting sentence sounds. " +
         hintText,
       tools: [TRANSCRIBE_TOOL],
       tool_choice: { type: "tool", name: "record_transcription" },
