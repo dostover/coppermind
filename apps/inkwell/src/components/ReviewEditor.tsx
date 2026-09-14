@@ -18,6 +18,7 @@ export function ReviewEditor({ noteId, imagePath, initialTitle, initialSegments,
   const [segments, setSegments] = useState(initialSegments);
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -73,6 +74,25 @@ export function ReviewEditor({ noteId, imagePath, initialTitle, initialSegments,
     }
   }
 
+  async function handleDelete() {
+    const ok = window.confirm(
+      "Delete this note? This permanently removes the transcription and the original photo. This can't be undone."
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Delete failed.");
+      router.push("/library");
+      router.refresh();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Delete failed.");
+      setDeleting(false);
+    }
+  }
+
   // Render consecutive non-heading segments as one flowing "line" (a natural
   // reading paragraph made of individually-editable words/phrases), and
   // headings on their own line - rather than one full-width box per
@@ -99,6 +119,9 @@ export function ReviewEditor({ noteId, imagePath, initialTitle, initialSegments,
         </p>
         <button className="button" onClick={handleRetry} disabled={retrying}>
           {retrying ? "Retrying..." : "Retry transcription"}
+        </button>{" "}
+        <button className="button danger" onClick={handleDelete} disabled={deleting}>
+          {deleting ? "Deleting..." : "Delete note"}
         </button>
         {errorMessage && <p style={{ color: "#a33" }}>{errorMessage}</p>}
       </div>
@@ -172,6 +195,9 @@ export function ReviewEditor({ noteId, imagePath, initialTitle, initialSegments,
 
       <button className="button" onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : "Save"}
+      </button>{" "}
+      <button className="button danger" onClick={handleDelete} disabled={deleting}>
+        {deleting ? "Deleting..." : "Delete note"}
       </button>
       {savedMessage && <p className="muted">{savedMessage}</p>}
       {errorMessage && <p style={{ color: "#a33" }}>{errorMessage}</p>}

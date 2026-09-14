@@ -26,6 +26,18 @@ export default async function LibraryPage({
         />
       </form>
 
+      {notes.length > 0 && (
+        <p style={{ marginBottom: "1.5rem" }}>
+          <a className="button secondary" href="/api/export">
+            Export all notes
+          </a>{" "}
+          <span className="muted">
+            Downloads a zip with every note&apos;s transcription and original photo - your
+            only backup right now, since nothing here syncs anywhere else.
+          </span>
+        </p>
+      )}
+
       {notes.length === 0 && (
         <p className="muted">
           {q ? "No notes match that search." : "No notes yet - capture your first page."}
