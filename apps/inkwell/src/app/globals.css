@@ -135,6 +135,17 @@ main {
   border: 1px solid var(--flag-border);
 }
 
+.flow input.segment-input.crossed-out {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  color: var(--muted);
+}
+
+.crossed-out-sample {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
 h2.segment-heading {
   margin: 0 0 0.75rem;
 }
