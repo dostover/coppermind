@@ -1,0 +1,19 @@
+import type { Metadata } from "next";
+import { Nav } from "@/components/Nav";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Inkwell",
+  description: "Turn handwritten pages into a searchable, corrected knowledge library.",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <Nav />
+        <main>{children}</main>
+      </body>
+    </html>
+  );
+}
