@@ -170,6 +170,11 @@ h2.segment-heading input.segment-input {
   position: relative;
   display: block;
   margin-bottom: 1.5rem;
+  /* Defensive: a region is now computed geometry (regionFromLines.ts), not
+     raw model output, so it should never land outside [0,1] - but this
+     guarantees a stray value can never visually spill past the photo. */
+  overflow: hidden;
+  border-radius: var(--radius);
 }
 
 .note-image {
