@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import type { TranscriptSegment } from "./ai/types";
+import { CONFIDENCE_THRESHOLD } from "./config";
 
 // SQLite for this phase, schema narrowed from the Phase 4 data-model doc to
 // what a single-page, single-user walking skeleton needs. Field names and
@@ -72,11 +73,22 @@ export interface Note extends Omit<NoteRow, "segments_ai" | "segments_current"> 
   segmentsCurrent: TranscriptSegment[];
 }
 
+// review-required is recomputed from each segment's stored raw confidence
+// against the *current* CONFIDENCE_THRESHOLD every time a note is read,
+// rather than trusting whatever was baked in at transcribe/retry time. This
+// is what AC-5 actually requires: changing the threshold in config and
+// re-rendering a previously-transcribed note must update its flags without
+// re-transcribing. (A provider still sets an initial value on the way in;
+// it's simply overwritten here.)
+function applyReviewRequired(segments: TranscriptSegment[]): TranscriptSegment[] {
+  return segments.map((s) => ({ ...s, reviewRequired: s.confidence < CONFIDENCE_THRESHOLD }));
+}
+
 function rowToNote(row: NoteRow): Note {
   return {
     ...row,
-    segmentsAi: JSON.parse(row.segments_ai),
-    segmentsCurrent: JSON.parse(row.segments_current),
+    segmentsAi: applyReviewRequired(JSON.parse(row.segments_ai)),
+    segmentsCurrent: applyReviewRequired(JSON.parse(row.segments_current)),
   };
 }
 
@@ -93,12 +105,20 @@ export const notesRepo = {
     ).run(input.id, input.title, input.imagePath, input.createdAt, input.createdAt);
   },
 
-  setTranscribed(id: string, segments: TranscriptSegment[], updatedAt: string): void {
+  // placeholderTitle is only ever applied via COALESCE, so a title the user
+  // already set (or edited) is never clobbered by upload/retry - see
+  // titleGen.ts.
+  setTranscribed(
+    id: string,
+    segments: TranscriptSegment[],
+    updatedAt: string,
+    placeholderTitle: string | null = null
+  ): void {
     const json = JSON.stringify(segments);
     db.prepare(
-      `UPDATE notes SET status = 'ready_for_review', segments_ai = ?, segments_current = ?, updated_at = ?
+      `UPDATE notes SET status = 'ready_for_review', segments_ai = ?, segments_current = ?, title = COALESCE(title, ?), updated_at = ?
        WHERE id = ?`
-    ).run(json, json, updatedAt, id);
+    ).run(json, json, placeholderTitle, updatedAt, id);
   },
 
   setError(id: string, message: string, updatedAt: string): void {

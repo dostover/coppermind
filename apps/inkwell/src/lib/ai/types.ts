@@ -37,7 +37,10 @@ export interface TranscriptSegment {
   emphasis: "none" | "underline" | "bold_or_heavy";
   /** 0-1, model's raw self-reported confidence for this segment. */
   confidence: number;
-  /** = confidence < confidenceThreshold, computed by the provider layer. */
+  /** = confidence < confidenceThreshold. Providers set an initial value at
+   *  transcribe time, but db.ts recomputes it from the stored `confidence`
+   *  against the live CONFIDENCE_THRESHOLD on every read, so changing the
+   *  threshold updates old notes without re-transcribing them (AC-5). */
   reviewRequired: boolean;
 }
 

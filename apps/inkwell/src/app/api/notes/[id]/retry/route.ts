@@ -3,6 +3,7 @@ import { notesRepo } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import { getHandwritingContext } from "@/lib/handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "@/lib/config";
+import { derivePlaceholderTitle } from "@/lib/titleGen";
 
 // Retries only the failed transcription stage, without re-uploading the
 // original image (FR-3.8/FR-13.2) - the image saved during upload is reused.
@@ -21,7 +22,12 @@ export async function POST(
       handwritingContext: getHandwritingContext(),
       confidenceThreshold: CONFIDENCE_THRESHOLD,
     });
-    notesRepo.setTranscribed(id, result.segments, new Date().toISOString());
+    notesRepo.setTranscribed(
+      id,
+      result.segments,
+      new Date().toISOString(),
+      derivePlaceholderTitle(result.segments)
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Transcription failed.";
     notesRepo.setError(id, message, new Date().toISOString());
