@@ -3,24 +3,31 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { notesRepo, notePagesRepo } from "@/lib/db";
-import { enqueuePageTranscribeJob } from "@/lib/jobs";
+import { enqueueNoteTranscribeJob } from "@/lib/jobs";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 // Async processing (per claude/09-walking-skeleton-architecture.md's
 // "Synchronous upload" note, superseding the walking-skeleton's original
 // deliberate deviation from FR-2.5/FR-17.1): upload only saves the file(s)
-// and enqueues a processing_jobs row per page, then returns immediately - it
-// never itself awaits any AI call. The actual transcribe+tag-suggestion work
-// now lives in src/lib/jobs.ts, run by the in-process job runner started
-// from src/instrumentation.ts. The note page polls GET /api/notes/[id] and
-// shows a "still processing" state (per page) until each page's job completes.
+// and enqueues one processing_jobs row for the whole note, then returns
+// immediately - it never itself awaits any AI call. The actual transcribe
+// (batched across pages) + tag-suggestion work now lives in src/lib/jobs.ts,
+// run by the in-process job runner started from src/instrumentation.ts. The
+// note page polls GET /api/notes/[id] and shows a "still processing" state
+// (per page) until the batch job completes.
 //
 // Multi-page notes (FR-2.4): one upload can carry several page images under
 // the repeated "images" field, in the order the client sent them - that
 // order becomes each page's page_number. All pages are grouped under one
 // new note row from the start, matching the spec's "explicitly grouped into
 // a single logical multi-page note."
+//
+// All pages are enqueued as a single batch job (enqueueNoteTranscribeJob),
+// not one job per page: one AI provider call covers every page, which avoids
+// resending the system prompt/handwriting-context text once per page (see
+// ai/types.ts's TranscribeBatchInput doc comment). Per-page retry after this
+// point still uses individual single-image jobs - see /[id]/retry/route.ts.
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const files = formData.getAll("images").filter((f): f is File => f instanceof File);
@@ -45,7 +52,6 @@ export async function POST(req: NextRequest) {
   // itself (FR-3.8/FR-13.2) - each page is its own durable row, and a page
   // whose job later fails leaves that page in a recoverable 'error' state
   // (see jobs.ts's runOneJob) with a per-page Retry action still available.
-  const pageIds: string[] = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const pageId = randomUUID();
@@ -64,12 +70,9 @@ export async function POST(req: NextRequest) {
       imagePath: relativePath,
       createdAt: now,
     });
-    pageIds.push(pageId);
   }
 
-  for (const pageId of pageIds) {
-    enqueuePageTranscribeJob(pageId, noteId);
-  }
+  enqueueNoteTranscribeJob(noteId);
 
   return NextResponse.json({ id: noteId }, { status: 201 });
 }

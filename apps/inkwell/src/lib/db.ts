@@ -688,7 +688,11 @@ export interface ProcessingJobRow {
 }
 
 export const processingJobsRepo = {
-  enqueue(input: { id: string; noteId: string; pageId: string; stage: string; createdAt: string }): void {
+  // pageId is nullable: a per-page job (STAGE_TRANSCRIBE, used for retry)
+  // sets it, but a note-level batch job (STAGE_TRANSCRIBE_BATCH, jobs.ts)
+  // covers every page of the note at once and has no single page_id to set -
+  // its failure handling instead walks notePagesRepo.listForNote itself.
+  enqueue(input: { id: string; noteId: string; pageId: string | null; stage: string; createdAt: string }): void {
     db.prepare(
       `INSERT INTO processing_jobs (id, note_id, page_id, stage, status, attempts, created_at)
        VALUES (?, ?, ?, ?, 'queued', 0, ?)`

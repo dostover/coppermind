@@ -70,6 +70,27 @@ export interface TranscribeOutput {
   pageLevelNotes?: string[];
 }
 
+// Batched sibling of transcribe()/TranscribeInput/TranscribeOutput, added so
+// a multi-page note can be transcribed with one provider call instead of one
+// per page. This does NOT reduce image-token cost (Claude's vision pricing
+// is per-image regardless of how many share a request - see the token-cost
+// note in ClaudeAIProvider.transcribeBatch), only the *non-image* overhead:
+// one system prompt + one handwriting-context block instead of N copies of
+// each. Kept as a separate method rather than folding into transcribe() so
+// the existing single-page path (used for per-page retry, where re-sending
+// every other already-succeeded page's image would be pure waste) stays
+// untouched and simple.
+export interface TranscribeBatchInput {
+  pages: { pageId: string; imagePath: string }[];
+  handwritingContext: HandwritingContext;
+  confidenceThreshold: number;
+}
+
+export interface TranscribeBatchOutput {
+  /** One entry per input page, matched back up by pageId (order not assumed). */
+  pages: { pageId: string; segments: TranscriptSegment[]; pageLevelNotes?: string[] }[];
+}
+
 export type CorrectionClassification =
   | "handwriting_correction"
   | "content_edit"
@@ -111,6 +132,7 @@ export interface GenerateTagsOutput {
 
 export interface AIProvider {
   transcribe(input: TranscribeInput): Promise<TranscribeOutput>;
+  transcribeBatch(input: TranscribeBatchInput): Promise<TranscribeBatchOutput>;
   evaluateHandwritingCorrection(input: LearningEvalInput): Promise<LearningEvalOutput>;
   generateTags(input: GenerateTagsInput): Promise<GenerateTagsOutput>;
 }

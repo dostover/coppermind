@@ -3,9 +3,12 @@ import type {
   AIProvider,
   GenerateTagsInput,
   GenerateTagsOutput,
+  HandwritingContext,
   LearningEvalInput,
   LearningEvalOutput,
   StructureType,
+  TranscribeBatchInput,
+  TranscribeBatchOutput,
   TranscribeInput,
   TranscribeOutput,
   TranscriptSegment,
@@ -127,14 +130,18 @@ function mockRegion(index: number, total: number, textLength: number): Transcrip
 }
 
 export class MockAIProvider implements AIProvider {
-  async transcribe(input: TranscribeInput): Promise<TranscribeOutput> {
-    const pageIndex = hashToIndex(input.imagePath, DEMO_PAGES.length);
+  // Shared by transcribe() and transcribeBatch() - the mock's per-page logic
+  // never actually depends on being called individually vs. in a batch (it
+  // doesn't make a network call either way), so both just call this once per
+  // page. Kept private/sync since there's no real async work to await.
+  private buildPageOutput(imagePath: string, handwritingContext: HandwritingContext, confidenceThreshold: number): TranscribeOutput {
+    const pageIndex = hashToIndex(imagePath, DEMO_PAGES.length);
     const page = DEMO_PAGES[pageIndex];
 
     const segments: TranscriptSegment[] = page.map((demo, index) => {
       const { text: resolvedText, confidence } = resolveSegment(
         demo,
-        input.handwritingContext.correctionPatternHints
+        handwritingContext.correctionPatternHints
       );
       return {
         id: randomUUID(),
@@ -143,7 +150,7 @@ export class MockAIProvider implements AIProvider {
         crossedOut: false,
         emphasis: demo.structureType === "heading" ? "bold_or_heavy" : "none",
         confidence,
-        reviewRequired: confidence < input.confidenceThreshold,
+        reviewRequired: confidence < confidenceThreshold,
         sourceRegion: mockRegion(index, page.length, resolvedText.length),
       };
     });
@@ -151,6 +158,23 @@ export class MockAIProvider implements AIProvider {
     return {
       segments,
       pageLevelNotes: ["Mock provider - demo content, not derived from the uploaded image."],
+    };
+  }
+
+  async transcribe(input: TranscribeInput): Promise<TranscribeOutput> {
+    return this.buildPageOutput(input.imagePath, input.handwritingContext, input.confidenceThreshold);
+  }
+
+  // Mirrors ClaudeAIProvider.transcribeBatch's contract (one result per input
+  // page, matched by pageId) without any real batching benefit to simulate -
+  // this just proves the jobs.ts/db.ts plumbing around a note-level batch job
+  // works end to end without needing an API key.
+  async transcribeBatch(input: TranscribeBatchInput): Promise<TranscribeBatchOutput> {
+    return {
+      pages: input.pages.map(({ pageId, imagePath }) => ({
+        pageId,
+        ...this.buildPageOutput(imagePath, input.handwritingContext, input.confidenceThreshold),
+      })),
     };
   }
 
