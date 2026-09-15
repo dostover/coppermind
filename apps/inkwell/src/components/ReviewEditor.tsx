@@ -61,6 +61,23 @@ export function ReviewEditor({
     setActiveSegmentId(null);
   }
 
+  // Segments render as <textarea> rather than <input> so long text can wrap
+  // onto multiple visual lines instead of forcing horizontal scrolling. The
+  // mock provider's segments are word/phrase-granular (see mockProvider.ts),
+  // so this rarely mattered before, but the real ClaudeAIProvider often
+  // returns a whole confident sentence as one segment - and a plain <input>
+  // can never wrap its text internally, it just grows wider or overflows.
+  // A <textarea> wraps naturally given a width, so it just needs its height
+  // kept in sync with its (possibly multi-line) content - this measures and
+  // sets that height directly on the element rather than through React
+  // state, since it's pure presentation with no effect on the segment's
+  // actual text.
+  function autoGrow(el: HTMLTextAreaElement | null) {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
   const flaggedCount = segments.filter((s) => s.reviewRequired).length;
   const crossedOutCount = segments.filter((s) => s.crossedOut).length;
   const isProcessing = status === "uploaded" || status === "transcribing";
@@ -346,10 +363,18 @@ export function ReviewEditor({
         {lines.map((line, i) =>
           line.type === "heading" ? (
             <h2 key={line.segments[0].id} className="segment-heading">
-              <input
+              <textarea
+                ref={autoGrow}
                 className="segment-input"
+                rows={1}
                 value={line.segments[0].text}
-                onChange={(e) => updateSegment(line.segments[0].id, e.target.value)}
+                onChange={(e) => {
+                  updateSegment(line.segments[0].id, e.target.value);
+                  autoGrow(e.currentTarget);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
                 onFocus={() => handleSegmentFocus(line.segments[0].id)}
                 onBlur={handleSegmentBlur}
               />
@@ -362,8 +387,10 @@ export function ReviewEditor({
                   segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
                 ].filter(Boolean);
                 return (
-                  <input
+                  <textarea
                     key={segment.id}
+                    ref={autoGrow}
+                    rows={1}
                     className={[
                       "segment-input",
                       segment.reviewRequired ? "flagged" : "",
@@ -373,7 +400,13 @@ export function ReviewEditor({
                       .join(" ")}
                     title={titleParts.length ? titleParts.join(" — ") : undefined}
                     value={segment.text}
-                    onChange={(e) => updateSegment(segment.id, e.target.value)}
+                    onChange={(e) => {
+                      updateSegment(segment.id, e.target.value);
+                      autoGrow(e.currentTarget);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
                     onFocus={() => handleSegmentFocus(segment.id)}
                     onBlur={handleSegmentBlur}
                   />
