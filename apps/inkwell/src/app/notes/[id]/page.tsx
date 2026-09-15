@@ -16,10 +16,8 @@ export default async function NotePage({
       <h1>{note.title ?? "Untitled note"}</h1>
       <ReviewEditor
         noteId={note.id}
-        imagePath={note.image_path}
+        pages={note.pages}
         initialTitle={note.title}
-        initialSegments={note.segmentsCurrent}
-        status={note.status}
         initialFolderId={note.folder_id}
         initialTags={note.tags}
         allFolders={foldersRepo.listAll()}
