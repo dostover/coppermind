@@ -1,5 +1,3 @@
-import { unlink } from "fs/promises";
-import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
@@ -114,7 +112,7 @@ export async function PATCH(
   }
 
   const title = body.title?.trim() || null;
-  notesRepo.setReviewed(id, title, now);
+  notesRepo.setReviewed(id, title, now, title !== note.title);
 
   if (body.folderId !== undefined) {
     notesRepo.setFolder(id, body.folderId, now);
@@ -141,12 +139,10 @@ export async function PATCH(
   return NextResponse.json(notesRepo.getById(id));
 }
 
-// Deletes a note permanently: the db row, its pages (via ON DELETE CASCADE
-// on note_pages.note_id) and handwriting_examples (via ON DELETE CASCADE),
-// and every page's uploaded image file. There's no separate "delete
-// original image only" action in this phase (that's deferred along with
-// retention policies - see claude/08-walking-skeleton-scope.md); this is
-// the single, permanent "Delete note" action, now covering every page.
+// "Delete note" from the review screen now soft-deletes (03-ux-screens.md's
+// Trash-with-a-grace-period, rather than one irreversible action) - nothing
+// on disk or in the db is actually touched here, just deleted_at. Permanent
+// removal is the separate /purge route, only reachable from Trash.
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -155,18 +151,6 @@ export async function DELETE(
   const note = notesRepo.getById(id);
   if (!note) return NextResponse.json({ error: "Note not found." }, { status: 404 });
 
-  const pages = note.pages;
-  notesRepo.delete(id);
-
-  for (const page of pages) {
-    try {
-      const absolutePath = path.join(process.cwd(), "public", page.image_path);
-      await unlink(absolutePath);
-    } catch {
-      // Best-effort - the note/page records are already gone either way, and
-      // a missing/already-removed file shouldn't block the delete succeeding.
-    }
-  }
-
+  notesRepo.softDelete(id, new Date().toISOString());
   return NextResponse.json({ ok: true });
 }
