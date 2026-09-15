@@ -17,9 +17,20 @@ export function UploadForm() {
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  function addFiles(newFiles: FileList | null) {
-    if (!newFiles || newFiles.length === 0) return;
-    setFiles((prev) => [...prev, ...Array.from(newFiles)]);
+  // Takes a plain File[] rather than the FileList straight off the input.
+  // input.files is a *live* view tied to the DOM element - reading it later
+  // (including from inside a React state updater, which can run after this
+  // handler returns) reflects whatever the input holds *then*, not what it
+  // held when onChange fired. The caller below resets the input's value
+  // right after calling this (so the same file can be picked again / more
+  // added right after), which clears that live FileList to empty - so by
+  // the time a deferred `Array.from(newFiles)` ran, it was reading an
+  // already-emptied list and silently contributing nothing. Converting to
+  // a plain array immediately, before the reset, fixes it regardless of
+  // when React actually processes the state update.
+  function addFiles(newFiles: File[]) {
+    if (newFiles.length === 0) return;
+    setFiles((prev) => [...prev, ...newFiles]);
   }
 
   function removeFile(index: number) {
@@ -69,7 +80,7 @@ export function UploadForm() {
         accept="image/jpeg,image/png,image/webp"
         multiple
         onChange={(e) => {
-          addFiles(e.target.files);
+          addFiles(Array.from(e.target.files ?? []));
           e.target.value = ""; // allow picking the same file again / adding more right after
         }}
         style={{ margin: "0.75rem 0" }}
