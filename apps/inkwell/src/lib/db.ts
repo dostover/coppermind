@@ -82,6 +82,28 @@ db.exec(`
     created_at TEXT NOT NULL,
     PRIMARY KEY (note_id, tag_id)
   );
+
+  -- Narrowed from 04-data-model.md's processing_jobs: one stage ('transcribe',
+  -- which also runs the tag-suggestion step - see jobs.ts) rather than the
+  -- full multi-stage pipeline, since analyze/summarize/etc. aren't built yet.
+  -- Durable so a server restart mid-job leaves a recoverable row instead of
+  -- silently losing the work (the walking-skeleton's original synchronous
+  -- upload had no such state at all - see claude/09-walking-skeleton-architecture.md's
+  -- "Synchronous upload" note).
+  CREATE TABLE IF NOT EXISTS processing_jobs (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    stage TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued', -- 'queued' | 'running' | 'succeeded' | 'failed'
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    started_at TEXT,
+    finished_at TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  -- index: (status, created_at) for the runner's poll query.
+  CREATE INDEX IF NOT EXISTS idx_processing_jobs_poll ON processing_jobs (status, created_at);
 `);
 
 // notes.folder_id was added after the original table shape shipped - ALTER
@@ -164,6 +186,16 @@ export const notesRepo = {
       `INSERT INTO notes (id, title, image_path, status, segments_ai, segments_current, created_at, updated_at)
        VALUES (?, ?, ?, 'uploaded', '[]', '[]', ?, ?)`
     ).run(input.id, input.title, input.imagePath, input.createdAt, input.createdAt);
+  },
+
+  // Set the moment a processing_jobs row for this note starts running, so
+  // the note page (polling) can show "still working" instead of the terminal
+  // 'uploaded' state it would otherwise be stuck displaying while queued/running.
+  setTranscribing(id: string, updatedAt: string): void {
+    db.prepare(`UPDATE notes SET status = 'transcribing', updated_at = ? WHERE id = ?`).run(
+      updatedAt,
+      id
+    );
   },
 
   // placeholderTitle is only ever applied via COALESCE, so a title the user
@@ -453,6 +485,73 @@ export const handwritingProfileRepo = {
       correctionPatterns: JSON.stringify(profile.correctionPatterns),
       updatedAt: profile.updatedAt,
     });
+  },
+};
+
+export interface ProcessingJobRow {
+  id: string;
+  note_id: string;
+  stage: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  attempts: number;
+  last_error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+export const processingJobsRepo = {
+  enqueue(input: { id: string; noteId: string; stage: string; createdAt: string }): void {
+    db.prepare(
+      `INSERT INTO processing_jobs (id, note_id, stage, status, attempts, created_at)
+       VALUES (?, ?, ?, 'queued', 0, ?)`
+    ).run(input.id, input.noteId, input.stage, input.createdAt);
+  },
+
+  // Claims the oldest queued job atomically (single UPDATE...WHERE guarded by
+  // status, not a separate SELECT-then-UPDATE) so two runner ticks can't both
+  // pick up the same row - defensive even though this app only ever runs one
+  // runner loop in one process today.
+  claimNext(now: string): ProcessingJobRow | undefined {
+    const next = db
+      .prepare(`SELECT id FROM processing_jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1`)
+      .get() as { id: string } | undefined;
+    if (!next) return undefined;
+
+    const result = db
+      .prepare(
+        `UPDATE processing_jobs SET status = 'running', started_at = ?, attempts = attempts + 1
+         WHERE id = ? AND status = 'queued'`
+      )
+      .run(now, next.id);
+    if (result.changes === 0) return undefined; // lost the race (or already claimed)
+
+    return db.prepare(`SELECT * FROM processing_jobs WHERE id = ?`).get(next.id) as ProcessingJobRow;
+  },
+
+  markSucceeded(id: string, finishedAt: string): void {
+    db.prepare(`UPDATE processing_jobs SET status = 'succeeded', finished_at = ? WHERE id = ?`).run(
+      finishedAt,
+      id
+    );
+  },
+
+  markFailed(id: string, error: string, finishedAt: string): void {
+    db.prepare(
+      `UPDATE processing_jobs SET status = 'failed', last_error = ?, finished_at = ? WHERE id = ?`
+    ).run(error, finishedAt, id);
+  },
+
+  // Recovery for a runner that never comes back (process crash mid-job,
+  // rather than a caught error) - a 'running' row past this age is assumed
+  // orphaned and requeued, rather than left stuck forever. Called once at
+  // runner startup (see jobs.ts), not on every tick.
+  requeueOrphanedRunning(olderThanMs: number): number {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    const result = db
+      .prepare(`UPDATE processing_jobs SET status = 'queued' WHERE status = 'running' AND started_at < ?`)
+      .run(cutoff);
+    return result.changes;
   },
 };
 
