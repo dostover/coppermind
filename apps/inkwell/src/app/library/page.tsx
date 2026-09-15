@@ -88,6 +88,7 @@ export default async function LibraryPage({
             <p className="muted">{snippet(bodyText) || "No transcription yet."}</p>
             <p className="muted">
               {note.status}
+              {note.pages.length > 1 ? ` · ${note.pages.length} pages` : ""}
               {flaggedCount > 0 ? ` · ${flaggedCount} flagged` : ""} ·{" "}
               {new Date(note.created_at).toLocaleString()}
               {noteFolder ? ` · ${noteFolder.name}` : ""}

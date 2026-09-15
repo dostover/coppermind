@@ -32,12 +32,16 @@ export async function GET() {
       id: note.id,
       title: note.title,
       status: note.status,
-      imageFile: note.image_path ? path.basename(note.image_path) : null,
+      pages: note.pages.map((p) => ({
+        pageNumber: p.page_number,
+        imageFile: p.image_path ? path.basename(p.image_path) : null,
+        status: p.status,
+        segmentsCurrent: p.segmentsCurrent,
+        segmentsOriginalAi: p.segmentsAi,
+      })),
       createdAt: note.created_at,
       updatedAt: note.updated_at,
       transcription: note.segmentsCurrent.map((s) => s.text).join("\n\n"),
-      segmentsCurrent: note.segmentsCurrent,
-      segmentsOriginalAi: note.segmentsAi,
     })),
     handwritingProfile: profile,
     handwritingExamples: examples,
@@ -53,14 +57,17 @@ export async function GET() {
   archive.append(JSON.stringify(exportData, null, 2), { name: "notes.json" });
 
   for (const note of notes) {
-    if (!note.image_path) continue;
-    const absolutePath = path.join(process.cwd(), "public", note.image_path);
-    try {
-      await stat(absolutePath);
-      archive.file(absolutePath, { name: `images/${path.basename(note.image_path)}` });
-    } catch {
-      // Original no longer on disk (e.g. manually removed) - the JSON export
-      // still has the full transcription, so skip rather than fail the export.
+    for (const page of note.pages) {
+      if (!page.image_path) continue;
+      const absolutePath = path.join(process.cwd(), "public", page.image_path);
+      try {
+        await stat(absolutePath);
+        archive.file(absolutePath, { name: `images/${path.basename(page.image_path)}` });
+      } catch {
+        // Original no longer on disk (e.g. manually removed) - the JSON
+        // export still has the full transcription, so skip rather than fail
+        // the export.
+      }
     }
   }
 

@@ -35,6 +35,32 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 
+  -- Multi-page notes: a note is now a lightweight grouping row (title,
+  -- aggregate status, folder/tags) and each page lives in note_pages, one
+  -- row per uploaded image with its own transcription state - the "large/
+  -- multi-page documents are processed page-by-page" design in
+  -- 02-architecture.md §8. notes.image_path/segments_ai/segments_current
+  -- above are now legacy columns, kept only so existing rows aren't broken;
+  -- new code reads/writes exclusively through note_pages (see the one-time
+  -- migration below) and notes.status becomes a derived aggregate
+  -- (notesRepo.recomputeStatus) rather than something a page write sets
+  -- directly.
+  CREATE TABLE IF NOT EXISTS note_pages (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    page_number INTEGER NOT NULL,
+    image_path TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'uploaded', -- uploaded | transcribing | ready_for_review | error
+    error_message TEXT,
+    segments_ai TEXT NOT NULL DEFAULT '[]',
+    segments_current TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (note_id, page_number)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_note_pages_note ON note_pages (note_id, page_number);
+
   CREATE TABLE IF NOT EXISTS handwriting_examples (
     id TEXT PRIMARY KEY,
     note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
@@ -102,6 +128,13 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
+  -- Narrowed further, matches note_pages: a note's transcribe stage is now
+  -- job-per-page so pages can be transcribed independently/in parallel-ready
+  -- fashion, per 02-architecture.md §8 ("parallelizable"). This runner still
+  -- only runs one job at a time (see jobs.ts), so "parallelizable" here means
+  -- "not blocked on each other," not "literally concurrent" - a real worker
+  -- pool would be the change to make that literal.
+
   -- index: (status, created_at) for the runner's poll query.
   CREATE INDEX IF NOT EXISTS idx_processing_jobs_poll ON processing_jobs (status, created_at);
 `);
@@ -118,14 +151,69 @@ if (!noteColumns.some((c) => c.name === "folder_id")) {
   db.exec(`ALTER TABLE notes ADD COLUMN folder_id TEXT REFERENCES folders(id)`);
 }
 
-export interface NoteRow {
+// processing_jobs.page_id was added when the transcribe stage moved from
+// note-scoped to page-scoped (multi-page notes). Nullable so historical rows
+// from before this change (already terminal - succeeded/failed long ago)
+// don't need backfilling; every new job enqueued from here on always sets it.
+const jobColumns = db.prepare(`PRAGMA table_info(processing_jobs)`).all() as { name: string }[];
+if (!jobColumns.some((c) => c.name === "page_id")) {
+  db.exec(`ALTER TABLE processing_jobs ADD COLUMN page_id TEXT REFERENCES note_pages(id)`);
+}
+
+// One-time backfill: any note that predates note_pages (created when a note
+// was still one row = one page) gets a single page-1 row built from its own
+// legacy image_path/segments_ai/segments_current/status/error_message
+// columns. Guarded by "no existing note_pages row for this note" so it's a
+// no-op on every run after the first. 'reviewed' has no page-level
+// equivalent (review is a note-level concept now), so it maps to
+// 'ready_for_review' - the content is there and was already looked at,
+// which is exactly what that page status means.
+const legacyNotes = db
+  .prepare(
+    `SELECT id, image_path, status, error_message, segments_ai, segments_current, created_at, updated_at
+     FROM notes
+     WHERE image_path IS NOT NULL AND image_path != ''
+       AND NOT EXISTS (SELECT 1 FROM note_pages WHERE note_pages.note_id = notes.id)`
+  )
+  .all() as {
   id: string;
-  title: string | null;
   image_path: string;
-  status: "uploaded" | "transcribing" | "ready_for_review" | "reviewed" | "error";
+  status: string;
   error_message: string | null;
   segments_ai: string;
   segments_current: string;
+  created_at: string;
+  updated_at: string;
+}[];
+if (legacyNotes.length > 0) {
+  const insertLegacyPage = db.prepare(
+    `INSERT INTO note_pages (id, note_id, page_number, image_path, status, error_message, segments_ai, segments_current, created_at, updated_at)
+     VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const tx = db.transaction(() => {
+    for (const n of legacyNotes) {
+      insertLegacyPage.run(
+        randomUUID(),
+        n.id,
+        n.image_path,
+        n.status === "reviewed" ? "ready_for_review" : n.status,
+        n.error_message,
+        n.segments_ai,
+        n.segments_current,
+        n.created_at,
+        n.updated_at
+      );
+    }
+  });
+  tx();
+  console.log(`Migrated ${legacyNotes.length} pre-multi-page note(s) into note_pages.`);
+}
+
+export interface NoteRow {
+  id: string;
+  title: string | null;
+  status: "uploaded" | "transcribing" | "ready_for_review" | "reviewed" | "error";
+  error_message: string | null;
   folder_id: string | null;
   created_at: string;
   updated_at: string;
@@ -138,10 +226,33 @@ export interface NoteTagView {
   confidence: number | null;
 }
 
-export interface Note extends Omit<NoteRow, "segments_ai" | "segments_current"> {
+export interface NotePageRow {
+  id: string;
+  note_id: string;
+  page_number: number;
+  image_path: string;
+  status: "uploaded" | "transcribing" | "ready_for_review" | "error";
+  error_message: string | null;
+  segments_ai: string;
+  segments_current: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotePage extends Omit<NotePageRow, "segments_ai" | "segments_current"> {
+  segmentsAi: TranscriptSegment[];
+  segmentsCurrent: TranscriptSegment[];
+}
+
+// A note's own segmentsAi/segmentsCurrent are the concatenation of all its
+// pages' segments, in page order - kept for callers (Library search/snippet,
+// export) that just want "the whole note's text" and don't care that it may
+// now span multiple images. `pages` is what the review UI actually renders.
+export interface Note extends NoteRow {
   segmentsAi: TranscriptSegment[];
   segmentsCurrent: TranscriptSegment[];
   tags: NoteTagView[];
+  pages: NotePage[];
 }
 
 // review-required is recomputed from each segment's stored raw confidence
@@ -166,72 +277,92 @@ function getTagsForNote(noteId: string): NoteTagView[] {
     .all(noteId) as NoteTagView[];
 }
 
-function rowToNote(row: NoteRow): Note {
+function rowToPage(row: NotePageRow): NotePage {
   return {
     ...row,
     segmentsAi: applyReviewRequired(JSON.parse(row.segments_ai)),
     segmentsCurrent: applyReviewRequired(JSON.parse(row.segments_current)),
-    tags: getTagsForNote(row.id),
   };
 }
 
+function getPagesForNote(noteId: string): NotePage[] {
+  const rows = db
+    .prepare(`SELECT * FROM note_pages WHERE note_id = ? ORDER BY page_number ASC`)
+    .all(noteId) as NotePageRow[];
+  return rows.map(rowToPage);
+}
+
+function rowToNote(row: NoteRow): Note {
+  const pages = getPagesForNote(row.id);
+  return {
+    ...row,
+    segmentsAi: pages.flatMap((p) => p.segmentsAi),
+    segmentsCurrent: pages.flatMap((p) => p.segmentsCurrent),
+    tags: getTagsForNote(row.id),
+    pages,
+  };
+}
+
+// Aggregate status rules (see the note_pages comment on the schema above):
+// once a note has been explicitly saved from the review screen it stays
+// 'reviewed' regardless of what a later page retry does to an individual
+// page's status - "reviewed" means "the user has looked at and saved this
+// note," which doesn't stop being true just because they retry one flagged
+// page afterward. Before that first save, the note's status tracks its
+// pages: still working if any page is, all-failed only if every page is,
+// otherwise reviewable (which covers both "every page succeeded" and "some
+// succeeded, some failed" - the review screen shows per-page state either
+// way, so a partial failure never blocks reviewing the pages that did work).
+function computeAggregateStatus(
+  pages: NotePage[],
+  currentStatus: NoteRow["status"]
+): NoteRow["status"] {
+  if (currentStatus === "reviewed") return "reviewed";
+  if (pages.length === 0) return "uploaded";
+  if (pages.some((p) => p.status === "uploaded" || p.status === "transcribing")) return "transcribing";
+  if (pages.every((p) => p.status === "error")) return "error";
+  return "ready_for_review";
+}
+
 export const notesRepo = {
-  create(input: {
-    id: string;
-    title: string | null;
-    imagePath: string;
-    createdAt: string;
-  }): void {
+  create(input: { id: string; title: string | null; createdAt: string }): void {
     db.prepare(
       `INSERT INTO notes (id, title, image_path, status, segments_ai, segments_current, created_at, updated_at)
-       VALUES (?, ?, ?, 'uploaded', '[]', '[]', ?, ?)`
-    ).run(input.id, input.title, input.imagePath, input.createdAt, input.createdAt);
-  },
-
-  // Set the moment a processing_jobs row for this note starts running, so
-  // the note page (polling) can show "still working" instead of the terminal
-  // 'uploaded' state it would otherwise be stuck displaying while queued/running.
-  setTranscribing(id: string, updatedAt: string): void {
-    db.prepare(`UPDATE notes SET status = 'transcribing', updated_at = ? WHERE id = ?`).run(
-      updatedAt,
-      id
-    );
+       VALUES (?, ?, '', 'uploaded', '[]', '[]', ?, ?)`
+    ).run(input.id, input.title, input.createdAt, input.createdAt);
   },
 
   // placeholderTitle is only ever applied via COALESCE, so a title the user
   // already set (or edited) is never clobbered by upload/retry - see
-  // titleGen.ts.
-  setTranscribed(
-    id: string,
-    segments: TranscriptSegment[],
-    updatedAt: string,
-    placeholderTitle: string | null = null
-  ): void {
-    const json = JSON.stringify(segments);
-    db.prepare(
-      `UPDATE notes SET status = 'ready_for_review', segments_ai = ?, segments_current = ?, title = COALESCE(title, ?), updated_at = ?
-       WHERE id = ?`
-    ).run(json, json, placeholderTitle, updatedAt, id);
-  },
-
-  setError(id: string, message: string, updatedAt: string): void {
-    db.prepare(`UPDATE notes SET status = 'error', error_message = ?, updated_at = ? WHERE id = ?`).run(
-      message,
+  // titleGen.ts. Only page 1 ever supplies one (see jobs.ts).
+  setPlaceholderTitle(id: string, placeholderTitle: string | null, updatedAt: string): void {
+    if (!placeholderTitle) return;
+    db.prepare(`UPDATE notes SET title = COALESCE(title, ?), updated_at = ? WHERE id = ?`).run(
+      placeholderTitle,
       updatedAt,
       id
     );
   },
 
-  setReviewed(
-    id: string,
-    segments: TranscriptSegment[],
-    title: string | null,
-    updatedAt: string
-  ): void {
+  // Recomputes notes.status from its pages' current states (see
+  // computeAggregateStatus above) and writes it if changed. Called after
+  // every page-level state transition (enqueue/transcribed/error) so the
+  // Library list's status column and the review screen's polling loop both
+  // see an up-to-date aggregate without joining note_pages on every read.
+  recomputeStatus(id: string, updatedAt: string): void {
+    const row = db.prepare(`SELECT * FROM notes WHERE id = ?`).get(id) as NoteRow | undefined;
+    if (!row) return;
+    const pages = getPagesForNote(id);
+    const next = computeAggregateStatus(pages, row.status);
+    if (next === row.status) return;
+    db.prepare(`UPDATE notes SET status = ?, updated_at = ? WHERE id = ?`).run(next, updatedAt, id);
+  },
+
+  setReviewed(id: string, title: string | null, updatedAt: string): void {
     db.prepare(
-      `UPDATE notes SET status = 'reviewed', segments_current = ?, title = COALESCE(?, title), updated_at = ?
+      `UPDATE notes SET status = 'reviewed', title = COALESCE(?, title), updated_at = ?
        WHERE id = ?`
-    ).run(JSON.stringify(segments), title, updatedAt, id);
+    ).run(title, updatedAt, id);
   },
 
   // folderId: null clears the folder (moves the note to "no folder").
@@ -277,6 +408,61 @@ export const notesRepo = {
         .toLowerCase();
       return haystack.includes(q);
     });
+  },
+};
+
+export const notePagesRepo = {
+  create(input: { id: string; noteId: string; pageNumber: number; imagePath: string; createdAt: string }): void {
+    db.prepare(
+      `INSERT INTO note_pages (id, note_id, page_number, image_path, status, segments_ai, segments_current, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'uploaded', '[]', '[]', ?, ?)`
+    ).run(input.id, input.noteId, input.pageNumber, input.imagePath, input.createdAt, input.createdAt);
+  },
+
+  listForNote(noteId: string): NotePage[] {
+    return getPagesForNote(noteId);
+  },
+
+  getById(id: string): NotePage | undefined {
+    const row = db.prepare(`SELECT * FROM note_pages WHERE id = ?`).get(id) as NotePageRow | undefined;
+    return row ? rowToPage(row) : undefined;
+  },
+
+  // Mirrors notesRepo.setTranscribing's old role, now per-page: set the
+  // moment this page's processing_jobs row starts running/queued, so the
+  // review screen can show "transcribing this page" instead of the terminal
+  // 'uploaded' state it would otherwise be stuck on while queued.
+  setTranscribing(id: string, updatedAt: string): void {
+    db.prepare(`UPDATE note_pages SET status = 'transcribing', updated_at = ? WHERE id = ?`).run(
+      updatedAt,
+      id
+    );
+  },
+
+  setTranscribed(id: string, segments: TranscriptSegment[], updatedAt: string): void {
+    const json = JSON.stringify(segments);
+    db.prepare(
+      `UPDATE note_pages SET status = 'ready_for_review', segments_ai = ?, segments_current = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(json, json, updatedAt, id);
+  },
+
+  setError(id: string, message: string, updatedAt: string): void {
+    db.prepare(
+      `UPDATE note_pages SET status = 'error', error_message = ?, updated_at = ? WHERE id = ?`
+    ).run(message, updatedAt, id);
+  },
+
+  // Called on Save (PATCH /api/notes/[id]) with this page's corrected
+  // segments - a page keeps whatever status it already had (usually
+  // 'ready_for_review'; 'error' pages have nothing to save since the review
+  // screen never renders editable content for them).
+  setSegments(id: string, segments: TranscriptSegment[], updatedAt: string): void {
+    db.prepare(`UPDATE note_pages SET segments_current = ?, updated_at = ? WHERE id = ?`).run(
+      JSON.stringify(segments),
+      updatedAt,
+      id
+    );
   },
 };
 
@@ -491,6 +677,7 @@ export const handwritingProfileRepo = {
 export interface ProcessingJobRow {
   id: string;
   note_id: string;
+  page_id: string | null;
   stage: string;
   status: "queued" | "running" | "succeeded" | "failed";
   attempts: number;
@@ -501,11 +688,11 @@ export interface ProcessingJobRow {
 }
 
 export const processingJobsRepo = {
-  enqueue(input: { id: string; noteId: string; stage: string; createdAt: string }): void {
+  enqueue(input: { id: string; noteId: string; pageId: string; stage: string; createdAt: string }): void {
     db.prepare(
-      `INSERT INTO processing_jobs (id, note_id, stage, status, attempts, created_at)
-       VALUES (?, ?, ?, 'queued', 0, ?)`
-    ).run(input.id, input.noteId, input.stage, input.createdAt);
+      `INSERT INTO processing_jobs (id, note_id, page_id, stage, status, attempts, created_at)
+       VALUES (?, ?, ?, ?, 'queued', 0, ?)`
+    ).run(input.id, input.noteId, input.pageId, input.stage, input.createdAt);
   },
 
   // Claims the oldest queued job atomically (single UPDATE...WHERE guarded by

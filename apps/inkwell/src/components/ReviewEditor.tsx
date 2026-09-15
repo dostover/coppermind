@@ -3,26 +3,51 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { TranscriptSegment } from "@/lib/ai/types";
-import type { FolderRow, NoteTagView } from "@/lib/db";
+import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 
 interface Props {
   noteId: string;
-  imagePath: string;
+  pages: NotePage[];
   initialTitle: string | null;
-  initialSegments: TranscriptSegment[];
-  status: string;
   initialFolderId: string | null;
   initialTags: NoteTagView[];
   allFolders: FolderRow[];
   allTagNames: string[];
 }
 
+// Multi-page notes: each page transcribes independently (see jobs.ts), so
+// this component tracks per-page state - status, error, and editable
+// segments - rather than one flat segment list for the whole note. A page's
+// local segments come from the server exactly once, the moment that page's
+// status first reaches 'ready_for_review' (seededPagesRef below); after
+// that, polling refreshes never touch it again, so in-progress edits on an
+// already-ready page are never clobbered by a later page's job finishing.
+interface PageState {
+  id: string;
+  pageNumber: number;
+  imagePath: string;
+  status: NotePage["status"];
+  errorMessage: string | null;
+  segments: TranscriptSegment[];
+}
+
+function toPageState(p: NotePage): PageState {
+  return {
+    id: p.id,
+    pageNumber: p.page_number,
+    imagePath: p.image_path,
+    status: p.status,
+    errorMessage: p.error_message,
+    // Only a ready page has anything meaningful to edit; other statuses
+    // render no editor at all, so an empty array here is never shown.
+    segments: p.status === "ready_for_review" ? p.segmentsCurrent : [],
+  };
+}
+
 export function ReviewEditor({
   noteId,
-  imagePath,
+  pages,
   initialTitle,
-  initialSegments,
-  status,
   initialFolderId,
   initialTags,
   allFolders,
@@ -30,31 +55,33 @@ export function ReviewEditor({
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle ?? "");
-  const [segments, setSegments] = useState(initialSegments);
+  const [pageStates, setPageStates] = useState<PageState[]>(() => pages.map(toPageState));
   const [folderId, setFolderId] = useState<string | null>(initialFolderId);
   const [tags, setTags] = useState(initialTags);
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
-  const [retrying, setRetrying] = useState(false);
+  const [retryingPageIds, setRetryingPageIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Image-region highlighting (AC-6 last bullet / FR-5.5, best-effort): which
   // segment is currently focused, so its sourceRegion (if any) can be drawn
-  // as an overlay box on the image above. See SourceRegion's doc comment in
-  // ai/types.ts for why 0-1 fractional coordinates need no image-size
-  // bookkeeping here.
+  // as an overlay box on the image above. Segment ids are globally unique
+  // across every page, so one id -> at most one page's image ever shows a
+  // highlight. See SourceRegion's doc comment in ai/types.ts for why 0-1
+  // fractional coordinates need no image-size bookkeeping here.
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
-  const imageWrapRef = useRef<HTMLDivElement>(null);
+  const imageWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  function handleSegmentFocus(segmentId: string) {
+  function handleSegmentFocus(segmentId: string, pageId: string) {
     setActiveSegmentId(segmentId);
-    // The review screen stacks the image above the transcription rather than
-    // the spec's desktop split-screen (see 03-ux-screens.md §5), so once
-    // you're editing a segment further down the page the image is often
-    // scrolled out of view - "nearest" is a no-op if it's already visible.
-    imageWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    // The review screen stacks each page's image above its transcription
+    // rather than the spec's desktop split-screen (see 03-ux-screens.md §5),
+    // so once you're editing a segment further down the page (or on a later
+    // page) that image is often scrolled out of view - "nearest" is a no-op
+    // if it's already visible.
+    imageWrapRefs.current.get(pageId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function handleSegmentBlur() {
@@ -78,43 +105,59 @@ export function ReviewEditor({
     el.style.height = `${el.scrollHeight}px`;
   }
 
-  const flaggedCount = segments.filter((s) => s.reviewRequired).length;
-  const crossedOutCount = segments.filter((s) => s.crossedOut).length;
-  const isProcessing = status === "uploaded" || status === "transcribing";
-  const activeRegion = segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
+  const anyPageWorking = pageStates.some((p) => p.status === "uploaded" || p.status === "transcribing");
+  const hasAnyReadyPage = pageStates.some((p) => p.status === "ready_for_review");
+  const allSegments = pageStates.flatMap((p) => p.segments);
+  const flaggedCount = allSegments.filter((s) => s.reviewRequired).length;
+  const crossedOutCount = allSegments.filter((s) => s.crossedOut).length;
+  const activeRegion = allSegments.find((s) => s.id === activeSegmentId)?.sourceRegion;
 
   // Async processing (see src/lib/jobs.ts): upload/retry now enqueue a job
-  // and return immediately, so this page has to poll rather than assume the
-  // note is done by the time it renders. Polling re-fetches the server
-  // component via router.refresh(), which re-renders this component with a
-  // fresh `status` prop - the effect below re-runs on that prop change and
-  // stops itself once the job has left 'uploaded'/'transcribing'.
+  // per page and return immediately, so this screen has to poll rather than
+  // assume every page is done by the time it renders. Polling re-fetches the
+  // server component via router.refresh(), which re-renders this component
+  // with a fresh `pages` prop - the effect below re-runs on that prop change
+  // and stops itself once no page is still uploaded/transcribing.
   useEffect(() => {
-    if (!isProcessing) return;
+    if (!anyPageWorking) return;
     const interval = setInterval(() => router.refresh(), 2000);
     return () => clearInterval(interval);
-  }, [isProcessing, router]);
+  }, [anyPageWorking, router]);
 
-  // useState only reads its initial* prop once, at mount - it doesn't
-  // resync when props change on a later render (e.g. the refresh above
-  // delivering the finished transcription). So when the job finishes while
-  // this component is already mounted (the normal case: land on the note
-  // page right after upload, still 'uploaded'/'transcribing'), pull the now-
-  // real segments/title/tags/folder into local state exactly once, the
-  // moment processing ends.
-  const wasProcessingRef = useRef(isProcessing);
+  // Per-page "seed once" sync: a page whose local status isn't yet
+  // 'ready_for_review' adopts whatever the latest prop says (still working,
+  // now ready, or now errored). The moment a page reaches 'ready_for_review'
+  // locally, it's marked seeded and this effect stops touching it, so a
+  // later poll (from some *other* page still working) can never overwrite
+  // edits already in progress on this one.
+  const seededPagesRef = useRef<Set<string>>(
+    new Set(pages.filter((p) => p.status === "ready_for_review").map((p) => p.id))
+  );
   useEffect(() => {
-    if (wasProcessingRef.current && !isProcessing) {
-      setTitle(initialTitle ?? "");
-      setSegments(initialSegments);
-      setFolderId(initialFolderId);
-      setTags(initialTags);
-    }
-    wasProcessingRef.current = isProcessing;
-  }, [isProcessing, initialTitle, initialSegments, initialFolderId, initialTags]);
+    setPageStates((prev) => {
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      let changed = false;
+      for (const incoming of pages) {
+        if (seededPagesRef.current.has(incoming.id)) continue;
+        byId.set(incoming.id, toPageState(incoming));
+        changed = true;
+        if (incoming.status === "ready_for_review") seededPagesRef.current.add(incoming.id);
+      }
+      if (!changed) return prev;
+      // Preserve page order (byId may have inserted in prop order already,
+      // but pages is always sorted by page_number - safe to just re-derive).
+      return pages.map((p) => byId.get(p.id) ?? toPageState(p));
+    });
+  }, [pages]);
 
-  function updateSegment(id: string, text: string) {
-    setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, text } : s)));
+  function updateSegment(pageId: string, segmentId: string, text: string) {
+    setPageStates((prev) =>
+      prev.map((p) =>
+        p.id === pageId
+          ? { ...p, segments: p.segments.map((s) => (s.id === segmentId ? { ...s, text } : s)) }
+          : p
+      )
+    );
     setSavedMessage(null);
   }
 
@@ -144,9 +187,9 @@ export function ReviewEditor({
   async function handleSave() {
     setSaving(true);
     setErrorMessage(null);
-    const changedCount = segments.filter(
-      (s, i) => s.text !== initialSegments[i]?.text
-    ).length;
+
+    const initialById = new Map(pages.flatMap((p) => p.segmentsCurrent.map((s) => [s.id, s.text])));
+    const changedCount = allSegments.filter((s) => initialById.get(s.id) !== s.text).length;
 
     try {
       const res = await fetch(`/api/notes/${noteId}`, {
@@ -154,7 +197,12 @@ export function ReviewEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          segments: segments.map((s) => ({ id: s.id, text: s.text })),
+          pages: pageStates
+            .filter((p) => p.status === "ready_for_review")
+            .map((p) => ({
+              pageId: p.id,
+              segments: p.segments.map((s) => ({ id: s.id, text: s.text })),
+            })),
           folderId,
           tags: tags.map((t) => t.name),
         }),
@@ -173,23 +221,33 @@ export function ReviewEditor({
     }
   }
 
-  async function handleRetry() {
-    setRetrying(true);
+  async function handleRetryPage(pageId: string) {
+    setRetryingPageIds((prev) => new Set(prev).add(pageId));
     setErrorMessage(null);
     try {
-      const res = await fetch(`/api/notes/${noteId}/retry`, { method: "POST" });
+      const res = await fetch(`/api/notes/${noteId}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId }),
+      });
       if (!res.ok) throw new Error((await res.json()).error ?? "Retry failed.");
       router.refresh();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Retry failed.");
     } finally {
-      setRetrying(false);
+      setRetryingPageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(pageId);
+        return next;
+      });
     }
   }
 
   async function handleDelete() {
     const ok = window.confirm(
-      "Delete this note? This permanently removes the transcription and the original photo. This can't be undone."
+      pageStates.length > 1
+        ? "Delete this note? This permanently removes the transcription and all original photos. This can't be undone."
+        : "Delete this note? This permanently removes the transcription and the original photo. This can't be undone."
     );
     if (!ok) return;
 
@@ -211,215 +269,235 @@ export function ReviewEditor({
   // headings on their own line - rather than one full-width box per
   // segment, which reads badly once segments are word-granular (see
   // src/lib/ai/mockProvider.ts for why they're granular in the first place).
-  const lines: { type: "heading" | "flow"; segments: TranscriptSegment[] }[] = [];
-  for (const segment of segments) {
-    const isHeading = segment.structureType === "heading";
-    const last = lines[lines.length - 1];
-    if (isHeading) {
-      lines.push({ type: "heading", segments: [segment] });
-    } else if (last && last.type === "flow") {
-      last.segments.push(segment);
-    } else {
-      lines.push({ type: "flow", segments: [segment] });
+  function toLines(segments: TranscriptSegment[]): { type: "heading" | "flow"; segments: TranscriptSegment[] }[] {
+    const lines: { type: "heading" | "flow"; segments: TranscriptSegment[] }[] = [];
+    for (const segment of segments) {
+      const isHeading = segment.structureType === "heading";
+      const last = lines[lines.length - 1];
+      if (isHeading) {
+        lines.push({ type: "heading", segments: [segment] });
+      } else if (last && last.type === "flow") {
+        last.segments.push(segment);
+      } else {
+        lines.push({ type: "flow", segments: [segment] });
+      }
     }
-  }
-
-  if (isProcessing) {
-    return (
-      <div className="card">
-        <div className="note-image-wrap">
-          <img src={`/${imagePath}`} alt="Uploaded handwritten page" className="note-image" />
-        </div>
-        <p>Transcribing your page… this updates automatically, no need to refresh.</p>
-        <button className="button danger" onClick={handleDelete} disabled={deleting}>
-          {deleting ? "Deleting..." : "Cancel / delete note"}
-        </button>
-        {errorMessage && <p style={{ color: "#a33" }}>{errorMessage}</p>}
-      </div>
-    );
-  }
-
-  if (status === "error") {
-    return (
-      <div className="card">
-        <p style={{ color: "#a33" }}>
-          Transcription failed. The original image is intact - you can retry.
-        </p>
-        <button className="button" onClick={handleRetry} disabled={retrying}>
-          {retrying ? "Retrying..." : "Retry transcription"}
-        </button>{" "}
-        <button className="button danger" onClick={handleDelete} disabled={deleting}>
-          {deleting ? "Deleting..." : "Delete note"}
-        </button>
-        {errorMessage && <p style={{ color: "#a33" }}>{errorMessage}</p>}
-      </div>
-    );
+    return lines;
   }
 
   return (
     <div>
-      <div className="note-image-wrap" ref={imageWrapRef}>
-        <img src={`/${imagePath}`} alt="Uploaded handwritten page" className="note-image" />
-        {activeRegion && (
-          <div
-            className="region-highlight"
-            style={{
-              left: `${activeRegion.bbox[0] * 100}%`,
-              top: `${activeRegion.bbox[1] * 100}%`,
-              width: `${activeRegion.bbox[2] * 100}%`,
-              height: `${activeRegion.bbox[3] * 100}%`,
-            }}
-          />
-        )}
-      </div>
+      {pageStates.map((page) => {
+        const lines = toLines(page.segments);
+        const isRetrying = retryingPageIds.has(page.id);
+        return (
+          <div key={page.id} className="note-page-block">
+            {pageStates.length > 1 && (
+              <p className="muted note-page-label">
+                Page {page.pageNumber} of {pageStates.length}
+              </p>
+            )}
 
-      <input
-        className="field"
-        placeholder="Untitled note"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        style={{ marginBottom: "1rem", fontSize: "1.1rem" }}
-      />
-
-      <div className="organize-row">
-        <label className="muted" htmlFor="folder-select">
-          Folder:
-        </label>
-        <select
-          id="folder-select"
-          className="field folder-select"
-          value={folderId ?? ""}
-          onChange={(e) => {
-            setFolderId(e.target.value || null);
-            setSavedMessage(null);
-          }}
-        >
-          <option value="">No folder</option>
-          {allFolders.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="tags-editor">
-        {tags.map((t) => (
-          <span key={t.id} className={`tag-chip${t.source === "ai" ? " ai-suggested" : ""}`}>
-            {t.name}
-            {t.source === "ai" && <span className="tag-ai-label">AI</span>}
-            <button
-              type="button"
-              className="tag-remove"
-              aria-label={`Remove tag ${t.name}`}
-              onClick={() => removeTag(t.id)}
+            <div
+              className="note-image-wrap"
+              ref={(el) => {
+                if (el) imageWrapRefs.current.set(page.id, el);
+                else imageWrapRefs.current.delete(page.id);
+              }}
             >
-              ×
-            </button>
-          </span>
-        ))}
-        <input
-          className="tag-input"
-          list="tag-suggestions"
-          placeholder="Add a tag…"
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addTag(tagInput);
-            }
-          }}
-        />
-        <datalist id="tag-suggestions">
-          {allTagNames.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-      </div>
-      {tags.some((t) => t.source === "ai") && (
-        <p className="muted">
-          Tags marked <span className="tag-ai-label">AI</span> were suggested automatically -
-          remove any that don&apos;t fit, or just save to keep them.
-        </p>
-      )}
+              <img src={`/${page.imagePath}`} alt="Uploaded handwritten page" className="note-image" />
+              {activeRegion && page.segments.some((s) => s.id === activeSegmentId) && (
+                <div
+                  className="region-highlight"
+                  style={{
+                    left: `${activeRegion.bbox[0] * 100}%`,
+                    top: `${activeRegion.bbox[1] * 100}%`,
+                    width: `${activeRegion.bbox[2] * 100}%`,
+                    height: `${activeRegion.bbox[3] * 100}%`,
+                  }}
+                />
+              )}
+            </div>
 
-      {flaggedCount > 0 && (
-        <p className="muted">
-          {flaggedCount} item{flaggedCount === 1 ? "" : "s"} still flagged for review - you
-          can save without resolving them.
-        </p>
-      )}
-      {crossedOutCount > 0 && (
-        <p className="muted">
-          <span className="crossed-out-sample">abc</span> {crossedOutCount} word
-          {crossedOutCount === 1 ? "" : "s"} shown with a strikethrough were crossed out in the
-          original - kept for reference, but feel free to delete them if you don&apos;t want them
-          in the note.
-        </p>
-      )}
+            {(page.status === "uploaded" || page.status === "transcribing") && (
+              <p className="muted">
+                Transcribing this page… this updates automatically, no need to refresh.
+              </p>
+            )}
 
-      <div className="transcription">
-        {lines.map((line, i) =>
-          line.type === "heading" ? (
-            <h2 key={line.segments[0].id} className="segment-heading">
-              <textarea
-                ref={autoGrow}
-                className="segment-input"
-                rows={1}
-                value={line.segments[0].text}
-                onChange={(e) => {
-                  updateSegment(line.segments[0].id, e.target.value);
-                  autoGrow(e.currentTarget);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.preventDefault();
-                }}
-                onFocus={() => handleSegmentFocus(line.segments[0].id)}
-                onBlur={handleSegmentBlur}
-              />
-            </h2>
-          ) : (
-            <p key={i} className="flow">
-              {line.segments.map((segment) => {
-                const titleParts = [
-                  segment.crossedOut ? "Crossed out in the original - kept here, delete if you don't want it" : null,
-                  segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
-                ].filter(Boolean);
-                return (
-                  <textarea
-                    key={segment.id}
-                    ref={autoGrow}
-                    rows={1}
-                    className={[
-                      "segment-input",
-                      segment.reviewRequired ? "flagged" : "",
-                      segment.crossedOut ? "crossed-out" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    title={titleParts.length ? titleParts.join(" — ") : undefined}
-                    value={segment.text}
-                    onChange={(e) => {
-                      updateSegment(segment.id, e.target.value);
-                      autoGrow(e.currentTarget);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.preventDefault();
-                    }}
-                    onFocus={() => handleSegmentFocus(segment.id)}
-                    onBlur={handleSegmentBlur}
-                  />
-                );
-              })}
+            {page.status === "error" && (
+              <p style={{ color: "#a33" }}>
+                Transcription failed for this page: {page.errorMessage ?? "Unknown error."} The
+                original image is intact.{" "}
+                <button
+                  className="button"
+                  onClick={() => handleRetryPage(page.id)}
+                  disabled={isRetrying}
+                >
+                  {isRetrying ? "Retrying..." : "Retry this page"}
+                </button>
+              </p>
+            )}
+
+            {page.status === "ready_for_review" && (
+              <div className="transcription">
+                {lines.map((line, i) =>
+                  line.type === "heading" ? (
+                    <h2 key={line.segments[0].id} className="segment-heading">
+                      <textarea
+                        ref={autoGrow}
+                        className="segment-input"
+                        rows={1}
+                        value={line.segments[0].text}
+                        onChange={(e) => {
+                          updateSegment(page.id, line.segments[0].id, e.target.value);
+                          autoGrow(e.currentTarget);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.preventDefault();
+                        }}
+                        onFocus={() => handleSegmentFocus(line.segments[0].id, page.id)}
+                        onBlur={handleSegmentBlur}
+                      />
+                    </h2>
+                  ) : (
+                    <p key={i} className="flow">
+                      {line.segments.map((segment) => {
+                        const titleParts = [
+                          segment.crossedOut
+                            ? "Crossed out in the original - kept here, delete if you don't want it"
+                            : null,
+                          segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
+                        ].filter(Boolean);
+                        return (
+                          <textarea
+                            key={segment.id}
+                            ref={autoGrow}
+                            rows={1}
+                            className={[
+                              "segment-input",
+                              segment.reviewRequired ? "flagged" : "",
+                              segment.crossedOut ? "crossed-out" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            title={titleParts.length ? titleParts.join(" — ") : undefined}
+                            value={segment.text}
+                            onChange={(e) => {
+                              updateSegment(page.id, segment.id, e.target.value);
+                              autoGrow(e.currentTarget);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.preventDefault();
+                            }}
+                            onFocus={() => handleSegmentFocus(segment.id, page.id)}
+                            onBlur={handleSegmentBlur}
+                          />
+                        );
+                      })}
+                    </p>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {hasAnyReadyPage && (
+        <>
+          <input
+            className="field"
+            placeholder="Untitled note"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            style={{ marginBottom: "1rem", fontSize: "1.1rem" }}
+          />
+
+          <div className="organize-row">
+            <label className="muted" htmlFor="folder-select">
+              Folder:
+            </label>
+            <select
+              id="folder-select"
+              className="field folder-select"
+              value={folderId ?? ""}
+              onChange={(e) => {
+                setFolderId(e.target.value || null);
+                setSavedMessage(null);
+              }}
+            >
+              <option value="">No folder</option>
+              {allFolders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="tags-editor">
+            {tags.map((t) => (
+              <span key={t.id} className={`tag-chip${t.source === "ai" ? " ai-suggested" : ""}`}>
+                {t.name}
+                {t.source === "ai" && <span className="tag-ai-label">AI</span>}
+                <button
+                  type="button"
+                  className="tag-remove"
+                  aria-label={`Remove tag ${t.name}`}
+                  onClick={() => removeTag(t.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              className="tag-input"
+              list="tag-suggestions"
+              placeholder="Add a tag…"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addTag(tagInput);
+                }
+              }}
+            />
+            <datalist id="tag-suggestions">
+              {allTagNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </div>
+          {tags.some((t) => t.source === "ai") && (
+            <p className="muted">
+              Tags marked <span className="tag-ai-label">AI</span> were suggested automatically -
+              remove any that don&apos;t fit, or just save to keep them.
             </p>
-          )
-        )}
-      </div>
+          )}
 
-      <button className="button" onClick={handleSave} disabled={saving}>
-        {saving ? "Saving..." : "Save"}
-      </button>{" "}
+          {flaggedCount > 0 && (
+            <p className="muted">
+              {flaggedCount} item{flaggedCount === 1 ? "" : "s"} still flagged for review - you
+              can save without resolving them.
+            </p>
+          )}
+          {crossedOutCount > 0 && (
+            <p className="muted">
+              <span className="crossed-out-sample">abc</span> {crossedOutCount} word
+              {crossedOutCount === 1 ? "" : "s"} shown with a strikethrough were crossed out in the
+              original - kept for reference, but feel free to delete them if you don&apos;t want them
+              in the note.
+            </p>
+          )}
+
+          <button className="button" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </button>{" "}
+        </>
+      )}
+
       <button className="button danger" onClick={handleDelete} disabled={deleting}>
         {deleting ? "Deleting..." : "Delete note"}
       </button>

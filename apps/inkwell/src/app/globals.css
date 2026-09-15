@@ -180,6 +180,49 @@ h2.segment-heading textarea.segment-input {
   white-space: pre-wrap;
 }
 
+/* Multi-page notes: each page (image + its own transcription/status) stacks
+   as its own block, with a divider between pages once there's more than one
+   so it reads as "several pages of one note," not a run-on wall of text. */
+.note-page-block {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+}
+
+.note-page-block:not(:last-child) {
+  border-bottom: 1px dashed var(--card-border);
+}
+
+.note-page-label {
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+/* Upload screen's page filmstrip (FR-2.3): a lightweight list of selected
+   pages in upload order, reorderable/removable before the note is created. */
+.page-filmstrip {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.page-filmstrip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.page-filmstrip-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .note-image-wrap {
   position: relative;
   display: block;

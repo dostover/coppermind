@@ -1,22 +1,49 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 
+// Multi-page notes (FR-2.3/FR-2.4): the user can select several page images
+// at once (or add more in a follow-up selection - the file input stays
+// available after a pick), see them listed in the order they'll be saved as
+// pages, remove one before uploading, and reorder with simple up/down moves
+// rather than a full drag gesture - lighter to build and just as effective
+// for "put page 3 before page 2," which is the actual need (03-ux-screens.md's
+// full filmstrip-with-drag is the fuller version of this same interaction).
 export function UploadForm() {
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
+  const inputId = useId();
+  const [files, setFiles] = useState<File[]>([]);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  function addFiles(newFiles: FileList | null) {
+    if (!newFiles || newFiles.length === 0) return;
+    setFiles((prev) => [...prev, ...Array.from(newFiles)]);
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function moveFile(index: number, direction: -1 | 1) {
+    setFiles((prev) => {
+      const next = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (files.length === 0) return;
     setStatus("uploading");
     setError(null);
 
     const formData = new FormData();
-    formData.append("image", file);
+    for (const file of files) formData.append("images", file);
 
     try {
       const res = await fetch("/api/notes/upload", { method: "POST", body: formData });
@@ -31,17 +58,66 @@ export function UploadForm() {
 
   return (
     <form onSubmit={handleSubmit} className="card">
-      <label htmlFor="image">Handwritten page image (JPEG, PNG, or WebP)</label>
+      <label htmlFor={inputId}>
+        Handwritten page image(s) (JPEG, PNG, or WebP) - select multiple, or add more below, to
+        capture a multi-page note as one entry
+      </label>
       <input
-        id="image"
+        id={inputId}
         className="field"
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        multiple
+        onChange={(e) => {
+          addFiles(e.target.files);
+          e.target.value = ""; // allow picking the same file again / adding more right after
+        }}
         style={{ margin: "0.75rem 0" }}
       />
-      <button className="button" type="submit" disabled={!file || status === "uploading"}>
-        {status === "uploading" ? "Uploading..." : "Upload & Transcribe"}
+
+      {files.length > 0 && (
+        <ul className="page-filmstrip">
+          {files.map((file, i) => (
+            <li key={`${file.name}-${i}`} className="page-filmstrip-item">
+              <span className="muted">Page {i + 1}</span>
+              <span className="page-filmstrip-name">{file.name}</span>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => moveFile(i, -1)}
+                disabled={i === 0}
+                aria-label={`Move ${file.name} earlier`}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => moveFile(i, 1)}
+                disabled={i === files.length - 1}
+                aria-label={`Move ${file.name} later`}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="button danger"
+                onClick={() => removeFile(i)}
+                aria-label={`Remove ${file.name}`}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button className="button" type="submit" disabled={files.length === 0 || status === "uploading"}>
+        {status === "uploading"
+          ? "Uploading..."
+          : files.length > 1
+            ? `Upload ${files.length} pages as one note`
+            : "Upload & Transcribe"}
       </button>
       {status === "error" && (
         <p style={{ color: "#a33" }}>
