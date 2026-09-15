@@ -1,7 +1,11 @@
 /* Palette: an ink-on-paper ramp, darkest to lightest. Used both as raw brand
    tokens (rarely referenced directly) and as the semantic tokens below them,
    which is what every rule in this file actually uses - so retuning the look
-   later only means changing this block. */
+   later only means changing this block. Direction: soft/rounded (Notion/
+   Craft-adjacent) - a tinted canvas behind white rounded surfaces, pill
+   buttons/chips, generous radii - picked over a minimal/borders-only or a
+   bold high-contrast direction after comparing all three live.
+*/
 :root {
   --ink-black: #0d1b2a;
   --prussian-blue: #1b263b;
@@ -9,15 +13,15 @@
   --dusty-denim: #778da9;
   --alabaster: #e0e1dd;
 
-  --bg: var(--alabaster);
+  --bg: #eef1f5;
   --surface: #ffffff;
-  --surface-alt: #eceeea;
+  --surface-alt: #e4e9f0;
   --ink: var(--ink-black);
   --muted: var(--dusk-blue);
   --accent: var(--dusk-blue);
   --accent-strong: var(--prussian-blue);
-  --accent-tint: #eef1f5;
-  --border: #d7d9d3;
+  --accent-tint: #dde6f0;
+  --border: #dde3ea;
   --border-strong: var(--dusty-denim);
 
   --flag-bg: #fdf1d8;
@@ -26,15 +30,19 @@
   --danger-bg: #fbeaea;
   --danger-border: #dcb3b3;
 
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 18px;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(13, 27, 42, 0.07), 0 1px 1px rgba(13, 27, 42, 0.04);
-  --shadow-md: 0 8px 24px rgba(13, 27, 42, 0.10), 0 2px 6px rgba(13, 27, 42, 0.06);
+  /* Tinted (blue, not black) shadows - a small thing that reads as
+     "considered" rather than a default drop-shadow dropped on everything. */
+  --shadow-sm: 0 1px 2px rgba(65, 90, 119, 0.08), 0 2px 6px rgba(65, 90, 119, 0.06);
+  --shadow-md: 0 10px 28px rgba(65, 90, 119, 0.16), 0 2px 8px rgba(65, 90, 119, 0.08);
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Noto Serif", serif;
+
+  --sidebar-width: 15rem;
 }
 
 * {
@@ -53,20 +61,20 @@ body {
 h1,
 h2,
 h3 {
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 800;
   color: var(--ink-black);
   line-height: 1.25;
   margin: 0 0 0.6em;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 h1 {
-  font-size: 2rem;
+  font-size: 1.9rem;
 }
 
 h2 {
-  font-size: 1.4rem;
+  font-size: 1.3rem;
 }
 
 p {
@@ -75,7 +83,6 @@ p {
 
 a {
   color: var(--accent);
-  text-decoration-color: var(--border-strong);
 }
 
 a:hover {
@@ -88,51 +95,88 @@ a:hover {
   border-radius: 3px;
 }
 
-/* App chrome: a dark bar (rather than a bordered strip in the page's own
-   background) is the single highest-leverage change for "this looks like a
-   real app, not a prototype" - it gives the content area somewhere to sit,
-   and reads as a title bar the way native/well-designed web apps have one. */
-.nav {
-  height: 3.75rem;
-  background: var(--ink-black);
-  box-shadow: var(--shadow-sm);
+/* App shell: sidebar + content, side by side. Collapses to a horizontal top
+   bar under the sidebar's own breakpoint (see .sidebar media query) so this
+   still works at phone width. */
+.app-shell {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
   position: sticky;
   top: 0;
-  z-index: 10;
+  height: 100vh;
+  overflow-y: auto;
 }
 
-.nav-inner {
-  display: flex;
-  gap: 2rem;
-  align-items: center;
-  height: 100%;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-.nav .brand {
-  font-family: var(--font-serif);
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: 0.01em;
-  color: var(--alabaster);
+.sidebar .brand {
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+  color: var(--ink-black);
   text-decoration: none;
+  padding: 0.4rem 0.75rem 1.1rem;
 }
 
-.nav a:not(.brand) {
+.sidebar a:not(.brand) {
   text-decoration: none;
-  color: var(--dusty-denim);
-  font-size: 0.95rem;
-  transition: color 0.15s ease;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.nav a:not(.brand):hover {
-  color: var(--alabaster);
+.sidebar a:not(.brand):hover {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+.sidebar a.active {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+  }
+
+  .sidebar .brand {
+    padding: 0.4rem 0.75rem;
+  }
 }
 
 main {
-  max-width: 800px;
+  flex: 1;
+  min-width: 0;
+}
+
+.main-inner {
+  max-width: 760px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 5rem;
 }
@@ -154,14 +198,14 @@ main {
 }
 
 .hero h1 {
-  font-size: 2.25rem;
+  font-size: 2.1rem;
 }
 
 .hero-rule {
   width: 3rem;
-  height: 3px;
+  height: 4px;
   background: var(--dusty-denim);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   margin: 0 auto 1.5rem;
 }
 
@@ -180,21 +224,21 @@ main {
   align-items: center;
   gap: 0.4rem;
   background: var(--dusk-blue);
-  color: var(--alabaster);
-  border: 1px solid var(--dusk-blue);
-  border-radius: var(--radius);
-  padding: 0.65rem 1.3rem;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 0.65rem 1.4rem;
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 700;
   font-family: inherit;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 .button:hover:not(:disabled) {
   background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .button:active:not(:disabled) {
@@ -207,32 +251,29 @@ main {
 }
 
 .button.secondary {
-  background: transparent;
-  color: var(--dusk-blue);
-  border: 1px solid var(--border-strong);
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  border: none;
 }
 
 .button.secondary:hover:not(:disabled) {
-  background: var(--accent-tint);
-  border-color: var(--dusk-blue);
-  color: var(--accent-strong);
+  background: #cfdcea;
 }
 
 .button.danger {
-  background: transparent;
+  background: var(--danger-bg);
   color: var(--danger);
-  border: 1px solid var(--danger-border);
+  border: none;
 }
 
 .button.danger:hover:not(:disabled) {
-  background: var(--danger-bg);
-  border-color: var(--danger);
+  background: #f6d9d9;
 }
 
 .field {
   display: block;
   width: 100%;
-  padding: 0.6rem 0.75rem;
+  padding: 0.65rem 0.9rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -251,7 +292,7 @@ main {
   display: inline-block;
   font-size: 0.75rem;
   padding: 0.15rem 0.6rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--flag-border);
   background: var(--flag-bg);
   color: #7a5a10;
@@ -273,8 +314,8 @@ main {
   border: none;
   background: transparent;
   font: inherit;
-  padding: 0.05rem 0.25rem;
-  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  border-radius: 5px;
   /* Sizes to fit short content like the old <input> did (Chrome/Edge; other
      browsers fall back to a default textarea width - see ReviewEditor.tsx's
      autoGrow comment). max-width caps a single long segment at the line's
@@ -321,7 +362,7 @@ h2.segment-heading {
 
 h2.segment-heading textarea.segment-input {
   font-size: 1.3rem;
-  font-weight: 600;
+  font-weight: 700;
   width: 100%;
   display: block;
   resize: none;
@@ -344,7 +385,7 @@ h2.segment-heading textarea.segment-input {
 }
 
 .note-page-label {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--dusk-blue);
   text-transform: uppercase;
   font-size: 0.75rem;
@@ -368,9 +409,8 @@ h2.segment-heading textarea.segment-input {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  padding: 0.5rem 0.75rem;
+  padding: 0.55rem 0.85rem;
   background: var(--surface-alt);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
@@ -398,7 +438,6 @@ h2.segment-heading textarea.segment-input {
   display: block;
   width: 100%;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
 }
 
 /* Image-region highlighting (AC-6 / FR-5.5): position/size come straight
@@ -408,7 +447,7 @@ h2.segment-heading textarea.segment-input {
   position: absolute;
   border: 2px solid var(--dusk-blue);
   background: rgba(65, 90, 119, 0.18);
-  border-radius: 3px;
+  border-radius: 5px;
   pointer-events: none;
   transition: left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease;
 }
@@ -461,8 +500,7 @@ h2.segment-heading textarea.segment-input {
   width: 4.5rem;
   height: 4.5rem;
   object-fit: cover;
-  border-radius: calc(var(--radius) - 2px);
-  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
 }
 
 .carousel-thumb.active {
@@ -474,18 +512,17 @@ h2.segment-heading textarea.segment-input {
   text-decoration: none;
   color: inherit;
   margin-bottom: 1rem;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 .note-card:hover {
   box-shadow: var(--shadow-md);
-  border-color: var(--border-strong);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .note-card strong {
-  font-family: var(--font-serif);
-  font-size: 1.1rem;
+  font-size: 1.08rem;
+  font-weight: 800;
 }
 
 .muted {
@@ -494,7 +531,7 @@ h2.segment-heading textarea.segment-input {
 }
 
 .empty-state {
-  border: 1px dashed var(--border-strong);
+  border: 1.5px dashed var(--border-strong);
   border-radius: var(--radius-lg);
   padding: 2.5rem 1.5rem;
   text-align: center;
@@ -515,31 +552,31 @@ h2.segment-heading textarea.segment-input {
   display: inline-block;
   text-decoration: none;
   font-size: 0.85rem;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  font-weight: 600;
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius-pill);
+  border: none;
   color: var(--muted);
   background: var(--surface);
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .folder-pill:hover {
-  border-color: var(--border-strong);
+  background: var(--accent-tint);
   color: var(--accent-strong);
 }
 
 .folder-pill.active {
-  border-color: var(--dusk-blue);
-  color: var(--surface);
+  color: #ffffff;
   background: var(--dusk-blue);
-  font-weight: 600;
 }
 
 .folder-pill.new-folder {
   cursor: pointer;
   font: inherit;
   color: var(--dusk-blue);
-  border-style: dashed;
+  background: transparent;
+  border: 1.5px dashed var(--border-strong);
 }
 
 .new-folder-form {
@@ -552,6 +589,7 @@ h2.segment-heading textarea.segment-input {
   width: auto;
   padding: 0.35rem 0.7rem;
   font-size: 0.85rem;
+  border-radius: var(--radius-pill);
 }
 
 .organize-row {
@@ -563,6 +601,7 @@ h2.segment-heading textarea.segment-input {
 
 .folder-select {
   width: auto;
+  border-radius: var(--radius-pill);
 }
 
 /* Tags */
@@ -580,26 +619,26 @@ h2.segment-heading textarea.segment-input {
   align-items: center;
   gap: 0.3rem;
   font-size: 0.8rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  font-weight: 600;
+  padding: 0.25rem 0.7rem;
+  border-radius: var(--radius-pill);
+  border: none;
   background: var(--accent-tint);
   color: var(--prussian-blue);
   margin-right: 0.3rem;
 }
 
 .tag-chip.ai-suggested {
-  border-style: dashed;
-  border-color: var(--dusty-denim);
+  box-shadow: inset 0 0 0 1.5px var(--dusty-denim);
 }
 
 .tag-ai-label {
   font-size: 0.65rem;
   font-weight: 700;
   color: var(--dusk-blue);
-  border: 1px solid var(--dusk-blue);
   border-radius: 4px;
   padding: 0 0.25rem;
+  background: #ffffffa8;
 }
 
 .tag-remove {
@@ -617,9 +656,9 @@ h2.segment-heading textarea.segment-input {
 }
 
 .tag-input {
-  border: 1px dashed var(--border-strong);
-  border-radius: 999px;
-  padding: 0.2rem 0.7rem;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-pill);
+  padding: 0.25rem 0.75rem;
   font-size: 0.85rem;
   font: inherit;
   min-width: 8ch;
@@ -647,5 +686,5 @@ h2.segment-heading textarea.segment-input {
 .danger-zone {
   margin-top: 2.5rem;
   padding-top: 1.5rem;
-  border-top: 1px dashed var(--border-strong);
+  border-top: 1.5px dashed var(--border-strong);
 }
