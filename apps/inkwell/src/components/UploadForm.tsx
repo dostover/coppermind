@@ -41,7 +41,7 @@ export function UploadForm() {
         style={{ margin: "0.75rem 0" }}
       />
       <button className="button" type="submit" disabled={!file || status === "uploading"}>
-        {status === "uploading" ? "Transcribing..." : "Upload & Transcribe"}
+        {status === "uploading" ? "Uploading..." : "Upload & Transcribe"}
       </button>
       {status === "error" && (
         <p style={{ color: "#a33" }}>

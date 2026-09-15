@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NoteTagView } from "@/lib/db";
 
@@ -42,6 +42,37 @@ export function ReviewEditor({
 
   const flaggedCount = segments.filter((s) => s.reviewRequired).length;
   const crossedOutCount = segments.filter((s) => s.crossedOut).length;
+  const isProcessing = status === "uploaded" || status === "transcribing";
+
+  // Async processing (see src/lib/jobs.ts): upload/retry now enqueue a job
+  // and return immediately, so this page has to poll rather than assume the
+  // note is done by the time it renders. Polling re-fetches the server
+  // component via router.refresh(), which re-renders this component with a
+  // fresh `status` prop - the effect below re-runs on that prop change and
+  // stops itself once the job has left 'uploaded'/'transcribing'.
+  useEffect(() => {
+    if (!isProcessing) return;
+    const interval = setInterval(() => router.refresh(), 2000);
+    return () => clearInterval(interval);
+  }, [isProcessing, router]);
+
+  // useState only reads its initial* prop once, at mount - it doesn't
+  // resync when props change on a later render (e.g. the refresh above
+  // delivering the finished transcription). So when the job finishes while
+  // this component is already mounted (the normal case: land on the note
+  // page right after upload, still 'uploaded'/'transcribing'), pull the now-
+  // real segments/title/tags/folder into local state exactly once, the
+  // moment processing ends.
+  const wasProcessingRef = useRef(isProcessing);
+  useEffect(() => {
+    if (wasProcessingRef.current && !isProcessing) {
+      setTitle(initialTitle ?? "");
+      setSegments(initialSegments);
+      setFolderId(initialFolderId);
+      setTags(initialTags);
+    }
+    wasProcessingRef.current = isProcessing;
+  }, [isProcessing, initialTitle, initialSegments, initialFolderId, initialTags]);
 
   function updateSegment(id: string, text: string) {
     setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, text } : s)));
@@ -152,6 +183,19 @@ export function ReviewEditor({
     } else {
       lines.push({ type: "flow", segments: [segment] });
     }
+  }
+
+  if (isProcessing) {
+    return (
+      <div className="card">
+        <img src={`/${imagePath}`} alt="Uploaded handwritten page" className="note-image" />
+        <p>Transcribing your page… this updates automatically, no need to refresh.</p>
+        <button className="button danger" onClick={handleDelete} disabled={deleting}>
+          {deleting ? "Deleting..." : "Cancel / delete note"}
+        </button>
+        {errorMessage && <p style={{ color: "#a33" }}>{errorMessage}</p>}
+      </div>
+    );
   }
 
   if (status === "error") {

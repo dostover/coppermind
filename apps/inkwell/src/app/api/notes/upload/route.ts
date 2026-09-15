@@ -2,21 +2,19 @@ import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { notesRepo, tagsRepo, noteTagsRepo } from "@/lib/db";
-import { getAIProvider } from "@/lib/ai";
-import { getHandwritingContext } from "@/lib/handwritingProfile";
-import { CONFIDENCE_THRESHOLD } from "@/lib/config";
-import { derivePlaceholderTitle } from "@/lib/titleGen";
+import { notesRepo } from "@/lib/db";
+import { enqueueTranscribeJob } from "@/lib/jobs";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-// Synchronous processing for this phase (per claude/08-walking-skeleton-scope.md):
-// the upload request itself runs transcribe() and waits for it, rather than
-// enqueuing an async pipeline stage. This is the one deliberate deviation
-// from FR-2.5/FR-17.1 ("upload gives immediate feedback, doesn't block on AI")
-// - acceptable while the whole point is validating the AI loop end-to-end
-// with a human at the keyboard; revisit when this grows toward the full
-// async pipeline in docs/inkwell/02-architecture.md §8.
+// Async processing (per claude/09-walking-skeleton-architecture.md's
+// "Synchronous upload" note, superseding the walking-skeleton's original
+// deliberate deviation from FR-2.5/FR-17.1): upload only saves the file and
+// enqueues a processing_jobs row, then returns immediately - it never
+// itself awaits the AI call. The actual transcribe+tag-suggestion work now
+// lives in src/lib/jobs.ts, run by the in-process job runner started from
+// src/instrumentation.ts. The note page polls GET /api/notes/[id] and shows
+// a "still processing" state until the job completes.
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const file = formData.get("image");
@@ -43,56 +41,11 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
   notesRepo.create({ id, title: null, imagePath: relativePath, createdAt: now });
 
-  try {
-    const provider = getAIProvider();
-    const result = await provider.transcribe({
-      imagePath: relativePath,
-      handwritingContext: getHandwritingContext(),
-      confidenceThreshold: CONFIDENCE_THRESHOLD,
-    });
-    notesRepo.setTranscribed(
-      id,
-      result.segments,
-      new Date().toISOString(),
-      derivePlaceholderTitle(result.segments)
-    );
-
-    // Best-effort AI tag suggestion, one time only (new note -> no existing
-    // note_tags rows yet). A failure here must not fail an otherwise-
-    // successful upload/transcription - tags are a nice-to-have, not core
-    // to the walking-skeleton's transcription+learning loop.
-    try {
-      const transcriptionText = result.segments
-        .filter((s) => !s.crossedOut)
-        .map((s) => s.text)
-        .join(" ");
-      if (transcriptionText.trim()) {
-        const existingUserTags = tagsRepo.listAll().map((t) => t.name);
-        const { tags } = await provider.generateTags({
-          transcription: transcriptionText,
-          existingUserTags,
-        });
-        const resolved = tags.map((t) => ({
-          ...tagsRepo.findOrCreate(t.name, new Date().toISOString()),
-          confidence: t.confidence,
-        }));
-        noteTagsRepo.setForNote(
-          id,
-          resolved.map((t) => ({ tagId: t.id, source: "ai" as const, confidence: t.confidence })),
-          new Date().toISOString()
-        );
-      }
-    } catch (tagErr) {
-      console.error("AI tag suggestion failed (non-fatal):", tagErr);
-    }
-  } catch (err) {
-    // A failure here does not lose the uploaded original (FR-3.8/FR-13.2) -
-    // the image is already saved and the note is left in a recoverable
-    // 'error' state rather than discarded.
-    const message = err instanceof Error ? err.message : "Transcription failed.";
-    notesRepo.setError(id, message, new Date().toISOString());
-    return NextResponse.json({ id, error: message }, { status: 502 });
-  }
+  // Failure here does not lose the uploaded original (FR-3.8/FR-13.2) - the
+  // image and note row already exist; a job that later fails leaves the
+  // note in a recoverable 'error' state (see jobs.ts's runOneJob) with the
+  // existing Retry action still available.
+  enqueueTranscribeJob(id);
 
   return NextResponse.json({ id }, { status: 201 });
 }
