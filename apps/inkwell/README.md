@@ -121,8 +121,9 @@ src/
 ## Known limitations (by design, for this phase)
 
 - No authentication - single implicit local user.
-- Processing is synchronous (the upload request waits for the AI call to
-  finish) rather than an async pipeline with job stages.
+- Processing is async (a lightweight in-process job runner, not a real queue
+  broker) - fine for one local user, but jobs don't survive across separate
+  machines/processes and there's no horizontal scaling.
 - Search is naive substring matching over SQLite.
 - Single page per note; multi-page grouping isn't implemented.
 

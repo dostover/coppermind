@@ -5,8 +5,8 @@ export default function UploadPage() {
     <div>
       <h1>Capture a page</h1>
       <p className="muted">
-        Processing happens synchronously in this build - the page will wait for the
-        AI call (mock or real) to finish, then take you straight to review.
+        Transcription happens in the background - you&apos;ll land on the review screen
+        right away and it&apos;ll fill in automatically, no need to wait or refresh.
       </p>
       <UploadForm />
     </div>
