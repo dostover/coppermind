@@ -125,27 +125,37 @@ main {
   margin: 0 0 1rem;
 }
 
-.flow input.segment-input {
+.flow textarea.segment-input {
   border: none;
   background: transparent;
   font: inherit;
   padding: 0.05rem 0.25rem;
   border-radius: 4px;
+  /* Sizes to fit short content like the old <input> did (Chrome/Edge; other
+     browsers fall back to a default textarea width - see ReviewEditor.tsx's
+     autoGrow comment). max-width caps a single long segment at the line's
+     full width instead of overflowing it, so long text wraps inside the box
+     rather than forcing horizontal scrolling - the actual bug this fixes. */
   field-sizing: content;
   min-width: 1.5ch;
+  max-width: 100%;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  vertical-align: bottom;
 }
 
-.flow input.segment-input:focus {
+.flow textarea.segment-input:focus {
   outline: 2px solid var(--accent);
   background: white;
 }
 
-.flow input.segment-input.flagged {
+.flow textarea.segment-input.flagged {
   background: var(--flag-bg);
   border: 1px solid var(--flag-border);
 }
 
-.flow input.segment-input.crossed-out {
+.flow textarea.segment-input.crossed-out {
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
   color: var(--muted);
@@ -160,10 +170,14 @@ h2.segment-heading {
   margin: 0 0 0.75rem;
 }
 
-h2.segment-heading input.segment-input {
+h2.segment-heading textarea.segment-input {
   font-size: 1.3rem;
   font-weight: 600;
   width: 100%;
+  display: block;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
 }
 
 .note-image-wrap {
