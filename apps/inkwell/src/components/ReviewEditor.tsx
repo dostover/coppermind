@@ -81,16 +81,23 @@ export function ReviewEditor({
   // highlight. See SourceRegion's doc comment in ai/types.ts for why 0-1
   // fractional coordinates need no image-size bookkeeping here.
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
-  const imageWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Every page's image lives in one shared carousel above the transcriptions
+  // (rather than each page's image sitting inline next to its own text - see
+  // the render below), so there's exactly one "which page's image is showing"
+  // index instead of one ref per page.
+  const [activePageIndex, setActivePageIndex] = useState(0);
+  const carouselRef = useRef<HTMLDivElement | null>(null);
 
   function handleSegmentFocus(segmentId: string, pageId: string) {
     setActiveSegmentId(segmentId);
-    // The review screen stacks each page's image above its transcription
-    // rather than the spec's desktop split-screen (see 03-ux-screens.md §5),
-    // so once you're editing a segment further down the page (or on a later
-    // page) that image is often scrolled out of view - "nearest" is a no-op
-    // if it's already visible.
-    imageWrapRefs.current.get(pageId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const idx = pageStates.findIndex((p) => p.id === pageId);
+    if (idx !== -1) setActivePageIndex(idx);
+    // The transcriptions sit below the shared image carousel (see
+    // 03-ux-screens.md §5's split-screen, approximated here as stacked
+    // rather than side-by-side), so once you're editing a segment further
+    // down the page that carousel is often scrolled out of view - "nearest"
+    // is a no-op if it's already visible.
+    carouselRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function handleSegmentBlur() {
@@ -119,7 +126,16 @@ export function ReviewEditor({
   const allSegments = pageStates.flatMap((p) => p.segments);
   const flaggedCount = allSegments.filter((s) => s.reviewRequired).length;
   const crossedOutCount = allSegments.filter((s) => s.crossedOut).length;
-  const activeRegion = allSegments.find((s) => s.id === activeSegmentId)?.sourceRegion;
+  const activePage = pageStates[activePageIndex] ?? pageStates[0];
+  // Only show the highlight when the focused segment actually belongs to the
+  // page currently showing in the carousel - handleSegmentFocus already
+  // switches the carousel to match, so in practice this is always true while
+  // a segment is focused, but it's a cheap guard against a stale index.
+  const activeRegion = activePage?.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
+
+  function goToPage(delta: -1 | 1) {
+    setActivePageIndex((i) => Math.min(Math.max(i + delta, 0), pageStates.length - 1));
+  }
 
   // Async processing (see src/lib/jobs.ts): upload/retry now enqueue a job
   // per page and return immediately, so this screen has to poll rather than
@@ -317,6 +333,72 @@ export function ReviewEditor({
 
   return (
     <div>
+      {activePage && (
+        <div className="note-image-carousel" ref={carouselRef}>
+          <div className="note-image-wrap">
+            <img
+              src={`/${activePage.imagePath}`}
+              alt="Uploaded handwritten page"
+              className="note-image"
+            />
+            {activeRegion && (
+              <div
+                className="region-highlight"
+                style={{
+                  left: `${activeRegion.bbox[0] * 100}%`,
+                  top: `${activeRegion.bbox[1] * 100}%`,
+                  width: `${activeRegion.bbox[2] * 100}%`,
+                  height: `${activeRegion.bbox[3] * 100}%`,
+                }}
+              />
+            )}
+          </div>
+
+          {pageStates.length > 1 && (
+            <>
+              <div className="carousel-controls">
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => goToPage(-1)}
+                  disabled={activePageIndex === 0}
+                  aria-label="Previous page"
+                >
+                  ‹ Prev
+                </button>
+                <span className="muted">
+                  Page {activePage.pageNumber} of {pageStates.length}
+                </span>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => goToPage(1)}
+                  disabled={activePageIndex === pageStates.length - 1}
+                  aria-label="Next page"
+                >
+                  Next ›
+                </button>
+              </div>
+
+              <div className="carousel-thumbs">
+                {pageStates.map((p, i) => (
+                  <button
+                    type="button"
+                    key={p.id}
+                    className={`carousel-thumb${i === activePageIndex ? " active" : ""}`}
+                    onClick={() => setActivePageIndex(i)}
+                    aria-label={`Go to page ${p.pageNumber}`}
+                    aria-current={i === activePageIndex}
+                  >
+                    <img src={`/${p.imagePath}`} alt="" />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {pageStates.map((page) => {
         const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
@@ -327,27 +409,6 @@ export function ReviewEditor({
                 Page {page.pageNumber} of {pageStates.length}
               </p>
             )}
-
-            <div
-              className="note-image-wrap"
-              ref={(el) => {
-                if (el) imageWrapRefs.current.set(page.id, el);
-                else imageWrapRefs.current.delete(page.id);
-              }}
-            >
-              <img src={`/${page.imagePath}`} alt="Uploaded handwritten page" className="note-image" />
-              {activeRegion && page.segments.some((s) => s.id === activeSegmentId) && (
-                <div
-                  className="region-highlight"
-                  style={{
-                    left: `${activeRegion.bbox[0] * 100}%`,
-                    top: `${activeRegion.bbox[1] * 100}%`,
-                    width: `${activeRegion.bbox[2] * 100}%`,
-                    height: `${activeRegion.bbox[3] * 100}%`,
-                  }}
-                />
-              )}
-            </div>
 
             {(page.status === "uploaded" || page.status === "transcribing") && (
               <p className="muted">
