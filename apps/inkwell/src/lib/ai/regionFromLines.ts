@@ -52,6 +52,22 @@ const RIGHT_MARGIN = 0.06;
 // Leaves a small visual gap between stacked line bands rather than having
 // them touch edge-to-edge, which reads as a tighter, more deliberate highlight.
 const LINE_FILL_RATIO = 0.82;
+// Character-count-proportional width (below) is a rough proxy for actual
+// rendered width - handwriting doesn't space evenly like a monospace font,
+// and short segments/punctuation are especially easy to under- or
+// overestimate. Packed edge-to-edge with no padding, that made the box look
+// like it was highlighting the wrong word whenever the estimate was even a
+// little off (user-reported: "off again and highlighting weird sections").
+// Since only the currently-focused segment's box is ever drawn at once (see
+// ReviewEditor's activeRegion), there's no visual cost to widening each
+// segment's box beyond its exact proportional slot - it can freely overlap
+// its neighbors' slots and nothing else is on screen to collide with. This
+// pads it a bit past the proportional width and re-centers it on the same
+// midpoint the un-padded box had, so it reads as "roughly this word" - more
+// forgiving of the estimate - rather than a razor-tight (and therefore
+// often visibly wrong) sliver.
+const WIDTH_PAD_RATIO = 0.35; // extra width added, split evenly on both sides
+const MIN_WIDTH_PAD = 0.018; // fractional page width - keeps very short segments from getting a near-invisible sliver even at 0% pad ratio
 
 export interface LineTaggedSegment {
   text: string;
@@ -127,9 +143,16 @@ export function computeLineBasedRegions(
     let cursor = LEFT_MARGIN;
     for (const i of indices) {
       const len = Math.max(segments[i].text.length, 1);
-      const width = (len / totalLen) * usableWidth;
-      regions[i] = { bbox: [cursor, top, width, lineHeight * LINE_FILL_RATIO] };
-      cursor += width;
+      const rawWidth = (len / totalLen) * usableWidth;
+      const pad = Math.max(rawWidth * WIDTH_PAD_RATIO, MIN_WIDTH_PAD);
+      const x = Math.max(0, cursor - pad / 2);
+      const width = Math.min(rawWidth + pad, 1 - x);
+      regions[i] = { bbox: [x, top, width, lineHeight * LINE_FILL_RATIO] };
+      // Advance by the un-padded width, so each segment's *slot* still comes
+      // from the real proportional layout - only the box drawn over it gets
+      // wider, the packing math that decides where the next segment's slot
+      // starts does not.
+      cursor += rawWidth;
     }
   }
 
