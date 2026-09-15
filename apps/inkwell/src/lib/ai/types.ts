@@ -28,6 +28,24 @@ export type StructureType =
   | "table_cell"
   | "line";
 
+// AC-6's last bullet / FR-5.5: "select a transcription span, see the matching
+// region of the original photo highlight." A SHOULD in the spec, explicitly
+// droppable "if it substantially raises implementation complexity" - kept
+// nullable/best-effort end to end for exactly that reason (a provider that
+// can't localize a segment just omits it; the UI shows no highlight rather
+// than erroring). Coordinates are fractions of the full page image (0-1),
+// not absolute pixels: ClaudeAIProvider sends the model a resized,
+// EXIF-rotated copy of the photo (see imagePrep.ts) that's never saved to
+// disk, while the review screen displays the original upload. Browsers
+// auto-orient <img> per EXIF the same way sharp's .rotate() does, and the
+// resize preserves aspect ratio, so a 0-1 fraction lines up on the
+// originally-displayed image regardless of the two images' differing pixel
+// dimensions - no pixel math or stored image-size metadata required.
+export interface SourceRegion {
+  /** [x, y, width, height], each a 0-1 fraction of the page, from the top-left. */
+  bbox: [number, number, number, number];
+}
+
 export interface TranscriptSegment {
   /** Stable id, referenced by review-UI editing and correction diffing. */
   id: string;
@@ -42,6 +60,9 @@ export interface TranscriptSegment {
    *  against the live CONFIDENCE_THRESHOLD on every read, so changing the
    *  threshold updates old notes without re-transcribing them (AC-5). */
   reviewRequired: boolean;
+  /** Best-effort source-image region for this segment; null/absent when the
+   *  provider couldn't localize it (see SourceRegion doc above). */
+  sourceRegion?: SourceRegion | null;
 }
 
 export interface TranscribeOutput {

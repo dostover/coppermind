@@ -56,6 +56,24 @@ const TRANSCRIBE_TOOL: Anthropic.Tool = {
             crossedOut: { type: "boolean" },
             emphasis: { type: "string", enum: ["none", "underline", "bold_or_heavy"] },
             confidence: { type: "number", description: "0-1 self-reported confidence" },
+            sourceRegion: {
+              type: "object",
+              description:
+                "Best-effort bounding box for where this segment appears on the page, as fractions " +
+                "(0-1) of the full image's width/height measured from the top-left corner. Omit this " +
+                "field entirely for a segment you cannot confidently localize - a missing region is " +
+                "expected and fine, never guess one just to fill the field.",
+              properties: {
+                bbox: {
+                  type: "array",
+                  description: "[x, y, width, height], each 0-1",
+                  items: { type: "number" },
+                  minItems: 4,
+                  maxItems: 4,
+                },
+              },
+              required: ["bbox"],
+            },
           },
           required: ["text", "structureType", "crossedOut", "emphasis", "confidence"],
         },
@@ -166,6 +184,10 @@ export class ClaudeAIProvider implements AIProvider {
         "dictionary word, and drop your confidence score accordingly rather than silently substituting " +
         "something that reads more naturally. Confidence should reflect how certain you actually are that the " +
         "letters on the page say what you transcribed, not how natural the resulting sentence sounds. " +
+        "For each segment, also report sourceRegion when you can confidently tell where it sits on the " +
+        "page - a bounding box as 0-1 fractions of the full image, from the top-left. This only needs " +
+        "to be roughly right (line-level precision is fine, word-perfect is not required); omit the " +
+        "field entirely rather than guessing when you're not confident where a segment is. " +
         hintText,
       tools: [TRANSCRIBE_TOOL],
       tool_choice: { type: "tool", name: "record_transcription" },
@@ -205,6 +227,10 @@ export class ClaudeAIProvider implements AIProvider {
         // reviewRequired is computed at the app-configured threshold, not
         // baked into the model call - see Phase 5 AI Contracts §1 notes.
         reviewRequired: s.confidence < input.confidenceThreshold,
+        // Normalize an omitted field to null rather than undefined, so
+        // downstream code (and the JSON round-trip through db.ts) sees one
+        // consistent "no region" representation.
+        sourceRegion: s.sourceRegion ?? null,
       })),
     };
   }

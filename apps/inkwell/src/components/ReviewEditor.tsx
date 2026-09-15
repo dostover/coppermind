@@ -40,9 +40,31 @@ export function ReviewEditor({
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Image-region highlighting (AC-6 last bullet / FR-5.5, best-effort): which
+  // segment is currently focused, so its sourceRegion (if any) can be drawn
+  // as an overlay box on the image above. See SourceRegion's doc comment in
+  // ai/types.ts for why 0-1 fractional coordinates need no image-size
+  // bookkeeping here.
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const imageWrapRef = useRef<HTMLDivElement>(null);
+
+  function handleSegmentFocus(segmentId: string) {
+    setActiveSegmentId(segmentId);
+    // The review screen stacks the image above the transcription rather than
+    // the spec's desktop split-screen (see 03-ux-screens.md §5), so once
+    // you're editing a segment further down the page the image is often
+    // scrolled out of view - "nearest" is a no-op if it's already visible.
+    imageWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function handleSegmentBlur() {
+    setActiveSegmentId(null);
+  }
+
   const flaggedCount = segments.filter((s) => s.reviewRequired).length;
   const crossedOutCount = segments.filter((s) => s.crossedOut).length;
   const isProcessing = status === "uploaded" || status === "transcribing";
+  const activeRegion = segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
 
   // Async processing (see src/lib/jobs.ts): upload/retry now enqueue a job
   // and return immediately, so this page has to poll rather than assume the
@@ -188,7 +210,9 @@ export function ReviewEditor({
   if (isProcessing) {
     return (
       <div className="card">
-        <img src={`/${imagePath}`} alt="Uploaded handwritten page" className="note-image" />
+        <div className="note-image-wrap">
+          <img src={`/${imagePath}`} alt="Uploaded handwritten page" className="note-image" />
+        </div>
         <p>Transcribing your page… this updates automatically, no need to refresh.</p>
         <button className="button danger" onClick={handleDelete} disabled={deleting}>
           {deleting ? "Deleting..." : "Cancel / delete note"}
@@ -217,7 +241,20 @@ export function ReviewEditor({
 
   return (
     <div>
-      <img src={`/${imagePath}`} alt="Uploaded handwritten page" className="note-image" />
+      <div className="note-image-wrap" ref={imageWrapRef}>
+        <img src={`/${imagePath}`} alt="Uploaded handwritten page" className="note-image" />
+        {activeRegion && (
+          <div
+            className="region-highlight"
+            style={{
+              left: `${activeRegion.bbox[0] * 100}%`,
+              top: `${activeRegion.bbox[1] * 100}%`,
+              width: `${activeRegion.bbox[2] * 100}%`,
+              height: `${activeRegion.bbox[3] * 100}%`,
+            }}
+          />
+        )}
+      </div>
 
       <input
         className="field"
@@ -313,6 +350,8 @@ export function ReviewEditor({
                 className="segment-input"
                 value={line.segments[0].text}
                 onChange={(e) => updateSegment(line.segments[0].id, e.target.value)}
+                onFocus={() => handleSegmentFocus(line.segments[0].id)}
+                onBlur={handleSegmentBlur}
               />
             </h2>
           ) : (
@@ -335,6 +374,8 @@ export function ReviewEditor({
                     title={titleParts.length ? titleParts.join(" — ") : undefined}
                     value={segment.text}
                     onChange={(e) => updateSegment(segment.id, e.target.value)}
+                    onFocus={() => handleSegmentFocus(segment.id)}
+                    onBlur={handleSegmentBlur}
                   />
                 );
               })}
