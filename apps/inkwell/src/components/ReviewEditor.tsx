@@ -13,6 +13,9 @@ interface Props {
   initialTags: NoteTagView[];
   allFolders: FolderRow[];
   allTagNames: string[];
+  googleConfigured: boolean;
+  googleConnected: boolean;
+  initialGoogleDocUrl: string | null;
 }
 
 // Multi-page notes: each page transcribes independently (see jobs.ts), so
@@ -52,9 +55,15 @@ export function ReviewEditor({
   initialTags,
   allFolders,
   allTagNames,
+  googleConfigured,
+  googleConnected,
+  initialGoogleDocUrl,
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle ?? "");
+  const [exportingToGoogle, setExportingToGoogle] = useState(false);
+  const [googleDocUrl, setGoogleDocUrl] = useState(initialGoogleDocUrl);
+  const [googleExportError, setGoogleExportError] = useState<string | null>(null);
   const [pageStates, setPageStates] = useState<PageState[]>(() => pages.map(toPageState));
   const [folderId, setFolderId] = useState<string | null>(initialFolderId);
   const [tags, setTags] = useState(initialTags);
@@ -240,6 +249,27 @@ export function ReviewEditor({
         next.delete(pageId);
         return next;
       });
+    }
+  }
+
+  // Exports (or re-exports, updating the same Doc in place - see
+  // docsExport.ts) the note as it's currently saved on the server. Uses
+  // last-saved content, not in-progress unsaved edits, same as how Save
+  // itself works - this button doesn't implicitly save first, so an
+  // unsaved edit isn't silently included.
+  async function handleExportToGoogle() {
+    setExportingToGoogle(true);
+    setGoogleExportError(null);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/export-to-docs`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Export failed.");
+      setGoogleDocUrl(data.url);
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setGoogleExportError(err instanceof Error ? err.message : "Export failed.");
+    } finally {
+      setExportingToGoogle(false);
     }
   }
 
@@ -495,6 +525,25 @@ export function ReviewEditor({
           <button className="button" onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </button>{" "}
+          {googleConfigured &&
+            (googleConnected ? (
+              <button className="button secondary" onClick={handleExportToGoogle} disabled={exportingToGoogle}>
+                {exportingToGoogle ? "Exporting..." : googleDocUrl ? "Re-export to Google Docs" : "Export to Google Docs"}
+              </button>
+            ) : (
+              <a className="button secondary" href="/api/integrations/google/connect">
+                Connect Google Docs to export
+              </a>
+            ))}{" "}
+          {googleDocUrl && (
+            <>
+              {" "}
+              <a href={googleDocUrl} target="_blank" rel="noopener noreferrer">
+                Open in Google Docs
+              </a>
+            </>
+          )}
+          {googleExportError && <p style={{ color: "#a33" }}>{googleExportError}</p>}
         </>
       )}
 
