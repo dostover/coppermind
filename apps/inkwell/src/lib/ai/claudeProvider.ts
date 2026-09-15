@@ -7,8 +7,11 @@ import type {
   AIProvider,
   GenerateTagsInput,
   GenerateTagsOutput,
+  HandwritingContext,
   LearningEvalInput,
   LearningEvalOutput,
+  TranscribeBatchInput,
+  TranscribeBatchOutput,
   TranscribeInput,
   TranscribeOutput,
 } from "./types";
@@ -29,6 +32,51 @@ import type {
 // optimizing for speed/cost.
 const MODEL = "claude-opus-5";
 
+// Shared by TRANSCRIBE_TOOL (one page per call) and TRANSCRIBE_BATCH_TOOL
+// (several pages per call) so the two schemas can't drift apart - a batch
+// call is just "the same per-page shape, once per image, wrapped in pages[]".
+const SEGMENT_SCHEMA = {
+  type: "object",
+  properties: {
+    text: { type: "string" },
+    structureType: {
+      type: "string",
+      enum: ["paragraph", "heading", "list_item", "numbered_item", "dialogue", "table_cell", "line"],
+    },
+    crossedOut: { type: "boolean" },
+    emphasis: { type: "string", enum: ["none", "underline", "bold_or_heavy"] },
+    confidence: { type: "number", description: "0-1 self-reported confidence" },
+    lineNumber: {
+      type: "integer",
+      description:
+        "Which physical line of handwriting this segment sits on, counting from 1 at the top " +
+        "of the page. Segments that are part of the same line of handwriting (e.g. \"the\" and " +
+        "\"wizard\" within a line reading \"Met with the wizard\") must share the same lineNumber. " +
+        "This only drives an approximate highlight region, not the transcription itself, so a " +
+        "best-effort count is fine - omit it only for a segment you genuinely can't place on any " +
+        "line (e.g. a stray mark).",
+    },
+  },
+  required: ["text", "structureType", "crossedOut", "emphasis", "confidence"],
+} as const;
+
+const CONTENT_AREA_SCHEMA = {
+  type: "object",
+  description:
+    "One whole-page judgment (not per segment) of roughly where the block of handwriting " +
+    "sits vertically on the page, as 0-1 fractions of the full image height from the top. " +
+    "Most pages are written on close to top-to-bottom, but when the writing only fills part " +
+    "of the page - a short note with blank space below, for example - report that real " +
+    "extent (e.g. top: 0.08, bottom: 0.3) rather than the whole page, so highlight regions " +
+    "for the last few lines don't end up placed in the blank area below the actual writing. " +
+    "Omit this field only if the writing genuinely fills the page top to bottom already.",
+  properties: {
+    top: { type: "number" },
+    bottom: { type: "number" },
+  },
+  required: ["top", "bottom"],
+} as const;
+
 const TRANSCRIBE_TOOL: Anthropic.Tool = {
   name: "record_transcription",
   description:
@@ -36,60 +84,43 @@ const TRANSCRIBE_TOOL: Anthropic.Tool = {
   input_schema: {
     type: "object",
     properties: {
-      segments: {
+      segments: { type: "array", items: SEGMENT_SCHEMA },
+      pageLevelNotes: { type: "array", items: { type: "string" } },
+      contentArea: CONTENT_AREA_SCHEMA,
+    },
+    required: ["segments"],
+  },
+};
+
+// Batched sibling of TRANSCRIBE_TOOL: one message carries several page
+// images, and this asks for one { segments, pageLevelNotes, contentArea }
+// entry per image, in image order - see transcribeBatch() below for the
+// rest of the batching design/rationale.
+const TRANSCRIBE_BATCH_TOOL: Anthropic.Tool = {
+  name: "record_transcription_batch",
+  description:
+    "Record the faithful transcription of each handwritten page image provided in this request, " +
+    "in the same order as the images, one entry per image.",
+  input_schema: {
+    type: "object",
+    properties: {
+      pages: {
         type: "array",
+        description:
+          "Exactly one entry per page image in this request, in the same order the images were " +
+          "given (the first image's transcription is pages[0], and so on).",
         items: {
           type: "object",
           properties: {
-            text: { type: "string" },
-            structureType: {
-              type: "string",
-              enum: [
-                "paragraph",
-                "heading",
-                "list_item",
-                "numbered_item",
-                "dialogue",
-                "table_cell",
-                "line",
-              ],
-            },
-            crossedOut: { type: "boolean" },
-            emphasis: { type: "string", enum: ["none", "underline", "bold_or_heavy"] },
-            confidence: { type: "number", description: "0-1 self-reported confidence" },
-            lineNumber: {
-              type: "integer",
-              description:
-                "Which physical line of handwriting this segment sits on, counting from 1 at the top " +
-                "of the page. Segments that are part of the same line of handwriting (e.g. \"the\" and " +
-                "\"wizard\" within a line reading \"Met with the wizard\") must share the same lineNumber. " +
-                "This only drives an approximate highlight region, not the transcription itself, so a " +
-                "best-effort count is fine - omit it only for a segment you genuinely can't place on any " +
-                "line (e.g. a stray mark).",
-            },
+            segments: { type: "array", items: SEGMENT_SCHEMA },
+            pageLevelNotes: { type: "array", items: { type: "string" } },
+            contentArea: CONTENT_AREA_SCHEMA,
           },
-          required: ["text", "structureType", "crossedOut", "emphasis", "confidence"],
+          required: ["segments"],
         },
-      },
-      pageLevelNotes: { type: "array", items: { type: "string" } },
-      contentArea: {
-        type: "object",
-        description:
-          "One whole-page judgment (not per segment) of roughly where the block of handwriting " +
-          "sits vertically on the page, as 0-1 fractions of the full image height from the top. " +
-          "Most pages are written on close to top-to-bottom, but when the writing only fills part " +
-          "of the page - a short note with blank space below, for example - report that real " +
-          "extent (e.g. top: 0.08, bottom: 0.3) rather than the whole page, so highlight regions " +
-          "for the last few lines don't end up placed in the blank area below the actual writing. " +
-          "Omit this field only if the writing genuinely fills the page top to bottom already.",
-        properties: {
-          top: { type: "number" },
-          bottom: { type: "number" },
-        },
-        required: ["top", "bottom"],
       },
     },
-    required: ["segments"],
+    required: ["pages"],
   },
 };
 
@@ -137,6 +168,97 @@ const GENERATE_TAGS_TOOL: Anthropic.Tool = {
   },
 };
 
+// Shared prose between transcribe() and transcribeBatch() - identical
+// transcription-quality bar either way, since batching only changes how many
+// images/system-prompt copies go in one request, never the instructions
+// themselves.
+const TRANSCRIPTION_QUALITY_INSTRUCTIONS =
+  "You transcribe handwritten page images faithfully and only. Reproduce exactly what is written: " +
+  "do not correct grammar or spelling, do not summarize, do not add interpretation. Preserve structure " +
+  "(paragraphs, headings, lists, dialogue) and mark crossed-out text and emphasis rather than omitting " +
+  "or silently normalizing it. " +
+  "IMPORTANT - crossed-out text: never mark crossedOut on a whole segment that also contains text that " +
+  "was NOT crossed out, and never invent your own in-text notation (like strikethrough symbols, brackets, " +
+  "or the words \"crossed out\") inside the transcribed text itself. Instead, split the crossed-out " +
+  "word or phrase out into its own separate segment with crossedOut: true and only that struck-through " +
+  "text as its content, and put the surrounding not-crossed-out text into their own separate " +
+  "crossedOut: false segment(s) - the same way you would split out a single misread word. This keeps " +
+  "every segment either entirely crossed-out or entirely not, so the app can render the distinction " +
+  "instead of you describing it in prose. " +
+  "Difficult or ambiguous cursive is expected - when a word is not clearly legible, do not guess a " +
+  "different, fluent-sounding real word just because it fits the sentence grammatically or semantically. " +
+  "A plausible invented word is a worse answer than an honest low-confidence best guess: transcribe your " +
+  "best literal reading of the actual letter shapes, even if the result looks unusual or is not a " +
+  "dictionary word, and drop your confidence score accordingly rather than silently substituting " +
+  "something that reads more naturally. Confidence should reflect how certain you actually are that the " +
+  "letters on the page say what you transcribed, not how natural the resulting sentence sounds. " +
+  "For each segment, also report lineNumber - which physical line of handwriting it's on, " +
+  "counting from 1 at the top of the page (not which sentence or paragraph - an actual visual " +
+  "line as it appears on the page). Segments from the same line share the same number. Also " +
+  "report contentArea once for the whole page - roughly where the block of handwriting starts " +
+  "and ends vertically, which matters when the writing doesn't fill the whole page. Both are " +
+  "used only to draw an approximate highlight region, never the transcription itself, so your " +
+  "best estimate is fine - omit either one when you genuinely can't tell.";
+
+function buildHandwritingHintText(hints: HandwritingContext): string {
+  return hints.vocabularyHints.length || hints.correctionPatternHints.length
+    ? [
+        hints.vocabularyHints.length
+          ? `Personal vocabulary this user writes often: ${hints.vocabularyHints.join(", ")}.`
+          : null,
+        hints.correctionPatternHints.length
+          ? `This user's handwriting has previously been misread and corrected as follows - prefer the corrected form when the handwriting is ambiguous: ${hints.correctionPatternHints
+              .map((h) => `"${h.fromPattern}" -> "${h.toPattern}"`)
+              .join("; ")}.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "No prior handwriting history for this user yet.";
+}
+
+type RawSegment = Omit<TranscribeOutput["segments"][number], "id" | "reviewRequired" | "sourceRegion"> & {
+  lineNumber?: number;
+};
+
+// Shared by transcribe() and transcribeBatch(): turns one page's raw
+// tool-call output (segments still carrying provider-only lineNumber, plus
+// an optional contentArea) into the app's TranscribeOutput shape, computing
+// regions rather than trusting any raw coordinates - see regionFromLines.ts.
+function finishPageOutput(
+  raw: { segments: RawSegment[]; pageLevelNotes?: string[]; contentArea?: { top: number; bottom: number } },
+  confidenceThreshold: number
+): TranscribeOutput {
+  const regions = computeLineBasedRegions(raw.segments, raw.contentArea);
+  return {
+    pageLevelNotes: raw.pageLevelNotes,
+    segments: raw.segments.map((s, i) => {
+      const { lineNumber: _lineNumber, ...rest } = s;
+      return {
+        ...rest,
+        id: crypto.randomUUID(),
+        // reviewRequired is computed at the app-configured threshold, not
+        // baked into the model call - see Phase 5 AI Contracts §1 notes.
+        reviewRequired: s.confidence < confidenceThreshold,
+        sourceRegion: regions[i],
+      };
+    }),
+  };
+}
+
+async function loadImageForVision(
+  imagePath: string
+): Promise<{ buffer: Buffer; mediaType: "image/jpeg" | "image/png" | "image/webp" }> {
+  const absolutePath = path.join(process.cwd(), "public", imagePath);
+  const rawBytes = await readFile(absolutePath);
+  // Auto-orient from EXIF and downscale to the vision model's
+  // high-resolution-tier ceiling ourselves, with a high-quality resampler,
+  // rather than letting the API auto-downscale a full uncropped photo - see
+  // src/lib/imagePrep.ts for why this matters for small cursive.
+  const { buffer, mediaType } = await prepareImageForVision(rawBytes);
+  return { buffer, mediaType: mediaType as "image/jpeg" | "image/png" | "image/webp" };
+}
+
 export class ClaudeAIProvider implements AIProvider {
   private client: Anthropic;
 
@@ -145,62 +267,13 @@ export class ClaudeAIProvider implements AIProvider {
   }
 
   async transcribe(input: TranscribeInput): Promise<TranscribeOutput> {
-    const absolutePath = path.join(process.cwd(), "public", input.imagePath);
-    const rawBytes = await readFile(absolutePath);
-    // Auto-orient from EXIF and downscale to the vision model's
-    // high-resolution-tier ceiling ourselves, with a high-quality resampler,
-    // rather than letting the API auto-downscale a full uncropped photo -
-    // see src/lib/imagePrep.ts for why this matters for small cursive.
-    const { buffer: imageBytes, mediaType } = await prepareImageForVision(rawBytes);
-
-    const hints = input.handwritingContext;
-    const hintText =
-      hints.vocabularyHints.length || hints.correctionPatternHints.length
-        ? [
-            hints.vocabularyHints.length
-              ? `Personal vocabulary this user writes often: ${hints.vocabularyHints.join(", ")}.`
-              : null,
-            hints.correctionPatternHints.length
-              ? `This user's handwriting has previously been misread and corrected as follows - prefer the corrected form when the handwriting is ambiguous: ${hints.correctionPatternHints
-                  .map((h) => `"${h.fromPattern}" -> "${h.toPattern}"`)
-                  .join("; ")}.`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" ")
-        : "No prior handwriting history for this user yet.";
+    const { buffer: imageBytes, mediaType } = await loadImageForVision(input.imagePath);
+    const hintText = buildHandwritingHintText(input.handwritingContext);
 
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: 4096,
-      system:
-        "You transcribe handwritten page images faithfully and only. Reproduce exactly what is written: " +
-        "do not correct grammar or spelling, do not summarize, do not add interpretation. Preserve structure " +
-        "(paragraphs, headings, lists, dialogue) and mark crossed-out text and emphasis rather than omitting " +
-        "or silently normalizing it. " +
-        "IMPORTANT - crossed-out text: never mark crossedOut on a whole segment that also contains text that " +
-        "was NOT crossed out, and never invent your own in-text notation (like strikethrough symbols, brackets, " +
-        "or the words \"crossed out\") inside the transcribed text itself. Instead, split the crossed-out " +
-        "word or phrase out into its own separate segment with crossedOut: true and only that struck-through " +
-        "text as its content, and put the surrounding not-crossed-out text into their own separate " +
-        "crossedOut: false segment(s) - the same way you would split out a single misread word. This keeps " +
-        "every segment either entirely crossed-out or entirely not, so the app can render the distinction " +
-        "instead of you describing it in prose. " +
-        "Difficult or ambiguous cursive is expected - when a word is not clearly legible, do not guess a " +
-        "different, fluent-sounding real word just because it fits the sentence grammatically or semantically. " +
-        "A plausible invented word is a worse answer than an honest low-confidence best guess: transcribe your " +
-        "best literal reading of the actual letter shapes, even if the result looks unusual or is not a " +
-        "dictionary word, and drop your confidence score accordingly rather than silently substituting " +
-        "something that reads more naturally. Confidence should reflect how certain you actually are that the " +
-        "letters on the page say what you transcribed, not how natural the resulting sentence sounds. " +
-        "For each segment, also report lineNumber - which physical line of handwriting it's on, " +
-        "counting from 1 at the top of the page (not which sentence or paragraph - an actual visual " +
-        "line as it appears on the page). Segments from the same line share the same number. Also " +
-        "report contentArea once for the whole page - roughly where the block of handwriting starts " +
-        "and ends vertically, which matters when the writing doesn't fill the whole page. Both are " +
-        "used only to draw an approximate highlight region, never the transcription itself, so your " +
-        "best estimate is fine - omit either one when you genuinely can't tell. " +
-        hintText,
+      system: TRANSCRIPTION_QUALITY_INSTRUCTIONS + " " + hintText,
       tools: [TRANSCRIBE_TOOL],
       tool_choice: { type: "tool", name: "record_transcription" },
       messages: [
@@ -211,7 +284,7 @@ export class ClaudeAIProvider implements AIProvider {
               type: "image",
               source: {
                 type: "base64",
-                media_type: mediaType as "image/jpeg" | "image/png" | "image/webp",
+                media_type: mediaType,
                 data: imageBytes.toString("base64"),
               },
             },
@@ -227,35 +300,100 @@ export class ClaudeAIProvider implements AIProvider {
     }
 
     const raw = toolUse.input as {
-      segments: Array<
-        Omit<TranscribeOutput["segments"][number], "id" | "reviewRequired" | "sourceRegion"> & {
-          lineNumber?: number;
-        }
-      >;
+      segments: RawSegment[];
       pageLevelNotes?: string[];
       contentArea?: { top: number; bottom: number };
     };
 
-    // Regions are computed here, not trusted from the model directly - see
-    // regionFromLines.ts for why (a first version that asked for a raw
-    // bounding box came back visibly wrong against a real photo, and a
-    // second version that assumed writing fills the whole page also came
-    // back wrong on a short page - contentArea fixes that second case).
-    const regions = computeLineBasedRegions(raw.segments, raw.contentArea);
+    return finishPageOutput(raw, input.confidenceThreshold);
+  }
+
+  // Combines every page of a note into ONE API call instead of one per page
+  // (the user asked for this after we discussed the token-cost tradeoff: see
+  // TranscribeBatchInput's doc comment in types.ts). Concretely, this sends
+  // one message with N images (each preceded by a "Page N of M" text label
+  // so the model can't lose track of ordering) and asks for one transcription
+  // per image back. What this saves: N-1 copies of the system prompt and
+  // handwriting-context text that a per-page loop would otherwise resend.
+  // What this does NOT save: image tokens themselves - Claude's vision
+  // pricing tokenizes each image independently regardless of how many share
+  // a request, so a 3-page note costs the same in image tokens whether sent
+  // as 3 calls or 1. Falls back to the plain single-image transcribe() call
+  // for a 1-page note, since there's no overhead to amortize and it keeps
+  // that common case on the simpler, longer-proven code path.
+  async transcribeBatch(input: TranscribeBatchInput): Promise<TranscribeBatchOutput> {
+    if (input.pages.length === 0) return { pages: [] };
+    if (input.pages.length === 1) {
+      const only = input.pages[0];
+      const result = await this.transcribe({
+        imagePath: only.imagePath,
+        handwritingContext: input.handwritingContext,
+        confidenceThreshold: input.confidenceThreshold,
+      });
+      return { pages: [{ pageId: only.pageId, ...result }] };
+    }
+
+    const prepared = await Promise.all(
+      input.pages.map(async (p) => ({ pageId: p.pageId, ...(await loadImageForVision(p.imagePath)) }))
+    );
+    const hintText = buildHandwritingHintText(input.handwritingContext);
+
+    const content: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [];
+    prepared.forEach((p, i) => {
+      content.push({ type: "text", text: `Page ${i + 1} of ${prepared.length}:` });
+      content.push({
+        type: "image",
+        source: { type: "base64", media_type: p.mediaType, data: p.buffer.toString("base64") },
+      });
+    });
+    content.push({
+      type: "text",
+      text:
+        `Transcribe each of the ${prepared.length} handwritten page images above, in order - ` +
+        `these are consecutive pages of one note. Return exactly ${prepared.length} entries in ` +
+        `"pages", matching image order (pages[0] for the first image, and so on). Treat each page ` +
+        "independently: do not merge, reorder, or carry segments across pages, even if the " +
+        "handwriting continues a thought from the previous page.",
+    });
+
+    // max_tokens scales with page count (structured per-segment output for
+    // several pages is proportionally larger than for one) but is capped -
+    // Claude's max output tokens is a hard ceiling regardless of input size.
+    const maxTokens = Math.min(4096 * prepared.length, 16384);
+
+    const message = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system: TRANSCRIPTION_QUALITY_INSTRUCTIONS + " " + hintText,
+      tools: [TRANSCRIBE_BATCH_TOOL],
+      tool_choice: { type: "tool", name: "record_transcription_batch" },
+      messages: [{ role: "user", content }],
+    });
+
+    const toolUse = message.content.find((block) => block.type === "tool_use");
+    if (!toolUse || toolUse.type !== "tool_use") {
+      throw new Error("Claude did not return a structured transcription batch (no tool_use block).");
+    }
+
+    const raw = toolUse.input as {
+      pages: Array<{
+        segments: RawSegment[];
+        pageLevelNotes?: string[];
+        contentArea?: { top: number; bottom: number };
+      }>;
+    };
+
+    if (raw.pages.length !== prepared.length) {
+      throw new Error(
+        `Claude returned ${raw.pages.length} page result(s) for a ${prepared.length}-image batch request.`
+      );
+    }
 
     return {
-      pageLevelNotes: raw.pageLevelNotes,
-      segments: raw.segments.map((s, i) => {
-        const { lineNumber: _lineNumber, ...rest } = s;
-        return {
-          ...rest,
-          id: crypto.randomUUID(),
-          // reviewRequired is computed at the app-configured threshold, not
-          // baked into the model call - see Phase 5 AI Contracts §1 notes.
-          reviewRequired: s.confidence < input.confidenceThreshold,
-          sourceRegion: regions[i],
-        };
-      }),
+      pages: raw.pages.map((pageRaw, i) => ({
+        pageId: prepared[i].pageId,
+        ...finishPageOutput(pageRaw, input.confidenceThreshold),
+      })),
     };
   }
 
