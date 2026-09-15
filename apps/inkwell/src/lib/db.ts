@@ -137,6 +137,23 @@ db.exec(`
 
   -- index: (status, created_at) for the runner's poll query.
   CREATE INDEX IF NOT EXISTS idx_processing_jobs_poll ON processing_jobs (status, created_at);
+
+  -- Singleton row, same pattern as handwriting_profile: single implicit
+  -- user, so there's exactly one Google account connection for the whole
+  -- app rather than per-user rows. Holds OAuth tokens for the Google Docs
+  -- export feature (see src/lib/google/). access_token/expires_at let
+  -- getValidAccessToken() skip a refresh call when the cached token is
+  -- still good; refresh_token is long-lived and is what actually gets a
+  -- new access_token once it expires.
+  CREATE TABLE IF NOT EXISTS google_auth (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    connected_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `);
 
 // notes.folder_id was added after the original table shape shipped - ALTER
@@ -149,6 +166,17 @@ db.exec(`
 const noteColumns = db.prepare(`PRAGMA table_info(notes)`).all() as { name: string }[];
 if (!noteColumns.some((c) => c.name === "folder_id")) {
   db.exec(`ALTER TABLE notes ADD COLUMN folder_id TEXT REFERENCES folders(id)`);
+}
+
+// Google Docs export (src/lib/google/): a note that's been exported keeps
+// the id/url of the Doc it was exported to, so a later re-export updates
+// that same Doc in place (clear + rewrite its content) instead of minting a
+// new one on every click - see docsExport.ts. Nullable: most notes are
+// never exported.
+if (!noteColumns.some((c) => c.name === "google_doc_id")) {
+  db.exec(`ALTER TABLE notes ADD COLUMN google_doc_id TEXT`);
+  db.exec(`ALTER TABLE notes ADD COLUMN google_doc_url TEXT`);
+  db.exec(`ALTER TABLE notes ADD COLUMN google_doc_exported_at TEXT`);
 }
 
 // processing_jobs.page_id was added when the transcribe stage moved from
@@ -215,6 +243,9 @@ export interface NoteRow {
   status: "uploaded" | "transcribing" | "ready_for_review" | "reviewed" | "error";
   error_message: string | null;
   folder_id: string | null;
+  google_doc_id: string | null;
+  google_doc_url: string | null;
+  google_doc_exported_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -377,6 +408,16 @@ export const notesRepo = {
   getById(id: string): Note | undefined {
     const row = db.prepare(`SELECT * FROM notes WHERE id = ?`).get(id) as NoteRow | undefined;
     return row ? rowToNote(row) : undefined;
+  },
+
+  // Records where a note's content was last exported to, so a later
+  // export re-uses (updates) the same Google Doc instead of creating a
+  // new one every time - see google/docsExport.ts.
+  setGoogleDocExport(id: string, docId: string, url: string, updatedAt: string): void {
+    db.prepare(
+      `UPDATE notes SET google_doc_id = ?, google_doc_url = ?, google_doc_exported_at = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(docId, url, updatedAt, updatedAt, id);
   },
 
   // Deletes the note row and (via ON DELETE CASCADE) its handwriting_examples.
@@ -671,6 +712,70 @@ export const handwritingProfileRepo = {
       correctionPatterns: JSON.stringify(profile.correctionPatterns),
       updatedAt: profile.updatedAt,
     });
+  },
+};
+
+export interface GoogleAuthRow {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  scope: string;
+  connectedAt: string;
+  updatedAt: string;
+}
+
+// Singleton, same shape as handwritingProfileRepo above - see the
+// google_auth table comment for why. src/lib/google/oauth.ts is the only
+// caller; nothing else in the app should read/write this table directly.
+export const googleAuthRepo = {
+  get(): GoogleAuthRow | undefined {
+    const row = db.prepare(`SELECT * FROM google_auth WHERE id = 1`).get() as
+      | {
+          access_token: string;
+          refresh_token: string;
+          expires_at: string;
+          scope: string;
+          connected_at: string;
+          updated_at: string;
+        }
+      | undefined;
+    if (!row) return undefined;
+    return {
+      accessToken: row.access_token,
+      refreshToken: row.refresh_token,
+      expiresAt: row.expires_at,
+      scope: row.scope,
+      connectedAt: row.connected_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  // Called once at initial connect. refreshToken is only ever sent by
+  // Google on the *first* consent (or when re-consenting with
+  // prompt=consent, which oauth.ts always requests) - a bare token refresh
+  // later only returns a new access_token, so updateAccessToken below never
+  // touches refresh_token.
+  upsert(input: { accessToken: string; refreshToken: string; expiresAt: string; scope: string; now: string }): void {
+    db.prepare(
+      `INSERT INTO google_auth (id, access_token, refresh_token, expires_at, scope, connected_at, updated_at)
+       VALUES (1, @accessToken, @refreshToken, @expiresAt, @scope, @now, @now)
+       ON CONFLICT(id) DO UPDATE SET
+         access_token = @accessToken,
+         refresh_token = @refreshToken,
+         expires_at = @expiresAt,
+         scope = @scope,
+         updated_at = @now`
+    ).run(input);
+  },
+
+  updateAccessToken(input: { accessToken: string; expiresAt: string; now: string }): void {
+    db.prepare(
+      `UPDATE google_auth SET access_token = ?, expires_at = ?, updated_at = ? WHERE id = 1`
+    ).run(input.accessToken, input.expiresAt, input.now);
+  },
+
+  disconnect(): void {
+    db.prepare(`DELETE FROM google_auth WHERE id = 1`).run();
   },
 };
 

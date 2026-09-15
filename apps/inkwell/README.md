@@ -50,6 +50,43 @@ in `.env.local`, then restart `npm run dev`. No code changes needed - the
 `AIProvider` factory in `src/lib/ai/index.ts` picks `ClaudeAIProvider`
 automatically once a key is present.
 
+### Google Docs export (optional)
+
+A note can be exported (or re-exported) to a Google Doc in your own Drive -
+the "Export to Google Docs" button on a note, and a connect/disconnect
+control on `/library`. Unset (the default), this feature is simply absent
+from the UI rather than erroring - same spirit as `ANTHROPIC_API_KEY`.
+
+To turn it on:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a
+   project (or use an existing one) and enable the **Google Docs API**.
+2. Under **APIs & Services → OAuth consent screen**, configure it for
+   **External** user type (Internal requires a Google Workspace org) and add
+   yourself as a **test user** - an app in "Testing" status works
+   indefinitely for its listed test users without needing Google's review,
+   which is all a single-user local app like this needs.
+3. Under **APIs & Services → Credentials**, create an **OAuth client ID** of
+   type **Web application**, with an authorized redirect URI of
+   `http://localhost:3000/api/integrations/google/callback` (or whatever
+   `GOOGLE_REDIRECT_URI` you set below).
+4. Copy the resulting Client ID and Client secret into `.env.local`:
+
+   ```bash
+   GOOGLE_CLIENT_ID=...
+   GOOGLE_CLIENT_SECRET=...
+   ```
+
+5. Restart `npm run dev`, then click **Connect Google Docs** on `/library`.
+   Google will warn that the app is unverified - that's expected for a
+   personal OAuth client in Testing status; proceed as yourself, the test
+   user you added in step 2.
+
+Tokens are stored in the same local SQLite database as everything else
+(`google_auth` table, one row - single implicit user, no per-user auth).
+Disconnecting from `/library` only forgets them locally; to revoke access on
+Google's side too, visit https://myaccount.google.com/permissions.
+
 ## Project structure
 
 ```
@@ -63,17 +100,22 @@ src/
       notes/upload/route.ts       POST image -> creates + synchronously transcribes a note
       notes/[id]/route.ts         GET a note / PATCH corrections (triggers handwriting learning)
       notes/[id]/retry/route.ts   POST -> retries a failed transcription without re-uploading
+      notes/[id]/export-to-docs/route.ts   POST -> exports/re-exports the note to Google Docs
       notes/route.ts              GET ?q= search
-  components/                Nav, UploadForm, ReviewEditor
+      integrations/google/        OAuth connect/callback/disconnect routes
+  components/                Nav, UploadForm, ReviewEditor, GoogleConnectionControl
   lib/
-    db.ts                    SQLite schema + repositories (notes, handwriting_examples, handwriting_profile)
-    config.ts                CONFIDENCE_THRESHOLD and other tunables
+    db.ts                    SQLite schema + repositories (notes, handwriting_examples, handwriting_profile, google_auth)
+    config.ts                CONFIDENCE_THRESHOLD, GOOGLE_* and other tunables
     handwritingProfile.ts    getHandwritingContext / recordHandwritingCorrection / updateHandwritingProfile
     ai/
       types.ts               AIProvider interface (narrowed to transcribe + evaluateHandwritingCorrection)
       mockProvider.ts         Deterministic no-key fallback
       claudeProvider.ts       Real Anthropic implementation (structured tool-call output)
       index.ts                getAIProvider() factory (env-based selection)
+    google/
+      oauth.ts                OAuth flow + getValidAccessToken() (auto-refreshing)
+      docsExport.ts           Maps a note's segments onto Google Docs API requests
 ```
 
 ## Known limitations (by design, for this phase)

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { notesRepo, foldersRepo, tagsRepo } from "@/lib/db";
 import { ReviewEditor } from "@/components/ReviewEditor";
+import { GOOGLE_OAUTH_CONFIGURED } from "@/lib/config";
+import { isGoogleConnected } from "@/lib/google/oauth";
 
 export default async function NotePage({
   params,
@@ -22,6 +24,9 @@ export default async function NotePage({
         initialTags={note.tags}
         allFolders={foldersRepo.listAll()}
         allTagNames={tagsRepo.listAll().map((t) => t.name)}
+        googleConfigured={GOOGLE_OAUTH_CONFIGURED}
+        googleConnected={isGoogleConnected()}
+        initialGoogleDocUrl={note.google_doc_url}
       />
     </div>
   );

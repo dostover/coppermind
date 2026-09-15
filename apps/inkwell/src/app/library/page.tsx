@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notesRepo, foldersRepo } from "@/lib/db";
 import { NewFolderForm } from "@/components/NewFolderForm";
+import { GoogleConnectionControl } from "@/components/GoogleConnectionControl";
+import { GOOGLE_OAUTH_CONFIGURED } from "@/lib/config";
+import { isGoogleConnected } from "@/lib/google/oauth";
 
 function snippet(text: string, max = 140): string {
   return text.length > max ? text.slice(0, max).trimEnd() + "…" : text;
@@ -9,9 +12,9 @@ function snippet(text: string, max = 140): string {
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; folder?: string }>;
+  searchParams: Promise<{ q?: string; folder?: string; googleConnected?: string; googleError?: string }>;
 }) {
-  const { q, folder } = await searchParams;
+  const { q, folder, googleError } = await searchParams;
   // folder: absent = All notes, "none" = unfiled only, else a folder id -
   // mirrors GET /api/notes' folder param.
   const folderId = folder === undefined ? undefined : folder === "none" ? null : folder;
@@ -62,11 +65,19 @@ export default async function LibraryPage({
             Export all notes
           </a>{" "}
           <span className="muted">
-            Downloads a zip with every note&apos;s transcription and original photo - your
-            only backup right now, since nothing here syncs anywhere else.
+            Downloads a zip with every note&apos;s transcription and original photo - a full local
+            backup. To send an individual note somewhere you can read/share it online, connect
+            Google Docs below and use the Export button on that note.
           </span>
         </p>
       )}
+
+      <GoogleConnectionControl
+        configured={GOOGLE_OAUTH_CONFIGURED}
+        connected={isGoogleConnected()}
+        errorFromCallback={googleError ?? null}
+      />
+
 
       {notes.length === 0 && (
         <p className="muted">
