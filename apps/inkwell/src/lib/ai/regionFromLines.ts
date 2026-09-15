@@ -25,11 +25,28 @@ import type { SourceRegion } from "./types";
 //     roughly the right horizontal neighborhood" rather than "a box anywhere
 //     on the page," which is the failure mode being fixed.
 //
-// Still unverified against a real photo (no live API key in this sandbox) -
-// see the Asana Discovery Item this shipped alongside.
+// UPDATE: real-photo testing (with a synthetic multi-line page, since no
+// actual handwritten photo was available) found line-counting itself works
+// well - the model correctly grouped multi-segment lines and ordered them
+// top to bottom. But the first version of this function assumed handwriting
+// fills nearly the whole page (5%-95% top to bottom) and divided that
+// evenly by line count. For a short page - a few lines with blank space
+// below, which is a completely ordinary way to write a note - that put
+// later lines' highlights well past where the real writing actually ends.
+// Fixed by asking the model for one additional *page-level* (not
+// per-segment) judgment: roughly where the handwritten block starts and
+// ends vertically. Still just one holistic call, not per-segment
+// coordinate regression - the failure mode this file was already designed
+// to avoid - so it's used only as the vertical range line bands are spread
+// across, with a full-page fallback when it's missing or nonsensical.
+//
+// Still unverified against a real handwritten photo (no live API key with
+// an actual photo of handwriting in this sandbox) - see the Asana Discovery
+// Item this shipped alongside.
 
-const TOP_MARGIN = 0.05;
-const BOTTOM_MARGIN = 0.05;
+const DEFAULT_CONTENT_TOP = 0.05;
+const DEFAULT_CONTENT_BOTTOM = 0.95;
+const MIN_CONTENT_SPAN = 0.05; // guards against a degenerate top≈bottom from the model
 const LEFT_MARGIN = 0.06;
 const RIGHT_MARGIN = 0.06;
 // Leaves a small visual gap between stacked line bands rather than having
@@ -42,12 +59,39 @@ export interface LineTaggedSegment {
   lineNumber?: number;
 }
 
+export interface ContentArea {
+  /** 0-1 fraction of the full page height where the handwritten block starts. */
+  top: number;
+  /** 0-1 fraction of the full page height where the handwritten block ends. */
+  bottom: number;
+}
+
+function resolveContentArea(contentArea: ContentArea | null | undefined): {
+  top: number;
+  bottom: number;
+} {
+  const top = contentArea?.top;
+  const bottom = contentArea?.bottom;
+  const valid =
+    typeof top === "number" &&
+    typeof bottom === "number" &&
+    Number.isFinite(top) &&
+    Number.isFinite(bottom) &&
+    top >= 0 &&
+    bottom <= 1 &&
+    bottom - top >= MIN_CONTENT_SPAN;
+  return valid ? { top, bottom } : { top: DEFAULT_CONTENT_TOP, bottom: DEFAULT_CONTENT_BOTTOM };
+}
+
 /**
  * Computes one SourceRegion (or null) per input segment, in the same order,
- * from nothing but each segment's reported line number and text length.
+ * from each segment's reported line number and text length, spread across
+ * the given page-level content area (falling back to a near-full-page
+ * default when omitted or nonsensical).
  */
 export function computeLineBasedRegions(
-  segments: LineTaggedSegment[]
+  segments: LineTaggedSegment[],
+  contentArea?: ContentArea | null
 ): (SourceRegion | null)[] {
   const validLineNumbers = segments
     .map((s) => s.lineNumber)
@@ -57,8 +101,9 @@ export function computeLineBasedRegions(
     return segments.map(() => null);
   }
 
+  const { top: TOP_MARGIN, bottom: BOTTOM_FRACTION } = resolveContentArea(contentArea);
   const maxLine = Math.max(...validLineNumbers);
-  const usableHeight = 1 - TOP_MARGIN - BOTTOM_MARGIN;
+  const usableHeight = BOTTOM_FRACTION - TOP_MARGIN;
   const lineHeight = usableHeight / maxLine;
   const usableWidth = 1 - LEFT_MARGIN - RIGHT_MARGIN;
 
