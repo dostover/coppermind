@@ -188,6 +188,37 @@ if (!jobColumns.some((c) => c.name === "page_id")) {
   db.exec(`ALTER TABLE processing_jobs ADD COLUMN page_id TEXT REFERENCES note_pages(id)`);
 }
 
+// title_source distinguishes "the placeholder titleGen.ts derived" from "the
+// user actually typed/edited this" - the same ai/user distinction note_tags
+// already carries for tags, extended to titles so the review screen can show
+// the same "AI suggested this" visual language in both places (03-ux-screens.md's
+// cross-screen note: one visual pattern, reused everywhere AI touches
+// content). Defaults 'ai' since every note starts with either no title or a
+// placeholder one.
+if (!noteColumns.some((c) => c.name === "title_source")) {
+  db.exec(`ALTER TABLE notes ADD COLUMN title_source TEXT NOT NULL DEFAULT 'ai'`);
+}
+
+// Soft delete: "Delete note" now sets deleted_at instead of removing the row,
+// giving a Trash/undo grace period before anything is actually lost - real
+// notebooks people care about are exactly the content where an accidental
+// permanent delete does real damage. Permanent deletion (see notesRepo.delete
+// and the /purge route) is a separate, explicit action taken from Trash.
+if (!noteColumns.some((c) => c.name === "deleted_at")) {
+  db.exec(`ALTER TABLE notes ADD COLUMN deleted_at TEXT`);
+}
+
+// Delete-original-image, independent of deleting the note itself
+// (03-ux-screens.md §6: "two distinct choices, not one destructive button").
+// image_removed marks that this page's source photo has been discarded from
+// disk while its transcription is kept - the review screen renders an
+// "Original no longer available" placeholder instead of the <img> for a page
+// with this set (see rowToPage below).
+const pageColumns = db.prepare(`PRAGMA table_info(note_pages)`).all() as { name: string }[];
+if (!pageColumns.some((c) => c.name === "image_removed")) {
+  db.exec(`ALTER TABLE note_pages ADD COLUMN image_removed INTEGER NOT NULL DEFAULT 0`);
+}
+
 // One-time backfill: any note that predates note_pages (created when a note
 // was still one row = one page) gets a single page-1 row built from its own
 // legacy image_path/segments_ai/segments_current/status/error_message
@@ -240,12 +271,14 @@ if (legacyNotes.length > 0) {
 export interface NoteRow {
   id: string;
   title: string | null;
+  title_source: "ai" | "user";
   status: "uploaded" | "transcribing" | "ready_for_review" | "reviewed" | "error";
   error_message: string | null;
   folder_id: string | null;
   google_doc_id: string | null;
   google_doc_url: string | null;
   google_doc_exported_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -266,13 +299,15 @@ export interface NotePageRow {
   error_message: string | null;
   segments_ai: string;
   segments_current: string;
+  image_removed: number;
   created_at: string;
   updated_at: string;
 }
 
-export interface NotePage extends Omit<NotePageRow, "segments_ai" | "segments_current"> {
+export interface NotePage extends Omit<NotePageRow, "segments_ai" | "segments_current" | "image_removed"> {
   segmentsAi: TranscriptSegment[];
   segmentsCurrent: TranscriptSegment[];
+  imageRemoved: boolean;
 }
 
 // A note's own segmentsAi/segmentsCurrent are the concatenation of all its
@@ -313,6 +348,7 @@ function rowToPage(row: NotePageRow): NotePage {
     ...row,
     segmentsAi: applyReviewRequired(JSON.parse(row.segments_ai)),
     segmentsCurrent: applyReviewRequired(JSON.parse(row.segments_current)),
+    imageRemoved: Boolean(row.image_removed),
   };
 }
 
@@ -365,14 +401,20 @@ export const notesRepo = {
 
   // placeholderTitle is only ever applied via COALESCE, so a title the user
   // already set (or edited) is never clobbered by upload/retry - see
-  // titleGen.ts. Only page 1 ever supplies one (see jobs.ts).
+  // titleGen.ts. Only page 1 ever supplies one (see jobs.ts). The CASE
+  // evaluates against the row's pre-update title, so title_source only ever
+  // flips to 'ai' in the same statement that's actually applying the
+  // placeholder (title was still null) - a note whose title a user already
+  // set keeps whatever source it already had.
   setPlaceholderTitle(id: string, placeholderTitle: string | null, updatedAt: string): void {
     if (!placeholderTitle) return;
-    db.prepare(`UPDATE notes SET title = COALESCE(title, ?), updated_at = ? WHERE id = ?`).run(
-      placeholderTitle,
-      updatedAt,
-      id
-    );
+    db.prepare(
+      `UPDATE notes
+       SET title = COALESCE(title, ?),
+           title_source = CASE WHEN title IS NULL THEN 'ai' ELSE title_source END,
+           updated_at = ?
+       WHERE id = ?`
+    ).run(placeholderTitle, updatedAt, id);
   },
 
   // Recomputes notes.status from its pages' current states (see
@@ -389,11 +431,23 @@ export const notesRepo = {
     db.prepare(`UPDATE notes SET status = ?, updated_at = ? WHERE id = ?`).run(next, updatedAt, id);
   },
 
-  setReviewed(id: string, title: string | null, updatedAt: string): void {
-    db.prepare(
-      `UPDATE notes SET status = 'reviewed', title = COALESCE(?, title), updated_at = ?
-       WHERE id = ?`
-    ).run(title, updatedAt, id);
+  // titleChanged: whether this save's title differs from what was already
+  // stored (computed by the caller, which has both values). Only then does
+  // title_source flip to 'user' - saving without touching an AI-derived
+  // title must not silently reclassify it as user-authored, or the
+  // "AI suggested this" badge would disappear on the very first Save.
+  setReviewed(id: string, title: string | null, updatedAt: string, titleChanged: boolean): void {
+    if (titleChanged) {
+      db.prepare(
+        `UPDATE notes SET status = 'reviewed', title = ?, title_source = 'user', updated_at = ?
+         WHERE id = ?`
+      ).run(title, updatedAt, id);
+    } else {
+      db.prepare(`UPDATE notes SET status = 'reviewed', updated_at = ? WHERE id = ?`).run(
+        updatedAt,
+        id
+      );
+    }
   },
 
   // folderId: null clears the folder (moves the note to "no folder").
@@ -420,22 +474,55 @@ export const notesRepo = {
     ).run(docId, url, updatedAt, updatedAt, id);
   },
 
-  // Deletes the note row and (via ON DELETE CASCADE) its handwriting_examples.
-  // Does not touch the uploaded image file - callers are responsible for that,
-  // since this module doesn't otherwise deal in filesystem paths.
+  // Permanently deletes the note row and (via ON DELETE CASCADE) its
+  // handwriting_examples. Does not touch the uploaded image file - callers
+  // are responsible for that, since this module doesn't otherwise deal in
+  // filesystem paths. Only ever called from Trash's "Delete permanently"
+  // action (see the /purge route) - the review screen's own "Delete note"
+  // button calls softDelete below instead.
   delete(id: string): void {
     db.prepare(`DELETE FROM notes WHERE id = ?`).run(id);
   },
 
+  // Moves a note to Trash without touching any of its data - reversible via
+  // restore() below, unlike delete() above. This is what "Delete note" in
+  // the review screen actually does now (03-ux-screens.md's soft-delete
+  // grace period).
+  softDelete(id: string, updatedAt: string): void {
+    db.prepare(`UPDATE notes SET deleted_at = ?, updated_at = ? WHERE id = ?`).run(
+      updatedAt,
+      updatedAt,
+      id
+    );
+  },
+
+  restore(id: string, updatedAt: string): void {
+    db.prepare(`UPDATE notes SET deleted_at = NULL, updated_at = ? WHERE id = ?`).run(
+      updatedAt,
+      id
+    );
+  },
+
   // folderId: undefined = no filter (all notes), null = only unfiled notes,
-  // a string = only notes in that folder.
-  listAll(query?: string, folderId?: string | null): Note[] {
+  // a string = only notes in that folder. Ignored entirely in the "trash"
+  // view - Trash is deliberately a flat list (folder membership isn't the
+  // point once something's on its way out).
+  listAll(query?: string, folderId?: string | null, view: "active" | "trash" = "active"): Note[] {
+    const deletedCond = view === "trash" ? "deleted_at IS NOT NULL" : "deleted_at IS NULL";
     const rows =
-      folderId === undefined
-        ? (db.prepare(`SELECT * FROM notes ORDER BY created_at DESC`).all() as NoteRow[])
-        : (db
-            .prepare(`SELECT * FROM notes WHERE folder_id IS ? ORDER BY created_at DESC`)
-            .all(folderId) as NoteRow[]);
+      view === "trash"
+        ? (db
+            .prepare(`SELECT * FROM notes WHERE ${deletedCond} ORDER BY updated_at DESC`)
+            .all() as NoteRow[])
+        : folderId === undefined
+          ? (db
+              .prepare(`SELECT * FROM notes WHERE ${deletedCond} ORDER BY created_at DESC`)
+              .all() as NoteRow[])
+          : (db
+              .prepare(
+                `SELECT * FROM notes WHERE ${deletedCond} AND folder_id IS ? ORDER BY created_at DESC`
+              )
+              .all(folderId) as NoteRow[]);
     const notes = rows.map(rowToNote);
     if (!query) return notes;
 
@@ -501,6 +588,17 @@ export const notePagesRepo = {
   setSegments(id: string, segments: TranscriptSegment[], updatedAt: string): void {
     db.prepare(`UPDATE note_pages SET segments_current = ?, updated_at = ? WHERE id = ?`).run(
       JSON.stringify(segments),
+      updatedAt,
+      id
+    );
+  },
+
+  // "Delete original image only" (03-ux-screens.md §6) - the caller has
+  // already removed the file from disk; this just flags it so the review
+  // screen renders a placeholder instead of a broken <img>. Segments/
+  // transcription are untouched.
+  setImageRemoved(id: string, updatedAt: string): void {
+    db.prepare(`UPDATE note_pages SET image_removed = 1, updated_at = ? WHERE id = ?`).run(
       updatedAt,
       id
     );

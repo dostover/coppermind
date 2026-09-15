@@ -16,17 +16,32 @@ export function Nav() {
     return isActive ? "active" : undefined;
   }
 
+  const onUploadPage = pathname.startsWith("/upload");
+
   return (
-    <nav className="sidebar">
-      <Link href="/" className="brand">
-        Inkwell
-      </Link>
-      <Link href="/upload" className={linkClass("/upload")}>
-        Capture
-      </Link>
-      <Link href="/library" className={linkClass("/library")}>
-        Library
-      </Link>
-    </nav>
+    <>
+      <nav className="sidebar">
+        <Link href="/" className="brand">
+          Inkwell
+        </Link>
+        <Link href="/upload" className={linkClass("/upload")}>
+          Capture
+        </Link>
+        <Link href="/library" className={linkClass("/library")}>
+          Library
+        </Link>
+      </nav>
+      {/* Mobile-only floating capture action (03-ux-screens.md §2: "a
+          persistent '+' capture action - floating button on mobile"). The
+          sidebar collapses to a horizontal top bar under 720px, and its
+          Capture link can scroll out of view there - this keeps capture one
+          tap away regardless. Hidden on /upload itself, since the page the
+          button leads to is already open. */}
+      {!onUploadPage && (
+        <Link href="/upload" className="fab-capture" aria-label="Capture a new page">
+          +
+        </Link>
+      )}
+    </>
   );
 }

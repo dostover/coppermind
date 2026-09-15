@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
+import { StatusBadge, StatusDot } from "@/components/StatusBadge";
 
 interface Props {
   noteId: string;
   pages: NotePage[];
   initialTitle: string | null;
+  initialTitleSource: "ai" | "user";
   initialFolderId: string | null;
   initialTags: NoteTagView[];
   allFolders: FolderRow[];
@@ -32,6 +34,7 @@ interface PageState {
   status: NotePage["status"];
   errorMessage: string | null;
   segments: TranscriptSegment[];
+  imageRemoved: boolean;
 }
 
 function toPageState(p: NotePage): PageState {
@@ -44,6 +47,7 @@ function toPageState(p: NotePage): PageState {
     // Only a ready page has anything meaningful to edit; other statuses
     // render no editor at all, so an empty array here is never shown.
     segments: p.status === "ready_for_review" ? p.segmentsCurrent : [],
+    imageRemoved: p.imageRemoved,
   };
 }
 
@@ -51,6 +55,7 @@ export function ReviewEditor({
   noteId,
   pages,
   initialTitle,
+  initialTitleSource,
   initialFolderId,
   initialTags,
   allFolders,
@@ -70,9 +75,18 @@ export function ReviewEditor({
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [retryingPageIds, setRetryingPageIds] = useState<Set<string>>(new Set());
+  const [deletingImagePageIds, setDeletingImagePageIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // AI-trust visual language (03-ux-screens.md's cross-screen note), extended
+  // from tags to the title: shows the same "AI suggested this" badge only
+  // while the title is both server-recorded as AI-derived AND still exactly
+  // what's on screen - the instant the user types something different, this
+  // goes false immediately (same "the flag clears the moment you edit"
+  // feedback the transcription segments already give), well before Save.
+  const titleIsAiSuggested = initialTitleSource === "ai" && title.trim() === (initialTitle ?? "").trim();
 
   // Image-region highlighting (AC-6 last bullet / FR-5.5, best-effort): which
   // segment is currently focused, so its sourceRegion (if any) can be drawn
@@ -268,6 +282,34 @@ export function ReviewEditor({
     }
   }
 
+  // "Delete original image only" (03-ux-screens.md §6) - distinct from
+  // deleting the whole note below: this keeps the transcription and just
+  // discards the source photo, irreversibly, so it asks first.
+  async function handleDeleteImage(pageId: string) {
+    const ok = window.confirm(
+      "Delete this page's original photo? The transcription stays, but the photo itself can't be recovered afterward."
+    );
+    if (!ok) return;
+
+    setDeletingImagePageIds((prev) => new Set(prev).add(pageId));
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/pages/${pageId}/delete-image`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Couldn't delete the image.");
+      setPageStates((prev) => prev.map((p) => (p.id === pageId ? { ...p, imageRemoved: true } : p)));
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Couldn't delete the image.");
+    } finally {
+      setDeletingImagePageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(pageId);
+        return next;
+      });
+    }
+  }
+
   // Exports (or re-exports, updating the same Doc in place - see
   // docsExport.ts) the note as it's currently saved on the server. Uses
   // last-saved content, not in-progress unsaved edits, same as how Save
@@ -290,11 +332,7 @@ export function ReviewEditor({
   }
 
   async function handleDelete() {
-    const ok = window.confirm(
-      pageStates.length > 1
-        ? "Delete this note? This permanently removes the transcription and all original photos. This can't be undone."
-        : "Delete this note? This permanently removes the transcription and the original photo. This can't be undone."
-    );
+    const ok = window.confirm("Move this note to Trash? You can restore it from Trash later.");
     if (!ok) return;
 
     setDeleting(true);
@@ -336,23 +374,49 @@ export function ReviewEditor({
       {activePage && (
         <div className="note-image-carousel" ref={carouselRef}>
           <div className="note-image-wrap">
-            <img
-              src={`/${activePage.imagePath}`}
-              alt="Uploaded handwritten page"
-              className="note-image"
-            />
-            {activeRegion && (
-              <div
-                className="region-highlight"
-                style={{
-                  left: `${activeRegion.bbox[0] * 100}%`,
-                  top: `${activeRegion.bbox[1] * 100}%`,
-                  width: `${activeRegion.bbox[2] * 100}%`,
-                  height: `${activeRegion.bbox[3] * 100}%`,
-                }}
-              />
+            {activePage.imageRemoved ? (
+              // Original removed via "Delete original image" - the
+              // transcription below is unaffected, this just replaces the
+              // broken/missing <img> with an honest placeholder
+              // (03-ux-screens.md §6's "clear ... state rather than a broken
+              // image or blank area").
+              <div className="image-removed-placeholder">
+                <p className="muted" style={{ margin: 0 }}>
+                  Original photo deleted. The transcription below is unaffected.
+                </p>
+              </div>
+            ) : (
+              <>
+                <img
+                  src={`/${activePage.imagePath}`}
+                  alt="Uploaded handwritten page"
+                  className="note-image"
+                />
+                {activeRegion && (
+                  <div
+                    className="region-highlight"
+                    style={{
+                      left: `${activeRegion.bbox[0] * 100}%`,
+                      top: `${activeRegion.bbox[1] * 100}%`,
+                      width: `${activeRegion.bbox[2] * 100}%`,
+                      height: `${activeRegion.bbox[3] * 100}%`,
+                    }}
+                  />
+                )}
+              </>
             )}
           </div>
+
+          {activePage.status === "ready_for_review" && !activePage.imageRemoved && (
+            <button
+              type="button"
+              className="button secondary delete-image-button"
+              onClick={() => handleDeleteImage(activePage.id)}
+              disabled={deletingImagePageIds.has(activePage.id)}
+            >
+              {deletingImagePageIds.has(activePage.id) ? "Deleting…" : "Delete original image"}
+            </button>
+          )}
 
           {pageStates.length > 1 && (
             <>
@@ -387,10 +451,19 @@ export function ReviewEditor({
                     key={p.id}
                     className={`carousel-thumb${i === activePageIndex ? " active" : ""}`}
                     onClick={() => setActivePageIndex(i)}
-                    aria-label={`Go to page ${p.pageNumber}`}
+                    aria-label={`Go to page ${p.pageNumber} (${p.status.replace(/_/g, " ")})`}
                     aria-current={i === activePageIndex}
                   >
-                    <img src={`/${p.imagePath}`} alt="" />
+                    {p.imageRemoved ? (
+                      <span className="carousel-thumb-placeholder" aria-hidden="true">
+                        ✕
+                      </span>
+                    ) : (
+                      <img src={`/${p.imagePath}`} alt="" />
+                    )}
+                    {p.status !== "ready_for_review" && (
+                      <StatusDot status={p.status} className="carousel-thumb-dot" />
+                    )}
                   </button>
                 ))}
               </div>
@@ -411,14 +484,15 @@ export function ReviewEditor({
             )}
 
             {(page.status === "uploaded" || page.status === "transcribing") && (
-              <p className="muted">
-                Transcribing this page… this updates automatically, no need to refresh.
+              <p className="muted" role="status" aria-live="polite">
+                <StatusBadge status={page.status} /> - this updates automatically, no need to
+                refresh.
               </p>
             )}
 
             {page.status === "error" && (
-              <p style={{ color: "var(--danger)" }}>
-                Transcription failed for this page: {page.errorMessage ?? "Unknown error."} The
+              <p className="toast error" role="alert">
+                <StatusBadge status={page.status} />: {page.errorMessage ?? "Unknown error."} The
                 original image is intact.{" "}
                 <button
                   className="button"
@@ -497,13 +571,24 @@ export function ReviewEditor({
 
       {hasAnyReadyPage && (
         <>
-          <input
-            className="field"
-            placeholder="Untitled note"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            style={{ marginBottom: "1rem", fontSize: "1.1rem" }}
-          />
+          <div className="title-row">
+            <input
+              className="field"
+              placeholder="Untitled note"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            {titleIsAiSuggested && title.trim() && (
+              <span className="tag-ai-label title-ai-label" title="Suggested automatically - edit to make it yours">
+                AI
+              </span>
+            )}
+          </div>
+          {titleIsAiSuggested && title.trim() && (
+            <p className="muted">
+              This title was suggested automatically - edit it above, or save to keep it.
+            </p>
+          )}
 
           <div className="organize-row">
             <label className="muted" htmlFor="folder-select">
@@ -611,17 +696,30 @@ export function ReviewEditor({
               </a>
             )}
           </div>
-          {googleExportError && <p style={{ color: "var(--danger)" }}>{googleExportError}</p>}
+          {googleExportError && (
+            <p className="toast error" role="alert">
+              ⚠ {googleExportError}
+            </p>
+          )}
         </>
       )}
 
-      {savedMessage && <p className="muted">{savedMessage}</p>}
-      {errorMessage && <p style={{ color: "var(--danger)" }}>{errorMessage}</p>}
+      {savedMessage && (
+        <p className="toast success" role="status">
+          ✓ {savedMessage}
+        </p>
+      )}
+      {errorMessage && (
+        <p className="toast error" role="alert">
+          ⚠ {errorMessage}
+        </p>
+      )}
 
       <div className="danger-zone">
         <button className="button danger" onClick={handleDelete} disabled={deleting}>
-          {deleting ? "Deleting..." : "Delete note"}
+          {deleting ? "Moving to Trash…" : "Move to Trash"}
         </button>
+        <span className="muted danger-zone-hint">Recoverable from Trash in the Library sidebar.</span>
       </div>
     </div>
   );

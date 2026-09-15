@@ -78,6 +78,13 @@ export function UploadForm() {
         className="field"
         type="file"
         accept="image/jpeg,image/png,image/webp"
+        // On a phone/tablet with a camera, "capture" is what puts the
+        // camera itself (not just the photo library) at the top of the
+        // options a tap on this input offers - the mobile-first "camera
+        // viewfinder as default entry point" from 03-ux-screens.md §3,
+        // without needing getUserMedia/a custom viewfinder to get there.
+        // Desktop browsers simply ignore the attribute.
+        capture="environment"
         multiple
         onChange={(e) => {
           addFiles(Array.from(e.target.files ?? []));
@@ -131,8 +138,8 @@ export function UploadForm() {
             : "Upload & Transcribe"}
       </button>
       {status === "error" && (
-        <p style={{ color: "var(--danger)" }}>
-          {error} The original upload is safe - you can retry from this page.
+        <p className="toast error" role="alert">
+          ⚠ {error} The original upload is safe - you can retry from this page.
         </p>
       )}
     </form>
