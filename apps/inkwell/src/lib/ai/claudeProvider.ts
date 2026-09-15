@@ -4,6 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prepareImageForVision } from "@/lib/imagePrep";
 import type {
   AIProvider,
+  GenerateTagsInput,
+  GenerateTagsOutput,
   LearningEvalInput,
   LearningEvalOutput,
   TranscribeInput,
@@ -78,6 +80,33 @@ const EVALUATE_TOOL: Anthropic.Tool = {
       rationale: { type: "string" },
     },
     required: ["classification", "learningWeight", "rationale"],
+  },
+};
+
+const GENERATE_TAGS_TOOL: Anthropic.Tool = {
+  name: "record_tags",
+  description:
+    "Propose a short list of tags for this note, strongly preferring the user's existing tag vocabulary over new near-duplicate tags.",
+  input_schema: {
+    type: "object",
+    properties: {
+      tags: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            matchedExistingTag: {
+              type: "boolean",
+              description: "true if this exactly matches one of the provided existingUserTags",
+            },
+            confidence: { type: "number", description: "0-1" },
+          },
+          required: ["name", "matchedExistingTag", "confidence"],
+        },
+      },
+    },
+    required: ["tags"],
   },
 };
 
@@ -206,5 +235,39 @@ export class ClaudeAIProvider implements AIProvider {
     }
 
     return toolUse.input as LearningEvalOutput;
+  }
+
+  async generateTags(input: GenerateTagsInput): Promise<GenerateTagsOutput> {
+    const existingList = input.existingUserTags.length
+      ? `This user's existing tags (reuse one of these verbatim whenever it reasonably applies, rather than proposing a near-duplicate - e.g. prefer their existing "D&D" over inventing "Dungeons & Dragons"): ${input.existingUserTags.join(", ")}.`
+      : "This user has no existing tags yet.";
+
+    const message = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system:
+        "You propose a short list (1-4) of concise topical tags for a handwritten note, based on its " +
+        "transcription. Prefer reusing the user's existing tag vocabulary exactly (same spelling/casing) over " +
+        "minting a new near-duplicate tag - only propose a new tag when no existing one reasonably applies. " +
+        "Set matchedExistingTag to true only when `name` is an exact match to one of the provided existing " +
+        "tags. Keep tags short (1-3 words), topical rather than generic (avoid vague tags like \"notes\" or " +
+        "\"misc\"). " +
+        existingList,
+      tools: [GENERATE_TAGS_TOOL],
+      tool_choice: { type: "tool", name: "record_tags" },
+      messages: [
+        {
+          role: "user",
+          content: `Note transcription:\n${input.transcription}`,
+        },
+      ],
+    });
+
+    const toolUse = message.content.find((block) => block.type === "tool_use");
+    if (!toolUse || toolUse.type !== "tool_use") {
+      throw new Error("Claude did not return structured tags (no tool_use block).");
+    }
+
+    return toolUse.input as GenerateTagsOutput;
   }
 }

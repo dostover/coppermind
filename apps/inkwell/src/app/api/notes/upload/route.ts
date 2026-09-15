@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { notesRepo } from "@/lib/db";
+import { notesRepo, tagsRepo, noteTagsRepo } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import { getHandwritingContext } from "@/lib/handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "@/lib/config";
@@ -56,6 +56,35 @@ export async function POST(req: NextRequest) {
       new Date().toISOString(),
       derivePlaceholderTitle(result.segments)
     );
+
+    // Best-effort AI tag suggestion, one time only (new note -> no existing
+    // note_tags rows yet). A failure here must not fail an otherwise-
+    // successful upload/transcription - tags are a nice-to-have, not core
+    // to the walking-skeleton's transcription+learning loop.
+    try {
+      const transcriptionText = result.segments
+        .filter((s) => !s.crossedOut)
+        .map((s) => s.text)
+        .join(" ");
+      if (transcriptionText.trim()) {
+        const existingUserTags = tagsRepo.listAll().map((t) => t.name);
+        const { tags } = await provider.generateTags({
+          transcription: transcriptionText,
+          existingUserTags,
+        });
+        const resolved = tags.map((t) => ({
+          ...tagsRepo.findOrCreate(t.name, new Date().toISOString()),
+          confidence: t.confidence,
+        }));
+        noteTagsRepo.setForNote(
+          id,
+          resolved.map((t) => ({ tagId: t.id, source: "ai" as const, confidence: t.confidence })),
+          new Date().toISOString()
+        );
+      }
+    } catch (tagErr) {
+      console.error("AI tag suggestion failed (non-fatal):", tagErr);
+    }
   } catch (err) {
     // A failure here does not lose the uploaded original (FR-3.8/FR-13.2) -
     // the image is already saved and the note is left in a recoverable

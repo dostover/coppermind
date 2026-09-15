@@ -6,6 +6,11 @@ import { notesRepo } from "@/lib/db";
 // FR-10.6) is deferred per claude/08-walking-skeleton-scope.md.
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") ?? undefined;
-  const notes = notesRepo.listAll(q);
+  // "folder" query param: absent = no filter, "" (or "none") = unfiled notes
+  // only, otherwise a folder id.
+  const folderParam = req.nextUrl.searchParams.get("folder");
+  const folderId =
+    folderParam === null ? undefined : folderParam === "" || folderParam === "none" ? null : folderParam;
+  const notes = notesRepo.listAll(q, folderId);
   return NextResponse.json({ notes });
 }

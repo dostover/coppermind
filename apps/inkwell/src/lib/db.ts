@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import type { TranscriptSegment } from "./ai/types";
 import { CONFIDENCE_THRESHOLD } from "./config";
 
@@ -54,7 +55,46 @@ db.exec(`
     correction_patterns TEXT NOT NULL DEFAULT '[]',   -- JSON [{ fromPattern, toPattern, occurrences, lastConfirmedAt }]
     updated_at TEXT NOT NULL
   );
+
+  -- Folders/tags, narrowed from 04-data-model.md: flat (no parent_folder_id
+  -- nesting) and manual-only for folders (no AI folder-suggestion flow) -
+  -- tags do get an AI-suggestion pass (generateTags), folders don't, per the
+  -- scoping decision for this feature. No user_id on any of these - still
+  -- single implicit user.
+  CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS tags (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL UNIQUE,  -- lowercased/trimmed, for AI/user dedup (FR-7.6)
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS note_tags (
+    note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    confidence REAL,          -- null for user-added tags
+    source TEXT NOT NULL,     -- 'user' | 'ai'
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (note_id, tag_id)
+  );
 `);
+
+// notes.folder_id was added after the original table shape shipped - ALTER
+// TABLE ADD COLUMN, guarded so it's a no-op (not an error) on a database
+// that already has it. `ON DELETE SET NULL` isn't expressible on an added
+// column via ALTER TABLE in SQLite, so that behavior (a deleted folder
+// clears folder_id rather than deleting the note - 04-data-model.md's
+// "safety net, not the primary UX path") is enforced in foldersRepo.delete
+// below instead of at the schema level.
+const noteColumns = db.prepare(`PRAGMA table_info(notes)`).all() as { name: string }[];
+if (!noteColumns.some((c) => c.name === "folder_id")) {
+  db.exec(`ALTER TABLE notes ADD COLUMN folder_id TEXT REFERENCES folders(id)`);
+}
 
 export interface NoteRow {
   id: string;
@@ -64,13 +104,22 @@ export interface NoteRow {
   error_message: string | null;
   segments_ai: string;
   segments_current: string;
+  folder_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface NoteTagView {
+  id: string;
+  name: string;
+  source: "user" | "ai";
+  confidence: number | null;
 }
 
 export interface Note extends Omit<NoteRow, "segments_ai" | "segments_current"> {
   segmentsAi: TranscriptSegment[];
   segmentsCurrent: TranscriptSegment[];
+  tags: NoteTagView[];
 }
 
 // review-required is recomputed from each segment's stored raw confidence
@@ -84,11 +133,23 @@ function applyReviewRequired(segments: TranscriptSegment[]): TranscriptSegment[]
   return segments.map((s) => ({ ...s, reviewRequired: s.confidence < CONFIDENCE_THRESHOLD }));
 }
 
+function getTagsForNote(noteId: string): NoteTagView[] {
+  return db
+    .prepare(
+      `SELECT tags.id as id, tags.name as name, note_tags.source as source, note_tags.confidence as confidence
+       FROM note_tags JOIN tags ON tags.id = note_tags.tag_id
+       WHERE note_tags.note_id = ?
+       ORDER BY tags.name ASC`
+    )
+    .all(noteId) as NoteTagView[];
+}
+
 function rowToNote(row: NoteRow): Note {
   return {
     ...row,
     segmentsAi: applyReviewRequired(JSON.parse(row.segments_ai)),
     segmentsCurrent: applyReviewRequired(JSON.parse(row.segments_current)),
+    tags: getTagsForNote(row.id),
   };
 }
 
@@ -141,6 +202,15 @@ export const notesRepo = {
     ).run(JSON.stringify(segments), title, updatedAt, id);
   },
 
+  // folderId: null clears the folder (moves the note to "no folder").
+  setFolder(id: string, folderId: string | null, updatedAt: string): void {
+    db.prepare(`UPDATE notes SET folder_id = ?, updated_at = ? WHERE id = ?`).run(
+      folderId,
+      updatedAt,
+      id
+    );
+  },
+
   getById(id: string): Note | undefined {
     const row = db.prepare(`SELECT * FROM notes WHERE id = ?`).get(id) as NoteRow | undefined;
     return row ? rowToNote(row) : undefined;
@@ -153,10 +223,15 @@ export const notesRepo = {
     db.prepare(`DELETE FROM notes WHERE id = ?`).run(id);
   },
 
-  listAll(query?: string): Note[] {
-    const rows = db
-      .prepare(`SELECT * FROM notes ORDER BY created_at DESC`)
-      .all() as NoteRow[];
+  // folderId: undefined = no filter (all notes), null = only unfiled notes,
+  // a string = only notes in that folder.
+  listAll(query?: string, folderId?: string | null): Note[] {
+    const rows =
+      folderId === undefined
+        ? (db.prepare(`SELECT * FROM notes ORDER BY created_at DESC`).all() as NoteRow[])
+        : (db
+            .prepare(`SELECT * FROM notes WHERE folder_id IS ? ORDER BY created_at DESC`)
+            .all(folderId) as NoteRow[]);
     const notes = rows.map(rowToNote);
     if (!query) return notes;
 
@@ -170,6 +245,116 @@ export const notesRepo = {
         .toLowerCase();
       return haystack.includes(q);
     });
+  },
+};
+
+export interface FolderRow {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export const foldersRepo = {
+  create(input: { id: string; name: string; createdAt: string }): void {
+    db.prepare(`INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)`).run(
+      input.id,
+      input.name,
+      input.createdAt
+    );
+  },
+
+  listAll(): FolderRow[] {
+    return db.prepare(`SELECT * FROM folders ORDER BY name ASC`).all() as FolderRow[];
+  },
+
+  getById(id: string): FolderRow | undefined {
+    return db.prepare(`SELECT * FROM folders WHERE id = ?`).get(id) as FolderRow | undefined;
+  },
+
+  // Notes in this folder are reassigned to "no folder" first (04-data-model.md:
+  // "the application layer [must] first reassign or null out notes.folder_id" -
+  // deleting a folder must never delete the notes in it), then the folder row
+  // itself is removed. Both statements run as one transaction so a crash
+  // between them can't leave notes pointing at a folder_id that no longer
+  // exists.
+  delete(id: string): void {
+    const tx = db.transaction((folderId: string) => {
+      db.prepare(`UPDATE notes SET folder_id = NULL WHERE folder_id = ?`).run(folderId);
+      db.prepare(`DELETE FROM folders WHERE id = ?`).run(folderId);
+    });
+    tx(id);
+  },
+};
+
+function normalizeTagName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+export const tagsRepo = {
+  listAll(): { id: string; name: string }[] {
+    return db.prepare(`SELECT id, name FROM tags ORDER BY name ASC`).all() as {
+      id: string;
+      name: string;
+    }[];
+  },
+
+  // Case-insensitive find-or-create by normalized name (FR-7.6 / AC-9's
+  // "reuse the existing tag rather than a near-duplicate being created"),
+  // so "D&D" and "d&d" resolve to the same row and the first-ever spelling
+  // wins for display.
+  findOrCreate(name: string, createdAt: string): { id: string; name: string } {
+    const normalized = normalizeTagName(name);
+    const existing = db
+      .prepare(`SELECT id, name FROM tags WHERE normalized_name = ?`)
+      .get(normalized) as { id: string; name: string } | undefined;
+    if (existing) return existing;
+
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO tags (id, name, normalized_name, created_at) VALUES (?, ?, ?, ?)`
+    ).run(id, name.trim(), normalized, createdAt);
+    return { id, name: name.trim() };
+  },
+};
+
+export const noteTagsRepo = {
+  // Replaces the note's full tag set. Used both for the AI's initial
+  // suggestions (source: 'ai') at upload time and for the user's edits from
+  // the review screen (source: 'user') - see notes/[id]/route.ts PATCH.
+  // Replacing rather than diffing is deliberate and simple for this phase:
+  // the review screen always saves the complete current tag list, the same
+  // pattern as segments_current.
+  setForNote(
+    noteId: string,
+    tags: { tagId: string; source: "user" | "ai"; confidence: number | null }[],
+    createdAt: string
+  ): void {
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM note_tags WHERE note_id = ?`).run(noteId);
+      const insert = db.prepare(
+        `INSERT INTO note_tags (note_id, tag_id, confidence, source, created_at)
+         VALUES (@noteId, @tagId, @confidence, @source, @createdAt)`
+      );
+      for (const t of tags) {
+        insert.run({
+          noteId,
+          tagId: t.tagId,
+          confidence: t.confidence,
+          source: t.source,
+          createdAt,
+        });
+      }
+    });
+    tx();
+  },
+
+  // Whether this note has ever had any tags recorded - used to gate the
+  // one-time AI tag suggestion the same way titleGen.ts gates the
+  // placeholder title, so a later retry doesn't silently re-add a tag the
+  // user deliberately removed (AC-9: "does not silently reappear").
+  hasAnyForNote(noteId: string): boolean {
+    const row = db.prepare(`SELECT 1 FROM note_tags WHERE note_id = ? LIMIT 1`).get(noteId);
+    return Boolean(row);
   },
 };
 

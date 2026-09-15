@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import type {
   AIProvider,
+  GenerateTagsInput,
+  GenerateTagsOutput,
   LearningEvalInput,
   LearningEvalOutput,
   StructureType,
@@ -180,5 +182,40 @@ export class MockAIProvider implements AIProvider {
       learningWeight: 0.1,
       rationale: "Structurally different from the original - low-confidence fallback classification.",
     };
+  }
+
+  // Simplistic keyword match against the mock's own fixed demo vocabulary
+  // (see DEMO_PAGES above) rather than real topic extraction - this proves
+  // the generateTags plumbing (reuse-existing-tag matching, AC-9) end to end
+  // without a network call, the same spirit as the rest of this file.
+  // Matches on both the "right" and (still-unlearned) "wrong" spellings from
+  // DEMO_PAGES, since the transcription text this actually runs against is
+  // whatever the mock transcriber produced - which may still be the
+  // misread form early on.
+  async generateTags(input: GenerateTagsInput): Promise<GenerateTagsOutput> {
+    const KEYWORDS: { tag: string; variants: string[] }[] = [
+      { tag: "Rilldale", variants: ["rilldale", "rilldaie"] },
+      { tag: "wizard", variants: ["wizard", "wizzard"] },
+      { tag: "amulet", variants: ["amulet", "amvlet"] },
+      { tag: "watchtower", variants: ["watchtower", "watchtowfr"] },
+      { tag: "expedition", variants: ["expedition"] },
+    ];
+    const lowerText = input.transcription.toLowerCase();
+    const found = KEYWORDS.filter((k) => k.variants.some((v) => lowerText.includes(v))).map(
+      (k) => k.tag
+    );
+
+    const tags = found.map((keyword) => {
+      const existing = input.existingUserTags.find(
+        (t) => t.toLowerCase() === keyword.toLowerCase()
+      );
+      return {
+        name: existing ?? keyword,
+        matchedExistingTag: Boolean(existing),
+        confidence: 0.7 + Math.random() * 0.2,
+      };
+    });
+
+    return { tags };
   }
 }
