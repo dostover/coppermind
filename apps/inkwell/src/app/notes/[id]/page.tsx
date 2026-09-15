@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { notesRepo } from "@/lib/db";
+import { notesRepo, foldersRepo, tagsRepo } from "@/lib/db";
 import { ReviewEditor } from "@/components/ReviewEditor";
 
 export default async function NotePage({
@@ -20,6 +20,10 @@ export default async function NotePage({
         initialTitle={note.title}
         initialSegments={note.segmentsCurrent}
         status={note.status}
+        initialFolderId={note.folder_id}
+        initialTags={note.tags}
+        allFolders={foldersRepo.listAll()}
+        allTagNames={tagsRepo.listAll().map((t) => t.name)}
       />
     </div>
   );

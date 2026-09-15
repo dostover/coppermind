@@ -1,7 +1,7 @@
 import { unlink } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { notesRepo } from "@/lib/db";
+import { notesRepo, tagsRepo, noteTagsRepo } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import {
   recordHandwritingCorrection,
@@ -22,6 +22,11 @@ export async function GET(
 interface PatchBody {
   title?: string | null;
   segments: { id: string; text: string }[];
+  // Both optional and independently applied: omitting a field leaves that
+  // note property untouched, so callers that only save segments/title (if
+  // any remain) don't accidentally clear folder/tags.
+  folderId?: string | null;
+  tags?: string[];
 }
 
 // Save flow (FR-5.4/FR-5.6/FR-6.1): saves even if some segments are still
@@ -90,6 +95,29 @@ export async function PATCH(
 
   const title = body.title?.trim() || null;
   notesRepo.setReviewed(id, updatedSegments, title, new Date().toISOString());
+
+  if (body.folderId !== undefined) {
+    notesRepo.setFolder(id, body.folderId, new Date().toISOString());
+  }
+
+  // The review screen always sends its complete current tag list (same
+  // pattern as segments_current) - saved here as source: 'user' regardless
+  // of whether a given tag started as an AI suggestion, since the act of
+  // saving from the review screen is the user's confirmation of the final
+  // set (AC-9: removed AI tags must not silently reappear; kept/edited ones
+  // are now user-owned).
+  if (body.tags !== undefined) {
+    const now = new Date().toISOString();
+    const resolved = body.tags
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .map((name) => tagsRepo.findOrCreate(name, now));
+    noteTagsRepo.setForNote(
+      id,
+      resolved.map((t) => ({ tagId: t.id, source: "user" as const, confidence: null })),
+      now
+    );
+  }
 
   return NextResponse.json(notesRepo.getById(id));
 }

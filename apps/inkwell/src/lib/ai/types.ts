@@ -70,7 +70,26 @@ export interface LearningEvalOutput {
   rationale: string;
 }
 
+// Narrowed from the full Phase 5 `generateTags` contract (05-ai-contracts.md
+// §5): the full contract also passes the adaptive `summary`, but summarize()
+// is still deferred per claude/08-walking-skeleton-scope.md, so this takes
+// transcription text directly. `existingUserTags` is passed so the model can
+// reuse the user's vocabulary instead of minting near-duplicates (FR-7.6).
+export interface GenerateTagsInput {
+  transcription: string;
+  existingUserTags: string[];
+}
+
+export interface GenerateTagsOutput {
+  tags: {
+    name: string;
+    matchedExistingTag: boolean;
+    confidence: number;
+  }[];
+}
+
 export interface AIProvider {
   transcribe(input: TranscribeInput): Promise<TranscribeOutput>;
   evaluateHandwritingCorrection(input: LearningEvalInput): Promise<LearningEvalOutput>;
+  generateTags(input: GenerateTagsInput): Promise<GenerateTagsOutput>;
 }
