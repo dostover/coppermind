@@ -180,9 +180,11 @@ h2.segment-heading textarea.segment-input {
   white-space: pre-wrap;
 }
 
-/* Multi-page notes: each page (image + its own transcription/status) stacks
-   as its own block, with a divider between pages once there's more than one
-   so it reads as "several pages of one note," not a run-on wall of text. */
+/* Multi-page notes: every page's image lives in one shared carousel above
+   (see .note-image-carousel below); each page's transcription/status still
+   stacks as its own block down here, with a divider between pages once
+   there's more than one so it reads as "several pages of one note," not a
+   run-on wall of text. */
 .note-page-block {
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
@@ -251,6 +253,52 @@ h2.segment-heading textarea.segment-input {
   border-radius: 3px;
   pointer-events: none;
   transition: left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease;
+}
+
+/* Multi-page notes: one shared image carousel above every page's
+   transcription (instead of each page's image sitting next to its own
+   text) - see ReviewEditor.tsx. For a single-page note this renders with no
+   controls/thumbs at all, so it looks exactly like the old plain image. */
+.note-image-carousel {
+  margin-bottom: 1.5rem;
+}
+
+.carousel-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+
+.carousel-thumbs {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.carousel-thumb {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.carousel-thumb img {
+  display: block;
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--card-border);
+}
+
+.carousel-thumb.active {
+  border-color: var(--accent);
 }
 
 .note-card {
