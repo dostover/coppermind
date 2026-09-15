@@ -417,7 +417,7 @@ export function ReviewEditor({
             )}
 
             {page.status === "error" && (
-              <p style={{ color: "#a33" }}>
+              <p style={{ color: "var(--danger)" }}>
                 Transcription failed for this page: {page.errorMessage ?? "Unknown error."} The
                 original image is intact.{" "}
                 <button
@@ -583,36 +583,46 @@ export function ReviewEditor({
             </p>
           )}
 
-          <button className="button" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </button>{" "}
-          {googleConfigured &&
-            (googleConnected ? (
-              <button className="button secondary" onClick={handleExportToGoogle} disabled={exportingToGoogle}>
-                {exportingToGoogle ? "Exporting..." : googleDocUrl ? "Re-export to Google Docs" : "Export to Google Docs"}
-              </button>
-            ) : (
-              <a className="button secondary" href="/api/integrations/google/connect">
-                Connect Google Docs to export
-              </a>
-            ))}{" "}
-          {googleDocUrl && (
-            <>
-              {" "}
+          <div className="note-actions">
+            <button className="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+            {googleConfigured &&
+              (googleConnected ? (
+                <button
+                  className="button secondary"
+                  onClick={handleExportToGoogle}
+                  disabled={exportingToGoogle}
+                >
+                  {exportingToGoogle
+                    ? "Exporting..."
+                    : googleDocUrl
+                      ? "Re-export to Google Docs"
+                      : "Export to Google Docs"}
+                </button>
+              ) : (
+                <a className="button secondary" href="/api/integrations/google/connect">
+                  Connect Google Docs to export
+                </a>
+              ))}
+            {googleDocUrl && (
               <a href={googleDocUrl} target="_blank" rel="noopener noreferrer">
                 Open in Google Docs
               </a>
-            </>
-          )}
-          {googleExportError && <p style={{ color: "#a33" }}>{googleExportError}</p>}
+            )}
+          </div>
+          {googleExportError && <p style={{ color: "var(--danger)" }}>{googleExportError}</p>}
         </>
       )}
 
-      <button className="button danger" onClick={handleDelete} disabled={deleting}>
-        {deleting ? "Deleting..." : "Delete note"}
-      </button>
       {savedMessage && <p className="muted">{savedMessage}</p>}
-      {errorMessage && <p style={{ color: "#a33" }}>{errorMessage}</p>}
+      {errorMessage && <p style={{ color: "var(--danger)" }}>{errorMessage}</p>}
+
+      <div className="danger-zone">
+        <button className="button danger" onClick={handleDelete} disabled={deleting}>
+          {deleting ? "Deleting..." : "Delete note"}
+        </button>
+      </div>
     </div>
   );
 }

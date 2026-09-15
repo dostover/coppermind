@@ -59,34 +59,37 @@ export default async function LibraryPage({
         <NewFolderForm />
       </div>
 
-      {notes.length > 0 && (
-        <p style={{ marginBottom: "1.5rem" }}>
-          <a className="button secondary" href="/api/export">
-            Export all notes
-          </a>{" "}
-          <span className="muted">
-            Downloads a zip with every note&apos;s transcription and original photo - a full local
-            backup. To send an individual note somewhere you can read/share it online, connect
-            Google Docs below and use the Export button on that note.
-          </span>
-        </p>
-      )}
-
-      <GoogleConnectionControl
-        configured={GOOGLE_OAUTH_CONFIGURED}
-        connected={isGoogleConnected()}
-        errorFromCallback={googleError ?? null}
-      />
+      <div className="card" style={{ marginBottom: "1.5rem", padding: "1.1rem 1.25rem" }}>
+        {notes.length > 0 && (
+          <p style={{ marginBottom: "0.6rem" }}>
+            <a className="button secondary" href="/api/export">
+              Export all notes
+            </a>{" "}
+            <span className="muted">
+              Downloads a zip with every note&apos;s transcription and original photo - a full
+              local backup. To send an individual note somewhere you can read/share it online,
+              connect Google Docs below and use the Export button on that note.
+            </span>
+          </p>
+        )}
+        <GoogleConnectionControl
+          configured={GOOGLE_OAUTH_CONFIGURED}
+          connected={isGoogleConnected()}
+          errorFromCallback={googleError ?? null}
+        />
+      </div>
 
 
       {notes.length === 0 && (
-        <p className="muted">
-          {q
-            ? "No notes match that search."
-            : folderId !== undefined
-              ? `No notes in ${activeFolderName}.`
-              : "No notes yet - capture your first page."}
-        </p>
+        <div className="empty-state">
+          <p className="muted" style={{ margin: 0 }}>
+            {q
+              ? "No notes match that search."
+              : folderId !== undefined
+                ? `No notes in ${activeFolderName}.`
+                : "No notes yet - capture your first page."}
+          </p>
+        </div>
       )}
 
       {notes.map((note) => {

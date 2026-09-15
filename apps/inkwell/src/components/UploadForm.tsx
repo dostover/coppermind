@@ -131,7 +131,7 @@ export function UploadForm() {
             : "Upload & Transcribe"}
       </button>
       {status === "error" && (
-        <p style={{ color: "#a33" }}>
+        <p style={{ color: "var(--danger)" }}>
           {error} The original upload is safe - you can retry from this page.
         </p>
       )}

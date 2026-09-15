@@ -62,7 +62,7 @@ export function GoogleConnectionControl({ configured, connected, errorFromCallba
           Connect Google Docs
         </a>
       )}{" "}
-      {error && <span style={{ color: "#a33" }}>{error}</span>}
+      {error && <span style={{ color: "var(--danger)" }}>{error}</span>}
     </p>
   );
 }
