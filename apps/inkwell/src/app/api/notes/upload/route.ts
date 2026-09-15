@@ -6,6 +6,7 @@ import { notesRepo } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import { getHandwritingContext } from "@/lib/handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "@/lib/config";
+import { derivePlaceholderTitle } from "@/lib/titleGen";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -49,7 +50,12 @@ export async function POST(req: NextRequest) {
       handwritingContext: getHandwritingContext(),
       confidenceThreshold: CONFIDENCE_THRESHOLD,
     });
-    notesRepo.setTranscribed(id, result.segments, new Date().toISOString());
+    notesRepo.setTranscribed(
+      id,
+      result.segments,
+      new Date().toISOString(),
+      derivePlaceholderTitle(result.segments)
+    );
   } catch (err) {
     // A failure here does not lose the uploaded original (FR-3.8/FR-13.2) -
     // the image is already saved and the note is left in a recoverable
