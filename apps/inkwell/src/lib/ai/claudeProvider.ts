@@ -72,6 +72,22 @@ const TRANSCRIBE_TOOL: Anthropic.Tool = {
         },
       },
       pageLevelNotes: { type: "array", items: { type: "string" } },
+      contentArea: {
+        type: "object",
+        description:
+          "One whole-page judgment (not per segment) of roughly where the block of handwriting " +
+          "sits vertically on the page, as 0-1 fractions of the full image height from the top. " +
+          "Most pages are written on close to top-to-bottom, but when the writing only fills part " +
+          "of the page - a short note with blank space below, for example - report that real " +
+          "extent (e.g. top: 0.08, bottom: 0.3) rather than the whole page, so highlight regions " +
+          "for the last few lines don't end up placed in the blank area below the actual writing. " +
+          "Omit this field only if the writing genuinely fills the page top to bottom already.",
+        properties: {
+          top: { type: "number" },
+          bottom: { type: "number" },
+        },
+        required: ["top", "bottom"],
+      },
     },
     required: ["segments"],
   },
@@ -179,9 +195,11 @@ export class ClaudeAIProvider implements AIProvider {
         "letters on the page say what you transcribed, not how natural the resulting sentence sounds. " +
         "For each segment, also report lineNumber - which physical line of handwriting it's on, " +
         "counting from 1 at the top of the page (not which sentence or paragraph - an actual visual " +
-        "line as it appears on the page). Segments from the same line share the same number. This is " +
+        "line as it appears on the page). Segments from the same line share the same number. Also " +
+        "report contentArea once for the whole page - roughly where the block of handwriting starts " +
+        "and ends vertically, which matters when the writing doesn't fill the whole page. Both are " +
         "used only to draw an approximate highlight region, never the transcription itself, so your " +
-        "best count is fine - omit it only when you genuinely can't tell which line a segment is on. " +
+        "best estimate is fine - omit either one when you genuinely can't tell. " +
         hintText,
       tools: [TRANSCRIBE_TOOL],
       tool_choice: { type: "tool", name: "record_transcription" },
@@ -215,12 +233,15 @@ export class ClaudeAIProvider implements AIProvider {
         }
       >;
       pageLevelNotes?: string[];
+      contentArea?: { top: number; bottom: number };
     };
 
     // Regions are computed here, not trusted from the model directly - see
     // regionFromLines.ts for why (a first version that asked for a raw
-    // bounding box came back visibly wrong against a real photo).
-    const regions = computeLineBasedRegions(raw.segments);
+    // bounding box came back visibly wrong against a real photo, and a
+    // second version that assumed writing fills the whole page also came
+    // back wrong on a short page - contentArea fixes that second case).
+    const regions = computeLineBasedRegions(raw.segments, raw.contentArea);
 
     return {
       pageLevelNotes: raw.pageLevelNotes,
