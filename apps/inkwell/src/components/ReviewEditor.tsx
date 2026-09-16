@@ -79,6 +79,16 @@ export function ReviewEditor({
   const [deleting, setDeleting] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Which segment's source handwriting to highlight on the page image -
+  // whatever segment textarea currently has focus, cleared on blur. See
+  // src/lib/ai/gridOverlay.ts for how sourceRegion is derived.
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  function handleSegmentFocus(segmentId: string) {
+    setActiveSegmentId(segmentId);
+  }
+  function handleSegmentBlur() {
+    setActiveSegmentId(null);
+  }
 
   // AI-trust visual language (03-ux-screens.md's cross-screen note), extended
   // from tags to the title: shows the same "AI suggested this" badge only
@@ -357,6 +367,7 @@ export function ReviewEditor({
       {pageStates.map((page) => {
         const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
+        const activeRegion = page.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
         return (
           <div key={page.id} className="note-page-block">
             {pageStates.length > 1 && (
@@ -380,11 +391,24 @@ export function ReviewEditor({
                       </p>
                     </div>
                   ) : (
-                    <img
-                      src={`/${page.imagePath}`}
-                      alt="Uploaded handwritten page"
-                      className="note-image"
-                    />
+                    <>
+                      <img
+                        src={`/${page.imagePath}`}
+                        alt="Uploaded handwritten page"
+                        className="note-image"
+                      />
+                      {activeRegion && (
+                        <div
+                          className="region-highlight"
+                          style={{
+                            left: `${activeRegion.bbox[0] * 100}%`,
+                            top: `${activeRegion.bbox[1] * 100}%`,
+                            width: `${activeRegion.bbox[2] * 100}%`,
+                            height: `${activeRegion.bbox[3] * 100}%`,
+                          }}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -436,6 +460,8 @@ export function ReviewEditor({
                               updateSegment(page.id, line.segments[0].id, e.target.value);
                               autoGrow(e.currentTarget);
                             }}
+                            onFocus={() => handleSegmentFocus(line.segments[0].id)}
+                            onBlur={handleSegmentBlur}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") e.preventDefault();
                             }}
@@ -468,6 +494,8 @@ export function ReviewEditor({
                                   updateSegment(page.id, segment.id, e.target.value);
                                   autoGrow(e.currentTarget);
                                 }}
+                                onFocus={() => handleSegmentFocus(segment.id)}
+                                onBlur={handleSegmentBlur}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") e.preventDefault();
                                 }}
