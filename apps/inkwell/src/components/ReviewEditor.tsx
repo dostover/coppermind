@@ -174,6 +174,14 @@ interface PageState {
   segments: TranscriptSegment[];
   imageRemoved: boolean;
   transcriptionRemoved: boolean;
+  // The moment this page last flipped status (set by notePagesRepo.setTranscribing/
+  // setTranscribed/setError - see jobs.ts) - used purely to show "how long
+  // has this been running" while status is 'uploaded'/'transcribing' (see
+  // formatElapsed below). Not a precise job-start time for a retried page
+  // that sat 'uploaded' for a while first, but close enough for a rough
+  // elapsed readout, and it costs nothing extra: every NotePage already
+  // carries this column.
+  updatedAt: string;
 }
 
 function toPageState(p: NotePage): PageState {
@@ -188,7 +196,60 @@ function toPageState(p: NotePage): PageState {
     segments: p.status === "ready_for_review" ? p.segmentsCurrent : [],
     imageRemoved: p.imageRemoved,
     transcriptionRemoved: p.transcriptionRemoved,
+    updatedAt: p.updated_at,
   };
+}
+
+// "12s" / "1m 05s" - deliberately coarse (whole seconds, no fractional/ms
+// precision) since it's driven by useNow's 1s tick below, not a true
+// stopwatch.
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+}
+
+// A ticking clock for the "Xs so far" elapsed-time readout. First attempt
+// was useSyncExternalStore with Date.now() as the snapshot getter - that's a
+// documented footgun, not a working pattern: useSyncExternalStore requires
+// getSnapshot to return the *same* value across repeated calls until the
+// store actually changes and notifies its subscribers, but Date.now() never
+// returns the same value twice. React interprets that as "the snapshot is
+// still changing" and re-renders immediately to check again - forever,
+// synchronously, in the same tick. That surfaced as a real "Maximum update
+// depth exceeded" crash (caught by testing this against a page stuck in
+// 'transcribing'), not merely a lint complaint.
+//
+// This plain useState + useEffect version is the standard, React-docs-
+// sanctioned pattern for "render a value only the client can know, safely
+// across hydration": start at a fixed placeholder (null) that renders
+// identically on the server and on the client's first (pre-hydration) pass,
+// then read the real clock inside an effect, which by definition only runs
+// after hydration completes - avoiding the mismatch that a naive
+// `useState(() => Date.now())` initializer causes (that one runs during SSR
+// too, producing a different timestamp than the client's hydration pass -
+// also caught by testing, before this hook existed). The lint rule that
+// generically discourages setState-in-effect doesn't have a better
+// alternative for this specific case; disabled with this comment as the
+// justification, same as the codebase's other documented exceptions (e.g.
+// handleImageLoad's own guarded setState above).
+// `active` gates the interval so it only runs while at least one page is
+// actually uploaded/transcribing - no reason to keep ticking (and
+// re-rendering) once everything's done.
+function useNow(active: boolean): number | null {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see this hook's own comment above
+    setNow(Date.now());
+  }, []);
+  useEffect(() => {
+    if (!active) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [active]);
+  return now;
 }
 
 export function ReviewEditor({
@@ -320,6 +381,17 @@ export function ReviewEditor({
 
   const anyPageWorking = pageStates.some((p) => p.status === "uploaded" || p.status === "transcribing");
   const hasAnyReadyPage = pageStates.some((p) => p.status === "ready_for_review");
+  // "Settled" = no longer waiting on a job, whichever way it landed - a page
+  // that errored out is done occupying the queue just as much as one that
+  // came back ready. Real progress (not a guess): pages don't all reach
+  // 'ready_for_review'/'error' at once unless every page shares one batch
+  // job (the common upload-time case) - a PDF's pages can finish rasterizing
+  // at different times, and a per-page Retry runs independently of its
+  // siblings, so this count can (and does) climb one page at a time in those
+  // cases.
+  const settledPageCount = pageStates.filter(
+    (p) => p.status === "ready_for_review" || p.status === "error"
+  ).length;
   const allSegments = pageStates.flatMap((p) => p.segments);
   const flaggedCount = allSegments.filter((s) => s.reviewRequired).length;
   const crossedOutCount = allSegments.filter((s) => s.crossedOut).length;
@@ -379,6 +451,11 @@ export function ReviewEditor({
   // with a fresh `pages` prop - the effect above re-runs on that prop change
   // and applies it through the same seed-merge, and this effect stops itself
   // once no page is still uploaded/transcribing.
+  //
+  // Drives the "Xs so far" elapsed-time readout below - see useNow's own
+  // comment for why this isn't just a plain useState(Date.now()).
+  const now = useNow(anyPageWorking);
+
   useEffect(() => {
     if (!anyPageWorking) return;
     const interval = setInterval(() => router.refresh(), 2000);
@@ -824,6 +901,32 @@ export function ReviewEditor({
 
   return (
     <div>
+      {anyPageWorking && pageStates.length > 1 && (
+        // Real, not simulated: a genuine count of pages that have left the
+        // queue (one way or another) out of the note's total - see
+        // settledPageCount above. Only shown for multi-page notes; a
+        // single-page note's own per-page block below already says
+        // everything there is to say.
+        <div className="pages-progress" role="status" aria-live="polite">
+          <div
+            className="progress-track"
+            role="progressbar"
+            aria-valuenow={settledPageCount}
+            aria-valuemin={0}
+            aria-valuemax={pageStates.length}
+            aria-label="Pages processed"
+          >
+            <div
+              className="progress-fill"
+              style={{ width: `${(settledPageCount / pageStates.length) * 100}%` }}
+            />
+          </div>
+          <p className="muted pages-progress-label">
+            {settledPageCount} of {pageStates.length} pages processed - this updates automatically.
+          </p>
+        </div>
+      )}
+
       {pageStates.map((page) => {
         const blocks = toBlocks(toLines(page.segments));
         const isRetrying = retryingPageIds.has(page.id);
@@ -927,10 +1030,25 @@ export function ReviewEditor({
 
               <div className="note-page-text">
                 {(page.status === "uploaded" || page.status === "transcribing") && (
-                  <p className="muted" role="status" aria-live="polite">
-                    <StatusBadge status={page.status} /> - this updates automatically, no need to
-                    refresh.
-                  </p>
+                  <div className="page-processing" role="status" aria-live="polite">
+                    <StatusBadge status={page.status} />
+                    {/* Indeterminate, deliberately - there's no reliable way to
+                        turn "AI provider call in flight" into a real
+                        percentage or ETA for a single page (a batch call's
+                        duration depends on page count/image size, and this
+                        app doesn't track enough job history yet to estimate
+                        one honestly). The elapsed-time readout below gives a
+                        concrete, true number instead of a guessed one. */}
+                    <div className="progress-track" aria-hidden="true">
+                      <div className="progress-fill indeterminate" />
+                    </div>
+                    <p className="muted page-processing-caption">
+                      {now === null
+                        ? "Starting…"
+                        : `${formatElapsed(now - new Date(page.updatedAt).getTime())} so far`}{" "}
+                      - this updates automatically.
+                    </p>
+                  </div>
                 )}
 
                 {page.status === "error" && (
