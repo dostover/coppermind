@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { prepareImageForVision } from "@/lib/imagePrep";
+import { GRID_COLS, GRID_ROWS, overlayGrid, regionFromCells } from "./gridOverlay";
 import type {
   AIProvider,
   GenerateTagsInput,
@@ -45,6 +46,14 @@ const SEGMENT_SCHEMA = {
     crossedOut: { type: "boolean" },
     emphasis: { type: "string", enum: ["none", "underline", "bold_or_heavy"] },
     confidence: { type: "number", description: "0-1 self-reported confidence" },
+    gridCells: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Optional. The labeled grid cell(s) (e.g. \"C4\") printed on the image that this segment's " +
+        "handwriting touches, so the app can highlight it. List every cell the segment's text spans if " +
+        "it crosses more than one. Omit if you can't tell.",
+    },
   },
   required: ["text", "structureType", "crossedOut", "emphasis", "confidence"],
 } as const;
@@ -170,7 +179,15 @@ const TRANSCRIPTION_QUALITY_INSTRUCTIONS =
   "confidence on separately, a crossed-out span that has to stand alone, or a genuine structural break " +
   "(a new paragraph, heading, list item, or change of speaker in dialogue). A single segment should " +
   "read as a normal, natural chunk of prose - often a full sentence or more - not a fragment that " +
-  "happens to end where the handwriting ran out of space on that line.";
+  "happens to end where the handwriting ran out of space on that line. " +
+  "IMPORTANT - locating each segment: the image has a reference grid printed on top of it, with column " +
+  `letters (A-${String.fromCharCode("A".charCodeAt(0) + GRID_COLS - 1)}) labeled along the top and row ` +
+  `numbers (1-${GRID_ROWS}) labeled down the left side, both in the blank margin outside the actual page ` +
+  "content - the grid lines themselves cross the handwriting, but the labels never sit on top of it. " +
+  "For each segment, set gridCells to the label(s) of every cell its handwriting touches (usually one, " +
+  "occasionally two or three for a segment that spans a cell boundary), reading the labels directly off " +
+  "the image rather than estimating pixel coordinates. Skip gridCells for a segment if you genuinely " +
+  "can't tell which cell it's in.";
 
 function buildHandwritingHintText(hints: HandwritingContext): string {
   return hints.vocabularyHints.length || hints.correctionPatternHints.length
@@ -189,7 +206,9 @@ function buildHandwritingHintText(hints: HandwritingContext): string {
     : "No prior handwriting history for this user yet.";
 }
 
-type RawSegment = Omit<TranscribeOutput["segments"][number], "id" | "reviewRequired">;
+type RawSegment = Omit<TranscribeOutput["segments"][number], "id" | "reviewRequired" | "sourceRegion"> & {
+  gridCells?: string[];
+};
 
 // Shared by transcribe() and transcribeBatch(): turns one page's raw
 // tool-call output into the app's TranscribeOutput shape.
@@ -199,12 +218,13 @@ function finishPageOutput(
 ): TranscribeOutput {
   return {
     pageLevelNotes: raw.pageLevelNotes,
-    segments: raw.segments.map((s) => ({
+    segments: raw.segments.map(({ gridCells, ...s }) => ({
       ...s,
       id: crypto.randomUUID(),
       // reviewRequired is computed at the app-configured threshold, not
       // baked into the model call - see Phase 5 AI Contracts §1 notes.
       reviewRequired: s.confidence < confidenceThreshold,
+      sourceRegion: regionFromCells(gridCells),
     })),
   };
 }
@@ -219,7 +239,11 @@ async function loadImageForVision(
   // rather than letting the API auto-downscale a full uncropped photo - see
   // src/lib/imagePrep.ts for why this matters for small cursive.
   const { buffer, mediaType } = await prepareImageForVision(rawBytes);
-  return { buffer, mediaType: mediaType as "image/jpeg" | "image/png" | "image/webp" };
+  // Bake the reference grid onto this same image (see gridOverlay.ts) rather
+  // than sending a second image, so region-highlighting adds no extra vision
+  // API call/image tokens - only the few gridCells strings in the response.
+  const withGrid = await overlayGrid(buffer);
+  return { buffer: withGrid, mediaType: mediaType as "image/jpeg" | "image/png" | "image/webp" };
 }
 
 export class ClaudeAIProvider implements AIProvider {

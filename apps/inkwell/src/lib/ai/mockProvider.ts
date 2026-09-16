@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { GRID_COLS, GRID_ROWS, cellId, regionFromCells } from "./gridOverlay";
 import type {
   AIProvider,
   GenerateTagsInput,
@@ -6,6 +7,7 @@ import type {
   HandwritingContext,
   LearningEvalInput,
   LearningEvalOutput,
+  SourceRegion,
   StructureType,
   TranscribeBatchInput,
   TranscribeBatchOutput,
@@ -93,6 +95,19 @@ const DEMO_PAGES: DemoSegment[][] = [
   ],
 ];
 
+// Fake but plausible per-segment region, spreading segments down the page
+// in reading order (one row per segment, wrapping columns if there are more
+// segments than rows) - just enough for the review UI's highlight-on-focus
+// behavior to be exercised without a real API key. Reuses gridOverlay.ts's
+// own cell-id/region helpers so the mock and real providers describe
+// locations the same way.
+function mockRegion(index: number, total: number): SourceRegion | undefined {
+  if (total === 0) return undefined;
+  const row = index % GRID_ROWS;
+  const col = Math.floor((index / GRID_ROWS) % GRID_COLS);
+  return regionFromCells([cellId(col, row)]);
+}
+
 function hashToIndex(input: string, mod: number): number {
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
@@ -124,7 +139,7 @@ export class MockAIProvider implements AIProvider {
     const pageIndex = hashToIndex(imagePath, DEMO_PAGES.length);
     const page = DEMO_PAGES[pageIndex];
 
-    const segments: TranscriptSegment[] = page.map((demo) => {
+    const segments: TranscriptSegment[] = page.map((demo, index) => {
       const { text: resolvedText, confidence } = resolveSegment(
         demo,
         handwritingContext.correctionPatternHints
@@ -137,6 +152,7 @@ export class MockAIProvider implements AIProvider {
         emphasis: demo.structureType === "heading" ? "bold_or_heavy" : "none",
         confidence,
         reviewRequired: confidence < confidenceThreshold,
+        sourceRegion: mockRegion(index, page.length),
       };
     });
 

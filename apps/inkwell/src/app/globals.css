@@ -523,6 +523,20 @@ h2.segment-heading textarea.segment-input {
   border-radius: var(--radius-lg);
 }
 
+/* Highlights the source handwriting for whichever segment textarea currently
+   has focus (see ReviewEditor's activeRegion / gridOverlay.ts's SourceRegion).
+   Positioned as a fraction of .note-image-wrap, which is why that wrapper
+   needs position: relative + overflow: hidden (already set above). */
+.region-highlight {
+  position: absolute;
+  border: 2px solid var(--accent-strong);
+  background: var(--accent-tint);
+  opacity: 0.45;
+  border-radius: 3px;
+  pointer-events: none;
+  transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
+}
+
 /* Per-page image-left/text-right row (replaces the old shared image
    carousel above a stacked transcription list): each page's photo sits in a
    fixed-width column beside its own transcription, so review no longer

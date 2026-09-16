@@ -28,6 +28,17 @@ export type StructureType =
   | "table_cell"
   | "line";
 
+// Where a segment lives on the source page image - attempt #4 at this
+// feature (see gridOverlay.ts for the full history/rationale). Derived from
+// the grid cell(s) the model reports touching, not from raw coordinates.
+export interface SourceRegion {
+  /** [left, top, width, height], each 0-1 fractional relative to the
+   *  displayed page image - resolution-independent, so it lines up on the
+   *  original photo regardless of whatever resized copy was sent to the
+   *  model for transcription. */
+  bbox: [number, number, number, number];
+}
+
 export interface TranscriptSegment {
   /** Stable id, referenced by review-UI editing and correction diffing. */
   id: string;
@@ -42,6 +53,11 @@ export interface TranscriptSegment {
    *  against the live CONFIDENCE_THRESHOLD on every read, so changing the
    *  threshold updates old notes without re-transcribing them (AC-5). */
   reviewRequired: boolean;
+  /** Approximate on-page location, used to highlight the source handwriting
+   *  when this segment is focused in the review UI. Undefined when the model
+   *  didn't report a usable grid cell for this segment - no highlight is
+   *  shown rather than a wrong one. */
+  sourceRegion?: SourceRegion;
 }
 
 export interface TranscribeOutput {
