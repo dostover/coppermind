@@ -676,8 +676,21 @@ export function ReviewEditor({
               <div
                 className="region-highlight"
                 style={{
-                  left: `${popoutRegion.bbox[0] * 100}%`,
-                  width: `${popoutRegion.bbox[2] * 100}%`,
+                  // Full width rather than the AI-detected bbox's own left/
+                  // width (2026-09-16 feedback: "the width seems a bit off
+                  // ... expanded to fit the whole image"). The bbox's
+                  // horizontal extent comes from gridOverlay.ts's grid-cell
+                  // classification, which is naturally coarser sideways
+                  // than the vertical crop math here (a deliberate,
+                  // separate approximation - see verticalCrop()'s own
+                  // comment) - close enough for the small inline highlight,
+                  // but visibly noticeable blown up to pop-out size. The
+                  // pop-out's crop is already always full photo width (see
+                  // verticalCrop() - it never crops horizontally), so
+                  // matching the highlight to that width instead just
+                  // means "the whole visible line," not a wider guess.
+                  left: 0,
+                  width: "100%",
                   top: `${((popoutRegion.bbox[1] - popoutCrop.offsetY) / popoutCrop.lineFraction) * 100}%`,
                   height: `${(popoutRegion.bbox[3] / popoutCrop.lineFraction) * 100}%`,
                 }}
