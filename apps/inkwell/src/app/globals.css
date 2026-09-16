@@ -306,6 +306,165 @@ main {
   margin-top: 0.5rem;
 }
 
+/* Home page body, below the hero (2026-09-16 redesign - the page used to
+   end at the hero card, which read as empty/unfinished rather than a
+   considered landing page): a vertical stack of cards, each with its own
+   top margin rather than the .home element owning gaps between them, so
+   any section can be added/removed independently. */
+.home > * + * {
+  margin-top: 1.75rem;
+}
+
+/* Three-step "how it works" row - a considered explanation of the app's
+   shape for a first-time visitor, not just an empty page with one button
+   on it. Cards, not a plain numbered list, so it reads as steps to glance
+   at rather than instructions to read start-to-finish. */
+.home-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.home-step {
+  text-align: center;
+  padding: 1.5rem 1.25rem;
+}
+
+.home-step-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--dusk-blue);
+}
+
+.home-step-icon svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.home-step-number {
+  margin: 0 0 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dusty-denim);
+}
+
+.home-step strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.home-step p.muted {
+  margin: 0;
+}
+
+/* Editing tips - answers "what can I actually do on the review screen"
+   with the same visual language the review screen itself uses (the flagged/
+   crossed-out sample styling, the reclassify dropdown's look, kbd keys),
+   so a tip reads as a small preview of the real control rather than a
+   description of one. */
+.home-tips h2 {
+  margin-top: 0;
+}
+
+.home-tip-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.home-tip-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.85rem;
+}
+
+.home-tip-sample {
+  flex: 0 0 auto;
+  min-width: 6.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.home-tip-sample.flagged-sample {
+  background: var(--flag-bg);
+  border: 1px solid var(--flag-border);
+  border-radius: 5px;
+  padding: 0.15rem 0.4rem;
+}
+
+.home-tip-sample.line-type-select-sample {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: var(--muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.15rem 0.4rem;
+}
+
+.home-tip-list kbd {
+  font-family: inherit;
+  font-size: 0.78rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 0.1rem 0.4rem;
+  box-shadow: 0 1px 0 var(--border-strong);
+}
+
+/* Recent notes teaser - only rendered when the library isn't empty, so a
+   first-time visitor never sees an empty grid, but a returning one lands
+   somewhere more useful than a static pitch for a product they already use. */
+.home-recent-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.home-recent-header h2 {
+  margin: 0;
+}
+
+.home-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.home-recent-grid .note-card {
+  margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  .home-steps,
+  .home-recent-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-tip-list li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+
+  .home-tip-sample {
+    min-width: 0;
+  }
+}
+
 .button {
   display: inline-flex;
   align-items: center;
