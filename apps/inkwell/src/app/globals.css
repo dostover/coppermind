@@ -584,29 +584,24 @@ h2.segment-heading textarea.segment-input {
 /* Pop-out zoom (2026-09-16, replacing this feature's earlier "resize the
    in-page image/text columns" approach - see the git history around PRs
    #32-#34 to bring that back if it's ever wanted again; this file no
-   longer carries its now-unused CSS). Clicking into a segment shows a
-   large close-up of its source handwriting as its own overlay instead of
+   longer carries its now-unused CSS). Double-clicking a segment (see
+   ReviewEditor's handleSegmentDoubleClick/popoutSegmentId) shows a large
+   close-up of its source handwriting as its own overlay instead of
    reflowing the review screen's layout - simpler, and the close-up can be
    much bigger since it isn't sharing space with the transcription text at
-   all. Driven by ReviewEditor's popoutVisible/popoutDismissed state, which
-   follows the same activeSegmentId the plain .region-highlight above does.
+   all.
 
-   2026-09-16, same-day follow-up bug: this originally caught clicks
-   anywhere on screen (a full-viewport backdrop, "close via the X or by
-   clicking anywhere") so it could dismiss itself on an outside click -
-   but that meant *every* click while it was open, including one landing
-   squarely on the very segment textarea the pop-out was showing a
-   close-up of, hit this overlay first and never reached the text at all -
-   there was no way to click into a word to fix it while its close-up was
-   open. Fixed by making the backdrop (and the pop-out box itself, other
-   than its own close button) pointer-events: none: it still visually
-   dims/shows the close-up, but every click now passes straight through to
-   whatever's actually underneath - the focused textarea to reposition the
-   cursor, a different segment (which naturally swaps the pop-out to that
-   segment via its own focus handler), or blank space (which blurs the
-   current segment, closing the pop-out the same way it always did). The
-   close button keeps its own pointer-events: auto so it stays a working,
-   deliberate way to dismiss it without relying on that fallthrough. */
+   2026-09-16, two same-day follow-ups worth knowing if this changes again:
+   this originally opened on plain focus, which meant *every* click into a
+   segment opened it with no way to just click in and edit - fixed for a
+   few hours by making this whole overlay pointer-events: none so clicks
+   fell through to the real text underneath, but the *right* fix turned
+   out to be upstream of this file entirely: make opening it a deliberate
+   double-click instead of plain focus (see ReviewEditor.tsx), so a plain
+   single click is never ambiguous in the first place. With that fixed,
+   this went back to being a normal modal - a full-viewport backdrop that
+   closes on any click, no pointer-events tricks needed - since there's no
+   longer an everyday click for it to conflict with. */
 .zoom-popout-backdrop {
   position: fixed;
   inset: 0;
@@ -616,7 +611,7 @@ h2.segment-heading textarea.segment-input {
   justify-content: center;
   padding: clamp(0.75rem, 4vw, 2.5rem);
   z-index: 100;
-  pointer-events: none;
+  cursor: pointer;
   animation: zoom-popout-fade-in 0.15s ease;
 }
 
@@ -630,15 +625,16 @@ h2.segment-heading textarea.segment-input {
 }
 
 /* Sizing, not positioning - centering comes from the backdrop's flex
-   centering above. pointer-events: none here too (see the backdrop's
-   comment) - only .zoom-popout-close opts back in, so the close-up image
-   itself never blocks a click meant for whatever it's currently drawn
-   over. */
+   centering above. Clicking this (or its own close button) closes the
+   pop-out exactly like clicking the backdrop does - ReviewEditor wires the
+   same handler to all three, so this element only needs its own non-
+   pointer cursor, not a click guard/stopPropagation to protect it from the
+   backdrop's handler. */
 .zoom-popout {
   position: relative;
   width: min(100%, 1100px);
   max-height: 100%;
-  pointer-events: none;
+  cursor: default;
 }
 
 .zoom-popout-image-wrap {
@@ -664,11 +660,6 @@ h2.segment-heading textarea.segment-input {
      eating clicks meant for this button (found via Playwright: a real
      click landed on the <img> underneath instead). */
   z-index: 1;
-  /* The only part of this whole overlay that still catches clicks - see
-     .zoom-popout-backdrop's comment on why everything else is
-     pointer-events: none. A child can opt back in even though its
-     ancestors set none, so this stays a normal, always-clickable button. */
-  pointer-events: auto;
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 999px;

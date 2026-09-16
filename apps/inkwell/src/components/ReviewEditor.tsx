@@ -121,25 +121,29 @@ export function ReviewEditor({
   // whatever segment textarea currently has focus, cleared on blur. See
   // src/lib/ai/gridOverlay.ts for how sourceRegion is derived.
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
-  // Pop-out zoom (2026-09-16, replacing the in-page zoom-on-focus this
-  // screen previously used - "I don't think this is quite what I want").
-  // Focusing a segment shows a large close-up of its source handwriting as
-  // an overlay (see popoutVisible below); dismissing it (the backdrop, the
-  // image, or the close button - all wired to the same handler in the JSX,
-  // since the ask was "closes if the user clicks anywhere") sets this
-  // without touching focus itself, so typing in the still-focused textarea
-  // behind it works normally once it's dismissed. Reset on every focus
-  // (right here, rather than via a useEffect watching activeSegmentId -
-  // this is the only place activeSegmentId ever becomes a real id) so a
-  // fresh focus - even refocusing the same segment after clicking away -
-  // always shows the pop-out again rather than staying dismissed forever.
-  const [popoutDismissed, setPopoutDismissed] = useState(false);
   function handleSegmentFocus(segmentId: string) {
     setActiveSegmentId(segmentId);
-    setPopoutDismissed(false);
   }
   function handleSegmentBlur() {
     setActiveSegmentId(null);
+  }
+
+  // Pop-out zoom (2026-09-16, replacing the in-page zoom-on-focus this
+  // screen previously used - "I don't think this is quite what I want").
+  // Originally opened on plain focus, same as the highlight above - but
+  // that meant *every* click into a segment opened it, with no way to just
+  // click in to edit (2026-09-16 follow-up bug report). A double-click is
+  // now its own, deliberate trigger, independent of activeSegmentId/focus
+  // entirely: a single click only ever places the cursor and edits, same
+  // as any plain text field, and this only opens on the second click of a
+  // double-click. Because a plain click can no longer open it, this is a
+  // real modal again (backdrop/click-anywhere-closes, see the JSX below) -
+  // it doesn't need the earlier pointer-events: none workaround that let
+  // clicks fall through to the text underneath, since there's no longer
+  // any everyday click for it to conflict with.
+  const [popoutSegmentId, setPopoutSegmentId] = useState<string | null>(null);
+  function handleSegmentDoubleClick(segmentId: string) {
+    setPopoutSegmentId(segmentId);
   }
 
   // The zoom-on-focus crop (see verticalCrop() above) needs to shrink each
@@ -166,25 +170,21 @@ export function ReviewEditor({
   // button handling in the JSX below - a real listener (not a JSX
   // onKeyDown) since the pop-out itself holds no focus for a key event to
   // land on; the focused element stays whichever segment textarea opened
-  // it, wherever that is in the DOM.
+  // it (double-clicking to open one doesn't blur it), wherever that is in
+  // the DOM.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setPopoutDismissed(true);
+      if (e.key === "Escape") setPopoutSegmentId(null);
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const popoutPage = pageStates.find((p) => p.segments.some((s) => s.id === activeSegmentId));
-  const popoutRegion = popoutPage?.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
+  const popoutPage = pageStates.find((p) => p.segments.some((s) => s.id === popoutSegmentId));
+  const popoutRegion = popoutPage?.segments.find((s) => s.id === popoutSegmentId)?.sourceRegion;
   const popoutAspect = popoutPage ? imgAspects[popoutPage.id] : undefined;
   const popoutVisible = Boolean(
-    !popoutDismissed &&
-      popoutPage &&
-      popoutRegion &&
-      popoutAspect &&
-      !popoutPage.imageRemoved &&
-      popoutPage.imagePath
+    popoutPage && popoutRegion && popoutAspect && !popoutPage.imageRemoved && popoutPage.imagePath
   );
   const popoutCrop = popoutVisible ? verticalCrop(popoutRegion) : { lineFraction: 1, offsetY: 0 };
 
@@ -601,6 +601,7 @@ export function ReviewEditor({
                             }}
                             onFocus={() => handleSegmentFocus(line.segments[0].id)}
                             onBlur={handleSegmentBlur}
+                            onDoubleClick={() => handleSegmentDoubleClick(line.segments[0].id)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") e.preventDefault();
                             }}
@@ -635,6 +636,7 @@ export function ReviewEditor({
                                 }}
                                 onFocus={() => handleSegmentFocus(segment.id)}
                                 onBlur={handleSegmentBlur}
+                                onDoubleClick={() => handleSegmentDoubleClick(segment.id)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") e.preventDefault();
                                 }}
@@ -653,20 +655,17 @@ export function ReviewEditor({
       })}
 
       {popoutVisible && popoutPage && popoutRegion && (
-        // pointer-events: none on this backdrop and the .zoom-popout box
-        // below (see globals.css) - only the close button opts back in -
-        // so this purely-visual overlay never blocks a click meant for the
-        // real page underneath (2026-09-16 fix: it used to catch every
-        // click while open, including one landing on the very segment
-        // textarea its close-up was showing, with no way to click into the
-        // text to edit it). Dismissing otherwise happens via the close
-        // button, Escape (see the effect above), or simply the normal
-        // focus/blur flow: clicking a different segment reassigns this to
-        // that segment, and clicking anything non-focusable blurs the
-        // current one, which closes this the same way it always has.
-        <div className="zoom-popout-backdrop">
+        // A real modal again (2026-09-16: now that opening it is a
+        // deliberate double-click - see handleSegmentDoubleClick above -
+        // rather than plain focus, there's no everyday single click left
+        // for a blocking backdrop to conflict with). Clicking anywhere
+        // here - the backdrop or the close-up image itself - closes it,
+        // same as the close button or Escape; nothing needs its own
+        // stopPropagation guard since every one of them does the same
+        // thing.
+        <div className="zoom-popout-backdrop" onClick={() => setPopoutSegmentId(null)}>
           <div className="zoom-popout">
-            <button type="button" className="zoom-popout-close" aria-label="Close close-up" onClick={() => setPopoutDismissed(true)}>
+            <button type="button" className="zoom-popout-close" aria-label="Close close-up" onClick={() => setPopoutSegmentId(null)}>
               ×
             </button>
             <div
