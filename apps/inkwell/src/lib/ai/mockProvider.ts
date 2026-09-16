@@ -44,54 +44,80 @@ import type {
 // walking skeleton starts here rather than on real transcription.
 
 type DemoSegment =
-  | { kind: "text"; text: string; structureType: StructureType }
-  | { kind: "word"; wrong: string; right: string; structureType: StructureType };
+  | { kind: "text"; text: string; structureType: StructureType; startsNewBlock: boolean }
+  | { kind: "word"; wrong: string; right: string; structureType: StructureType; startsNewBlock: boolean };
 
-function text(t: string, structureType: StructureType = "paragraph"): DemoSegment {
-  return { kind: "text", text: t, structureType };
+// startsNewBlock defaults to true - most text() calls in the demo pages below
+// are their own sentence-initial thought, same as before this field existed.
+// Pass false explicitly for a segment that continues the *same* paragraph/
+// list as the one before it (a later sentence in an ongoing paragraph), same
+// as a real transcription would report for such a segment.
+function text(t: string, structureType: StructureType = "paragraph", startsNewBlock = true): DemoSegment {
+  return { kind: "text", text: t, structureType, startsNewBlock };
 }
 
+// A misread word carved out of the middle of a sentence purely to score its
+// own confidence (see this file's top comment) is by definition never a
+// fresh structural block - it's always a continuation of whatever paragraph/
+// list item the surrounding text belongs to.
 function word(wrong: string, right: string): DemoSegment {
-  return { kind: "word", wrong, right, structureType: "paragraph" };
+  return { kind: "word", wrong, right, structureType: "paragraph", startsNewBlock: false };
 }
 
+// Each page below deliberately exercises a heading, a multi-sentence
+// paragraph (proving sentences don't each need their own paragraph break),
+// an actual paragraph break, and a list (bulleted or numbered) - the full
+// "core four" structure types the review screen now renders distinctly and
+// lets the user reclassify - rather than the single flattened paragraph
+// every demo page was before startsNewBlock existed, which meant this
+// structure-editing feature had nothing real to render against.
 const DEMO_PAGES: DemoSegment[][] = [
   [
     text("Notes on the Rilldale expedition", "heading"),
     text("Met with the"),
     word("wizzard", "wizard"),
-    text("near the old"),
+    text("near the old", "paragraph", false),
     word("watchtowfr", "watchtower"),
-    text("today."),
-    text("He warned me about the"),
+    text("today.", "paragraph", false),
+    text("He warned me about the", "paragraph", false),
     word("amvlet", "amulet"),
-    text("again."),
+    text("again.", "paragraph", false),
+    text("Things to check next visit:"),
+    text("Whether the amulet is truly cursed", "list_item"),
+    text("Who else knows about the watchtower", "list_item"),
+    text("If the elders will finally talk", "list_item"),
     text("I'm not sure if I believe him, but the village elders seem worried."),
   ],
   [
     text("Returned to"),
     word("Rilldaie", "Rilldale"),
-    text("this morning to ask more questions."),
-    text("The"),
+    text("this morning to ask more questions.", "paragraph", false),
+    text("The", "paragraph", false),
     word("wizzard", "wizard"),
-    text("says the"),
+    text("says the", "paragraph", false),
     word("amvlet", "amulet"),
-    text("must be hidden before the solstice."),
+    text("must be hidden before the solstice.", "paragraph", false),
     text("No sign of the"),
     word("watchtowfr", "watchtower"),
-    text("guards yet."),
+    text("guards yet.", "paragraph", false),
+    text("Preparations before we head back:"),
+    text("Pack extra torches", "numbered_item"),
+    text("Warn the village elders", "numbered_item"),
   ],
   [
     text("Third trip to"),
     word("Rilldaie", "Rilldale"),
-    text("- the"),
+    text("- the", "paragraph", false),
     word("wizzard", "wizard"),
-    text("finally showed me the"),
+    text("finally showed me the", "paragraph", false),
     word("amvlet", "amulet"),
-    text("."),
+    text(".", "paragraph", false),
     text("It glows faintly near the"),
     word("watchtowfr", "watchtower"),
-    text("at dusk."),
+    text("at dusk.", "paragraph", false),
+    text("Loose ends:"),
+    text("Ask why it only glows after dark", "list_item"),
+    text("Find out who built the watchtower", "list_item"),
   ],
 ];
 
@@ -148,6 +174,7 @@ export class MockAIProvider implements AIProvider {
         id: randomUUID(),
         text: resolvedText,
         structureType: demo.structureType,
+        startsNewBlock: demo.startsNewBlock,
         crossedOut: false,
         emphasis: demo.structureType === "heading" ? "bold_or_heavy" : "none",
         confidence,

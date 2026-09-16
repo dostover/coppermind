@@ -356,8 +356,22 @@ export interface Note extends NoteRow {
 // re-rendering a previously-transcribed note must update its flags without
 // re-transcribing. (A provider still sets an initial value on the way in;
 // it's simply overwritten here.)
+// startsNewBlock is absent from any note transcribed before it existed (it's
+// stored as opaque JSON, not a SQL column, so there's no migration to run -
+// old rows simply don't have the key). Defaulting a missing value to `false`
+// for every segment but a page's first reproduces exactly how those notes
+// rendered before this field was added (everything after the first segment
+// flowed into one continuous block) - nothing shifts under an old note until
+// its owner actually edits its structure.
+function applyStartsNewBlockDefault(segments: TranscriptSegment[]): TranscriptSegment[] {
+  return segments.map((s, i) => ({ ...s, startsNewBlock: s.startsNewBlock ?? i === 0 }));
+}
+
 function applyReviewRequired(segments: TranscriptSegment[]): TranscriptSegment[] {
-  return segments.map((s) => ({ ...s, reviewRequired: s.confidence < CONFIDENCE_THRESHOLD }));
+  return applyStartsNewBlockDefault(segments).map((s) => ({
+    ...s,
+    reviewRequired: s.confidence < CONFIDENCE_THRESHOLD,
+  }));
 }
 
 function getTagsForNote(noteId: string): NoteTagView[] {

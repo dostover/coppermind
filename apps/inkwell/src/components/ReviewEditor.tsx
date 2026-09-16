@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { GRID_ROWS } from "@/lib/ai/gridConstants";
-import type { SourceRegion, TranscriptSegment } from "@/lib/ai/types";
+import type { SourceRegion, StructureType, TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -42,6 +42,92 @@ function verticalCrop(region: SourceRegion | undefined): { lineFraction: number;
   const center = y + h / 2;
   const offsetY = Math.min(Math.max(center - lineFraction / 2, 0), 1 - lineFraction);
   return { lineFraction, offsetY };
+}
+
+// The "core four" structure types the review screen offers a reclassify
+// control for (2026-09-16 decision - dialogue and table_cell exist in the
+// data model and are still rendered without crashing, just as a plain
+// paragraph, but aren't offered here: table layout in particular needs
+// meaningfully more UI than a dropdown, and both are rare in practice).
+const CORE_STRUCTURE_TYPES: { value: StructureType; label: string }[] = [
+  { value: "paragraph", label: "Paragraph" },
+  { value: "heading", label: "Heading" },
+  { value: "list_item", label: "Bulleted list item" },
+  { value: "numbered_item", label: "Numbered list item" },
+];
+
+// What a line renders as. Only heading/list_item/numbered_item get their own
+// treatment; every other structureType (paragraph, line, dialogue,
+// table_cell) falls back to a plain flowing paragraph - see
+// CORE_STRUCTURE_TYPES above.
+type LineKind = "heading" | "list_item" | "numbered_item" | "paragraph";
+
+function lineKindFor(structureType: StructureType): LineKind {
+  if (structureType === "heading" || structureType === "list_item" || structureType === "numbered_item") {
+    return structureType;
+  }
+  return "paragraph";
+}
+
+// The value the reclassify dropdown shows for a line whose structureType
+// isn't one of the four it offers (dialogue/table_cell/line) - "Paragraph"
+// matches how it's actually rendered (see lineKindFor), so the dropdown
+// never shows a value that isn't one of its own options.
+function reclassifyValue(structureType: StructureType): StructureType {
+  return CORE_STRUCTURE_TYPES.some((t) => t.value === structureType) ? structureType : "paragraph";
+}
+
+interface Line {
+  kind: LineKind;
+  segments: TranscriptSegment[];
+}
+
+// Groups a page's flat segment list into lines: a new line starts whenever a
+// segment has startsNewBlock set (or it's the very first segment on the
+// page); otherwise it's a continuation of whatever line came before it,
+// regardless of its own structureType - see TranscriptSegment.startsNewBlock's
+// doc comment for why a continuation segment (e.g. a low-confidence word
+// pulled out of the middle of a sentence) always belongs to the previous
+// line rather than starting a new one just because it's a separate segment.
+function toLines(segments: TranscriptSegment[]): Line[] {
+  const lines: Line[] = [];
+  segments.forEach((segment, i) => {
+    const last = lines[lines.length - 1];
+    if (i === 0 || segment.startsNewBlock || !last) {
+      lines.push({ kind: lineKindFor(segment.structureType), segments: [segment] });
+    } else {
+      last.segments.push(segment);
+    }
+  });
+  return lines;
+}
+
+type Block =
+  | { kind: "heading"; line: Line }
+  | { kind: "list"; ordered: boolean; items: Line[] }
+  | { kind: "paragraph"; line: Line };
+
+// Groups adjacent same-type list lines into one shared <ul>/<ol> - three
+// consecutive bulleted items should render as one list of three, not three
+// separate one-item lists.
+function toBlocks(lines: Line[]): Block[] {
+  const blocks: Block[] = [];
+  for (const line of lines) {
+    const last = blocks[blocks.length - 1];
+    if (line.kind === "heading") {
+      blocks.push({ kind: "heading", line });
+    } else if (line.kind === "list_item" || line.kind === "numbered_item") {
+      const ordered = line.kind === "numbered_item";
+      if (last && last.kind === "list" && last.ordered === ordered) {
+        last.items.push(line);
+      } else {
+        blocks.push({ kind: "list", ordered, items: [line] });
+      }
+    } else {
+      blocks.push({ kind: "paragraph", line });
+    }
+  }
+  return blocks;
 }
 
 interface Props {
@@ -336,7 +422,7 @@ export function ReviewEditor({
             .filter((p) => p.status === "ready_for_review")
             .map((p) => ({
               pageId: p.id,
-              segments: p.segments.map((s) => ({ id: s.id, text: s.text })),
+              segments: p.segments.map((s) => ({ id: s.id, text: s.text, structureType: s.structureType })),
             })),
           folderId,
           tags: tags.map((t) => t.name),
@@ -478,31 +564,96 @@ export function ReviewEditor({
     }
   }
 
-  // Render consecutive non-heading segments as one flowing "line" (a natural
-  // reading paragraph made of individually-editable words/phrases), and
-  // headings on their own line - rather than one full-width box per
-  // segment, which reads badly once segments are word-granular (see
-  // src/lib/ai/mockProvider.ts for why they're granular in the first place).
-  function toLines(segments: TranscriptSegment[]): { type: "heading" | "flow"; segments: TranscriptSegment[] }[] {
-    const lines: { type: "heading" | "flow"; segments: TranscriptSegment[] }[] = [];
-    for (const segment of segments) {
-      const isHeading = segment.structureType === "heading";
-      const last = lines[lines.length - 1];
-      if (isHeading) {
-        lines.push({ type: "heading", segments: [segment] });
-      } else if (last && last.type === "flow") {
-        last.segments.push(segment);
-      } else {
-        lines.push({ type: "flow", segments: [segment] });
-      }
-    }
-    return lines;
+  // Reclassify (2026-09-16): changing what a line renders as. Applies the
+  // new structureType to every segment in the line, not just its first, so
+  // the stored data stays consistent with what's displayed - a line's
+  // segments should all agree on what kind of line they're part of.
+  function updateLineStructureType(pageId: string, segmentIds: string[], structureType: StructureType) {
+    setPageStates((prev) =>
+      prev.map((p) =>
+        p.id === pageId
+          ? {
+              ...p,
+              segments: p.segments.map((s) =>
+                segmentIds.includes(s.id) ? { ...s, structureType } : s
+              ),
+            }
+          : p
+      )
+    );
+    setSavedMessage(null);
+  }
+
+  // Renders one line's segments as the same individually-editable, auto-
+  // growing textareas regardless of what kind of line they're in (heading,
+  // paragraph, or a single list item) - only the wrapper element differs.
+  function renderLineSegments(pageId: string, segments: TranscriptSegment[]) {
+    return segments.map((segment) => {
+      const titleParts = [
+        segment.crossedOut
+          ? "Crossed out in the original - kept here, delete if you don't want it"
+          : null,
+        segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
+      ].filter(Boolean);
+      return (
+        <textarea
+          key={segment.id}
+          ref={autoGrow}
+          rows={1}
+          className={[
+            "segment-input",
+            segment.reviewRequired ? "flagged" : "",
+            segment.crossedOut ? "crossed-out" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          title={titleParts.length ? titleParts.join(" — ") : undefined}
+          value={segment.text}
+          onChange={(e) => {
+            updateSegment(pageId, segment.id, e.target.value);
+            autoGrow(e.currentTarget);
+          }}
+          onFocus={() => handleSegmentFocus(segment.id)}
+          onBlur={handleSegmentBlur}
+          onDoubleClick={() => handleSegmentDoubleClick(segment.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.preventDefault();
+          }}
+        />
+      );
+    });
+  }
+
+  // The small "what kind of line is this" dropdown shown next to every
+  // heading/paragraph/list item - reclassifies the whole line at once (see
+  // updateLineStructureType above).
+  function renderTypeSelect(pageId: string, line: Line) {
+    return (
+      <select
+        className="line-type-select"
+        aria-label="Change this line's formatting"
+        value={reclassifyValue(line.segments[0].structureType)}
+        onChange={(e) =>
+          updateLineStructureType(
+            pageId,
+            line.segments.map((s) => s.id),
+            e.target.value as StructureType
+          )
+        }
+      >
+        {CORE_STRUCTURE_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+    );
   }
 
   return (
     <div>
       {pageStates.map((page) => {
-        const lines = toLines(page.segments);
+        const blocks = toBlocks(toLines(page.segments));
         const isRetrying = retryingPageIds.has(page.id);
         const activeRegion = page.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
         return (
@@ -638,65 +789,46 @@ export function ReviewEditor({
 
                 {page.status === "ready_for_review" && !page.transcriptionRemoved && (
                   <div className="transcription">
-                    {lines.map((line, i) =>
-                      line.type === "heading" ? (
-                        <h2 key={line.segments[0].id} className="segment-heading">
-                          <textarea
-                            ref={autoGrow}
-                            className="segment-input"
-                            rows={1}
-                            value={line.segments[0].text}
-                            onChange={(e) => {
-                              updateSegment(page.id, line.segments[0].id, e.target.value);
-                              autoGrow(e.currentTarget);
-                            }}
-                            onFocus={() => handleSegmentFocus(line.segments[0].id)}
-                            onBlur={handleSegmentBlur}
-                            onDoubleClick={() => handleSegmentDoubleClick(line.segments[0].id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") e.preventDefault();
-                            }}
-                          />
-                        </h2>
-                      ) : (
-                        <p key={i} className="flow">
-                          {line.segments.map((segment) => {
-                            const titleParts = [
-                              segment.crossedOut
-                                ? "Crossed out in the original - kept here, delete if you don't want it"
-                                : null,
-                              segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
-                            ].filter(Boolean);
-                            return (
-                              <textarea
-                                key={segment.id}
-                                ref={autoGrow}
-                                rows={1}
-                                className={[
-                                  "segment-input",
-                                  segment.reviewRequired ? "flagged" : "",
-                                  segment.crossedOut ? "crossed-out" : "",
-                                ]
-                                  .filter(Boolean)
-                                  .join(" ")}
-                                title={titleParts.length ? titleParts.join(" — ") : undefined}
-                                value={segment.text}
-                                onChange={(e) => {
-                                  updateSegment(page.id, segment.id, e.target.value);
-                                  autoGrow(e.currentTarget);
-                                }}
-                                onFocus={() => handleSegmentFocus(segment.id)}
-                                onBlur={handleSegmentBlur}
-                                onDoubleClick={() => handleSegmentDoubleClick(segment.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") e.preventDefault();
-                                }}
-                              />
-                            );
-                          })}
-                        </p>
-                      )
-                    )}
+                    {blocks.map((block) => {
+                      if (block.kind === "heading") {
+                        return (
+                          <div key={block.line.segments[0].id} className="structure-line">
+                            {renderTypeSelect(page.id, block.line)}
+                            <h2 className="segment-heading">
+                              {renderLineSegments(page.id, block.line.segments)}
+                            </h2>
+                          </div>
+                        );
+                      }
+                      if (block.kind === "list") {
+                        const ListTag = block.ordered ? "ol" : "ul";
+                        return (
+                          <ListTag key={block.items[0].segments[0].id} className="segment-list">
+                            {block.items.map((line) => (
+                              <li key={line.segments[0].id}>
+                                {/* The flex row lives on this inner div, not
+                                    the <li> itself - display: flex on an
+                                    <li> suppresses its own bullet/number
+                                    marker (display: list-item stops
+                                    applying), which silently produced a
+                                    marker-less list the first time this
+                                    shipped. */}
+                                <div className="list-item-line">
+                                  {renderTypeSelect(page.id, line)}
+                                  <div className="flow">{renderLineSegments(page.id, line.segments)}</div>
+                                </div>
+                              </li>
+                            ))}
+                          </ListTag>
+                        );
+                      }
+                      return (
+                        <div key={block.line.segments[0].id} className="structure-line">
+                          {renderTypeSelect(page.id, block.line)}
+                          <p className="flow">{renderLineSegments(page.id, block.line.segments)}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 

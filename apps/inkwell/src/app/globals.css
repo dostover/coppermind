@@ -443,6 +443,68 @@ main {
   text-decoration-thickness: 1.5px;
 }
 
+/* Wraps the reclassify dropdown alongside a heading/paragraph line
+   (2026-09-16 - see ReviewEditor.tsx's renderTypeSelect/toBlocks). Owns the
+   bottom spacing itself (zeroing the inner .flow/.segment-heading margins
+   below) so that spacing doesn't depend on how a flex item's own margin
+   interacts with its container. */
+.structure-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.structure-line .flow,
+.structure-line h2.segment-heading {
+  margin-bottom: 0;
+}
+
+/* Same dropdown, but for one item inside a bulleted/numbered list - no own
+   margin, since .segment-list/li below handle spacing between items. */
+.list-item-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.list-item-line .flow {
+  margin: 0;
+}
+
+.segment-list {
+  margin: 0 0 1rem;
+  padding-left: 1.4rem;
+}
+
+.segment-list li {
+  margin-bottom: 0.4rem;
+}
+
+.segment-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* Small and muted so it reads as a quiet editing affordance, not a form
+   field competing with the transcription text next to it. */
+.line-type-select {
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.1rem 0.25rem;
+  cursor: pointer;
+}
+
+.line-type-select:hover {
+  color: var(--ink-black);
+  border-color: var(--border-strong);
+}
+
 h2.segment-heading {
   margin: 0 0 0.75rem;
 }

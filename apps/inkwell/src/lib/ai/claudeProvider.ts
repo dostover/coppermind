@@ -43,6 +43,15 @@ const SEGMENT_SCHEMA = {
       type: "string",
       enum: ["paragraph", "heading", "list_item", "numbered_item", "dialogue", "table_cell", "line"],
     },
+    startsNewBlock: {
+      type: "boolean",
+      description:
+        "True if this segment begins a new paragraph/heading/list item/etc., distinct from the " +
+        "segment before it. False if this segment is a continuation of the *same* block as the " +
+        "previous segment - e.g. a single low-confidence word or crossed-out span you pulled out of " +
+        "the middle of a sentence for its own score, per the instructions on ending a segment. The " +
+        "very first segment on the page should always be true.",
+    },
     crossedOut: { type: "boolean" },
     emphasis: { type: "string", enum: ["none", "underline", "bold_or_heavy"] },
     confidence: { type: "number", description: "0-1 self-reported confidence" },
@@ -55,7 +64,7 @@ const SEGMENT_SCHEMA = {
         "it crosses more than one. Omit if you can't tell.",
     },
   },
-  required: ["text", "structureType", "crossedOut", "emphasis", "confidence"],
+  required: ["text", "structureType", "startsNewBlock", "crossedOut", "emphasis", "confidence"],
 } as const;
 
 const TRANSCRIBE_TOOL: Anthropic.Tool = {
@@ -180,6 +189,13 @@ const TRANSCRIPTION_QUALITY_INSTRUCTIONS =
   "(a new paragraph, heading, list item, or change of speaker in dialogue). A single segment should " +
   "read as a normal, natural chunk of prose - often a full sentence or more - not a fragment that " +
   "happens to end where the handwriting ran out of space on that line. " +
+  "IMPORTANT - startsNewBlock: a reader can't tell, from structureType alone, whether two consecutive " +
+  "segments are separate paragraphs/list items or one continuous block you happened to split for a " +
+  "confidence/crossed-out reason - report that explicitly. Set startsNewBlock to true exactly when this " +
+  "segment is the genuine structural break described above (a new paragraph, heading, list item, or " +
+  "change of speaker); set it to false when this segment is only a word/phrase/crossed-out span you " +
+  "pulled out of the middle of the same paragraph or list item that the previous segment belongs to. " +
+  "The page's first segment is always true. " +
   "IMPORTANT - locating each segment: the image has a reference grid printed on top of it, with column " +
   `letters (A-${String.fromCharCode("A".charCodeAt(0) + GRID_COLS - 1)}) labeled along the top and row ` +
   `numbers (1-${GRID_ROWS}) labeled down the left side, both in the blank margin outside the actual page ` +

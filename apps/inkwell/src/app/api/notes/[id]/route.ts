@@ -5,7 +5,7 @@ import {
   recordHandwritingCorrection,
   updateHandwritingProfile,
 } from "@/lib/handwritingProfile";
-import type { TranscriptSegment } from "@/lib/ai/types";
+import type { StructureType, TranscriptSegment } from "@/lib/ai/types";
 
 export async function GET(
   _req: NextRequest,
@@ -24,7 +24,10 @@ interface PatchBody {
   // ready content yet (still transcribing, or errored) simply isn't
   // included - the review screen never sends segments for a page it hasn't
   // rendered an editor for.
-  pages: { pageId: string; segments: { id: string; text: string }[] }[];
+  // structureType is optional so an older client that hasn't loaded this
+  // change yet still works - the mapping below falls back to whatever
+  // structureType the segment already has rather than clearing it.
+  pages: { pageId: string; segments: { id: string; text: string; structureType?: StructureType }[] }[];
   // Both optional and independently applied: omitting a field leaves that
   // note property untouched, so callers that only save segments/title (if
   // any remain) don't accidentally clear folder/tags.
@@ -78,6 +81,18 @@ export async function PATCH(
       updatedSegments.push({
         ...original,
         text: edited.text,
+        // Falls back to the last-saved value, not the AI's original guess -
+        // a structureType the user reclassified on an earlier save must
+        // stick across every subsequent save, the same as an edited text
+        // value already does. Only an old client that never sends
+        // structureType at all (or a freshly-transcribed segment that's
+        // never been reclassified) falls through to it.
+        structureType: edited.structureType ?? previous.structureType ?? original.structureType,
+        // Same reasoning as structureType above: nothing sends a different
+        // startsNewBlock value yet (that's a future merge/split feature),
+        // but falling back to the last-saved value rather than the AI's
+        // original guess avoids silently reverting it once something does.
+        startsNewBlock: previous.startsNewBlock ?? original.startsNewBlock,
         // The flag clears the moment the user edits that span away from the
         // AI's original guess (Phase 3 UX §5); an untouched flagged span
         // stays flagged post-save (FR-5.4).

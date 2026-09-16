@@ -1,4 +1,5 @@
 import { notesRepo, type Note } from "@/lib/db";
+import type { TranscriptSegment } from "@/lib/ai/types";
 import { getValidAccessToken } from "./oauth";
 
 // Exports a note to a Google Doc via the Docs API - the "Export/backup to
@@ -59,6 +60,27 @@ interface StyleRange {
 // table support needs a separate insertTable request sequence per cell that
 // wasn't worth the complexity for a best-effort export, and this is
 // mentioned here rather than silently dropped.
+
+// Groups a page's flat segment list into lines exactly the way the review
+// screen does (ReviewEditor.tsx's toLines): a new line starts wherever a
+// segment has startsNewBlock set, otherwise it continues the previous one -
+// e.g. a low-confidence word split out mid-sentence joins the same line
+// rather than becoming its own one-word paragraph. Empty-text segments are
+// dropped rather than starting an empty line.
+function groupIntoLines(segments: TranscriptSegment[]): TranscriptSegment[][] {
+  const lines: TranscriptSegment[][] = [];
+  for (const segment of segments) {
+    if (!segment.text) continue;
+    const last = lines[lines.length - 1];
+    if (segment.startsNewBlock || !last) {
+      lines.push([segment]);
+    } else {
+      last.push(segment);
+    }
+  }
+  return lines;
+}
+
 function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
   let text = "";
   const styles: StyleRange[] = [];
@@ -78,18 +100,27 @@ function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
 
     if (multiPage) pushStyled(`Page ${page.page_number}`, "heading");
 
-    for (const segment of page.segmentsCurrent) {
-      if (!segment.text) continue;
-      const start = text.length;
-      text += segment.text + "\n";
-      const end = start + segment.text.length;
+    for (const line of groupIntoLines(page.segmentsCurrent)) {
+      const lineStart = text.length;
+      line.forEach((segment, i) => {
+        if (i > 0) text += " ";
+        const segStart = text.length;
+        text += segment.text;
+        const segEnd = text.length;
+        if (segment.crossedOut) styles.push({ startIndex: segStart, endIndex: segEnd, kind: "strikethrough" });
+        if (segment.emphasis === "bold_or_heavy") styles.push({ startIndex: segStart, endIndex: segEnd, kind: "bold" });
+        if (segment.emphasis === "underline") styles.push({ startIndex: segStart, endIndex: segEnd, kind: "underline" });
+      });
+      const lineEnd = text.length;
+      text += "\n";
 
-      if (segment.structureType === "heading") styles.push({ startIndex: start, endIndex: end, kind: "heading" });
-      if (segment.crossedOut) styles.push({ startIndex: start, endIndex: end, kind: "strikethrough" });
-      if (segment.emphasis === "bold_or_heavy") styles.push({ startIndex: start, endIndex: end, kind: "bold" });
-      if (segment.emphasis === "underline") styles.push({ startIndex: start, endIndex: end, kind: "underline" });
-      if (segment.structureType === "list_item") styles.push({ startIndex: start, endIndex: end, kind: "bullet" });
-      if (segment.structureType === "numbered_item") styles.push({ startIndex: start, endIndex: end, kind: "numbered" });
+      // These apply to the whole line (every segment in it shares one
+      // structureType by construction - see toLines/reclassify in
+      // ReviewEditor.tsx), not per-segment, so it's keyed off the first.
+      const lineType = line[0].structureType;
+      if (lineType === "heading") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "heading" });
+      if (lineType === "list_item") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "bullet" });
+      if (lineType === "numbered_item") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "numbered" });
     }
   }
 
