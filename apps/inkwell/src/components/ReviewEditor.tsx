@@ -8,43 +8,32 @@ import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 
 // How many extra lines of context to show above and below the focused line
-// (2026-09-16 follow-up to the first zoom-on-focus pass: cropping tightly
-// around just the segment's own width cut words off at the edges, and for a
-// long segment - a whole sentence, common since PR #25 - the "crop" was
-// barely smaller than the full photo, so it barely zoomed at all).
-//
-// NOTE, same day: a same-day follow-up briefly lowered this to 1 on the
-// theory that showing fewer lines in the same box would make each line
-// look bigger. That was wrong - worked through the actual math below and
-// reverted back to 2. This value only decides how much vertical context is
-// visible in the crop window; it has no effect on magnification at all.
-// The image is always rendered at width: 100% of .note-page-image, so the
-// scale factor from source pixels to screen pixels is exactly
-// (column width in px) / (photo's natural width in px), full stop - the
-// vertical crop (implemented via aspect-ratio + overflow: hidden on
-// .note-image-wrap, see the JSX below) only picks which already-scaled
-// band of the image is visible, it never rescales anything. So the real
-// zoom-more lever is the column's rendered width, not this constant - see
-// .note-page-image.zoomed's breakout width in globals.css.
+// in the pop-out zoom's close-up (see verticalCrop() and popoutVisible
+// below). 2026-09-16: this constant, and verticalCrop() itself, originally
+// belonged to an in-page "zoom the review columns" feature (PRs #32-#34 -
+// see git history to revive that approach if it's ever wanted again); this
+// file dropped that approach in favor of the pop-out overlay below, but
+// kept both, since the pop-out's close-up needs exactly the same "focused
+// line plus N lines of context" crop.
 const ZOOM_CONTEXT_LINES = 2;
 
 // Turns a segment's already-computed source region (see gridOverlay.ts's
 // regionFromCells - this reuses the exact geometry the .region-highlight box
 // already draws, so this needs no new AI call, no schema change, and no
-// added per-transcription cost) into a vertical crop: the focused line plus
-// ZOOM_CONTEXT_LINES lines of context above and below, expressed as a
-// fraction of the photo's height ("line height" is approximated as one
-// gridOverlay.ts grid row, GRID_ROWS - the grid was already sized so its
-// rows roughly track handwriting lines).
+// added per-transcription cost) into a vertical crop for the pop-out's
+// close-up: the focused line plus ZOOM_CONTEXT_LINES lines of context above
+// and below, expressed as a fraction of the photo's height ("line height" is
+// approximated as one gridOverlay.ts grid row, GRID_ROWS - the grid was
+// already sized so its rows roughly track handwriting lines).
 //
 // Deliberately never crops horizontally - full line width, every time - so
-// a full-width line is never cut off at the edges the way the first version
-// of this feature could be. That also means this alone doesn't visually
-// enlarge anything (the image's own width is untouched); the actual "zoom"
-// comes from ReviewEditor pairing this with a wider .note-page-image column
-// while a segment is focused (see the "zoomed" class below) - the same
-// image content, shown wider, renders bigger without any distortion, since
-// the <img> stays at width: 100%/height: auto throughout.
+// a full-width line is never cut off at the edges. The pop-out's own width
+// (see .zoom-popout in globals.css) is what actually makes the close-up
+// look "zoomed": the cropped photo is rendered at up to 1100px wide,
+// however narrow the original in-page column is, with no distortion since
+// the <img> stays at width: 100%/height: auto throughout - only the crop
+// window (via aspect-ratio + overflow: hidden on .zoom-popout-image-wrap)
+// picks which band of the now much-larger image is visible.
 function verticalCrop(region: SourceRegion | undefined): { lineFraction: number; offsetY: number } {
   if (!region) return { lineFraction: 1, offsetY: 0 };
   const [, y, , h] = region.bbox;
@@ -132,8 +121,22 @@ export function ReviewEditor({
   // whatever segment textarea currently has focus, cleared on blur. See
   // src/lib/ai/gridOverlay.ts for how sourceRegion is derived.
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  // Pop-out zoom (2026-09-16, replacing the in-page zoom-on-focus this
+  // screen previously used - "I don't think this is quite what I want").
+  // Focusing a segment shows a large close-up of its source handwriting as
+  // an overlay (see popoutVisible below); dismissing it (the backdrop, the
+  // image, or the close button - all wired to the same handler in the JSX,
+  // since the ask was "closes if the user clicks anywhere") sets this
+  // without touching focus itself, so typing in the still-focused textarea
+  // behind it works normally once it's dismissed. Reset on every focus
+  // (right here, rather than via a useEffect watching activeSegmentId -
+  // this is the only place activeSegmentId ever becomes a real id) so a
+  // fresh focus - even refocusing the same segment after clicking away -
+  // always shows the pop-out again rather than staying dismissed forever.
+  const [popoutDismissed, setPopoutDismissed] = useState(false);
   function handleSegmentFocus(segmentId: string) {
     setActiveSegmentId(segmentId);
+    setPopoutDismissed(false);
   }
   function handleSegmentBlur() {
     setActiveSegmentId(null);
@@ -158,6 +161,32 @@ export function ReviewEditor({
     // exceeded") rather than the intended "record it once" behavior.
     setImgAspects((prev) => (prev[pageId] === aspect ? prev : { ...prev, [pageId]: aspect }));
   }
+
+  // Escape also dismisses the pop-out, alongside the click-anywhere/close
+  // button handling in the JSX below - a real listener (not a JSX
+  // onKeyDown) since the pop-out itself holds no focus for a key event to
+  // land on; the focused element stays whichever segment textarea opened
+  // it, wherever that is in the DOM.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setPopoutDismissed(true);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const popoutPage = pageStates.find((p) => p.segments.some((s) => s.id === activeSegmentId));
+  const popoutRegion = popoutPage?.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
+  const popoutAspect = popoutPage ? imgAspects[popoutPage.id] : undefined;
+  const popoutVisible = Boolean(
+    !popoutDismissed &&
+      popoutPage &&
+      popoutRegion &&
+      popoutAspect &&
+      !popoutPage.imageRemoved &&
+      popoutPage.imagePath
+  );
+  const popoutCrop = popoutVisible ? verticalCrop(popoutRegion) : { lineFraction: 1, offsetY: 0 };
 
   // AI-trust visual language (03-ux-screens.md's cross-screen note), extended
   // from tags to the title: shows the same "AI suggested this" badge only
@@ -437,16 +466,6 @@ export function ReviewEditor({
         const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
         const activeRegion = page.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
-        const aspect = imgAspects[page.id];
-        // Only actually zoom once the image's aspect ratio is known - a
-        // narrow timing edge case (focus landing before the <img> has fired
-        // onLoad) otherwise shifts the image without the matching wrapper
-        // resize, showing the wrong slice of the photo. Falls back to the
-        // identity crop (the untouched full photo) until then.
-        const zoomActive = Boolean(activeRegion) && Boolean(aspect);
-        const { lineFraction, offsetY } = zoomActive
-          ? verticalCrop(activeRegion)
-          : { lineFraction: 1, offsetY: 0 };
         return (
           <div key={page.id} className="note-page-block">
             {pageStates.length > 1 && (
@@ -456,11 +475,8 @@ export function ReviewEditor({
             )}
 
             <div className="note-page-columns">
-              <div className={`note-page-image${zoomActive ? " zoomed" : ""}`}>
-                <div
-                  className="note-image-wrap"
-                  style={zoomActive ? { aspectRatio: `${aspect! / lineFraction}` } : undefined}
-                >
+              <div className="note-page-image">
+                <div className="note-image-wrap">
                   {page.imageRemoved ? (
                     // Original removed via "Delete original image" - the
                     // transcription alongside is unaffected, this just
@@ -518,11 +534,6 @@ export function ReviewEditor({
                             if (el && el.complete && el.naturalWidth) handleImageLoad(page.id, el);
                           }}
                           onLoad={(e) => handleImageLoad(page.id, e.currentTarget)}
-                          style={
-                            zoomActive
-                              ? { transform: `translateY(-${offsetY * 100}%)` }
-                              : undefined
-                          }
                         />
                       </a>
                       {activeRegion && (
@@ -531,16 +542,8 @@ export function ReviewEditor({
                           style={{
                             left: `${activeRegion.bbox[0] * 100}%`,
                             width: `${activeRegion.bbox[2] * 100}%`,
-                            // Re-expressed relative to the visible vertical
-                            // band (identity - i.e. the plain bbox percentage
-                            // - when not zoomed, since lineFraction=1 and
-                            // offsetY=0 then): the wrapper's height now
-                            // represents only lineFraction of the full
-                            // photo's height, starting at offsetY, so the
-                            // highlight has to track that same window to
-                            // stay pinned over the right handwriting.
-                            top: `${((activeRegion.bbox[1] - offsetY) / lineFraction) * 100}%`,
-                            height: `${(activeRegion.bbox[3] / lineFraction) * 100}%`,
+                            top: `${activeRegion.bbox[1] * 100}%`,
+                            height: `${activeRegion.bbox[3] * 100}%`,
                           }}
                         />
                       )}
@@ -648,6 +651,41 @@ export function ReviewEditor({
           </div>
         );
       })}
+
+      {popoutVisible && popoutPage && popoutRegion && (
+        // Clicking anywhere in here - the dimmed backdrop, the close-up
+        // image itself, or the explicit close button - dismisses the
+        // pop-out (see popoutDismissed above); nothing inside needs its own
+        // stopPropagation guard since every one of them is meant to close
+        // it the same way.
+        <div className="zoom-popout-backdrop" onClick={() => setPopoutDismissed(true)}>
+          <div className="zoom-popout">
+            <button type="button" className="zoom-popout-close" aria-label="Close close-up" onClick={() => setPopoutDismissed(true)}>
+              ×
+            </button>
+            <div
+              className="zoom-popout-image-wrap"
+              style={{ aspectRatio: `${popoutAspect! / popoutCrop.lineFraction}` }}
+            >
+              <img
+                src={`/${popoutPage.imagePath}`}
+                alt="Close-up of the highlighted handwriting"
+                className="zoom-popout-image"
+                style={{ transform: `translateY(-${popoutCrop.offsetY * 100}%)` }}
+              />
+              <div
+                className="region-highlight"
+                style={{
+                  left: `${popoutRegion.bbox[0] * 100}%`,
+                  width: `${popoutRegion.bbox[2] * 100}%`,
+                  top: `${((popoutRegion.bbox[1] - popoutCrop.offsetY) / popoutCrop.lineFraction) * 100}%`,
+                  height: `${(popoutRegion.bbox[3] / popoutCrop.lineFraction) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {hasAnyReadyPage && (
         <>
