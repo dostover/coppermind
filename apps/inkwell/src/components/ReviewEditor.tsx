@@ -390,6 +390,21 @@ export function ReviewEditor({
                         Original photo deleted. The transcription is unaffected.
                       </p>
                     </div>
+                  ) : !page.imagePath ? (
+                    // A page created from an uploaded PDF starts with no
+                    // image at all - it's rendered out of the PDF in the
+                    // background (jobs.ts's rasterize_pdf stage) rather than
+                    // during the upload itself, so this note may sit here
+                    // for a few seconds on a large scan. Same visual pattern
+                    // as the "original deleted" placeholder above, different
+                    // copy - this is a normal in-progress state, not an
+                    // error, and this page's status ('uploaded') keeps the
+                    // existing polling loop refreshing until it resolves.
+                    <div className="image-removed-placeholder">
+                      <p className="muted" style={{ margin: 0 }}>
+                        Extracting this page from your PDF…
+                      </p>
+                    </div>
                   ) : (
                     <>
                       <img
