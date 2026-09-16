@@ -407,11 +407,24 @@ export function ReviewEditor({
                     </div>
                   ) : (
                     <>
-                      <img
-                        src={`/${page.imagePath}`}
-                        alt="Uploaded handwritten page"
-                        className="note-image"
-                      />
+                      {/* Opens the original photo at full native resolution
+                          in a new tab - the in-page copy is now sized to be
+                          legible on its own (see globals.css), but a
+                          genuinely hard word may still need a closer look
+                          than any fixed on-page size can give. */}
+                      <a
+                        href={`/${page.imagePath}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="note-image-link"
+                        title="Open full-size in a new tab"
+                      >
+                        <img
+                          src={`/${page.imagePath}`}
+                          alt="Uploaded handwritten page"
+                          className="note-image"
+                        />
+                      </a>
                       {activeRegion && (
                         <div
                           className="region-highlight"
