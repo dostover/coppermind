@@ -24,10 +24,18 @@ interface PatchBody {
   // ready content yet (still transcribing, or errored) simply isn't
   // included - the review screen never sends segments for a page it hasn't
   // rendered an editor for.
-  // structureType is optional so an older client that hasn't loaded this
-  // change yet still works - the mapping below falls back to whatever
-  // structureType the segment already has rather than clearing it.
-  pages: { pageId: string; segments: { id: string; text: string; structureType?: StructureType }[] }[];
+  // structureType/startsNewBlock are optional so an older client that hasn't
+  // loaded this change yet still works - the mapping below falls back to
+  // whatever the segment already had rather than clearing it. A segment id
+  // with no counterpart in either segments_ai or segments_current is a
+  // brand-new segment created client-side by splitting an existing one (see
+  // ReviewEditor.tsx's handleSplitSegment); one that previously existed but
+  // is simply missing from this list was merged away (handleMergeSegmentBackward)
+  // and is deleted by omission - see the per-segment loop below for both.
+  pages: {
+    pageId: string;
+    segments: { id: string; text: string; structureType?: StructureType; startsNewBlock?: boolean }[];
+  }[];
   // Both optional and independently applied: omitting a field leaves that
   // note property untouched, so callers that only save segments/title (if
   // any remain) don't accidentally clear folder/tags.
@@ -73,47 +81,75 @@ export async function PATCH(
     const updatedSegments: TranscriptSegment[] = [];
     for (const edited of pageBody.segments) {
       const original = aiById.get(edited.id);
-      if (!original) continue;
-      const previous = currentById.get(edited.id) ?? original;
+      const previous = currentById.get(edited.id);
 
-      const changedFromOriginalAi = edited.text !== original.text;
-      const changedThisSave = edited.text !== previous.text;
-      updatedSegments.push({
-        ...original,
-        text: edited.text,
-        // Falls back to the last-saved value, not the AI's original guess -
-        // a structureType the user reclassified on an earlier save must
-        // stick across every subsequent save, the same as an edited text
-        // value already does. Only an old client that never sends
-        // structureType at all (or a freshly-transcribed segment that's
-        // never been reclassified) falls through to it.
-        structureType: edited.structureType ?? previous.structureType ?? original.structureType,
-        // Same reasoning as structureType above: nothing sends a different
-        // startsNewBlock value yet (that's a future merge/split feature),
-        // but falling back to the last-saved value rather than the AI's
-        // original guess avoids silently reverting it once something does.
-        startsNewBlock: previous.startsNewBlock ?? original.startsNewBlock,
-        // The flag clears the moment the user edits that span away from the
-        // AI's original guess (Phase 3 UX §5); an untouched flagged span
-        // stays flagged post-save (FR-5.4).
-        reviewRequired: changedFromOriginalAi ? false : original.reviewRequired,
-      });
+      if (original) {
+        // A segment the AI actually produced (possibly already edited or
+        // reclassified on an earlier save) - falls back to the last-saved
+        // value, not the AI's original guess, for anything this save didn't
+        // send: a structureType/startsNewBlock the user changed on an
+        // earlier save must stick across every subsequent save, the same as
+        // an edited text value already does. Only an old client that never
+        // sends a field at all falls through this far.
+        const base = previous ?? original;
+        const changedFromOriginalAi = edited.text !== original.text;
+        const changedThisSave = edited.text !== base.text;
+        updatedSegments.push({
+          ...original,
+          text: edited.text,
+          structureType: edited.structureType ?? base.structureType,
+          startsNewBlock: edited.startsNewBlock ?? base.startsNewBlock,
+          // The flag clears the moment the user edits that span away from
+          // the AI's original guess (Phase 3 UX §5); an untouched flagged
+          // span stays flagged post-save (FR-5.4).
+          reviewRequired: changedFromOriginalAi ? false : original.reviewRequired,
+        });
 
-      if (changedThisSave && changedFromOriginalAi) {
-        const evaluation = await provider.evaluateHandwritingCorrection({
-          aiText: original.text,
-          correctedText: edited.text,
-          originalConfidence: original.confidence,
+        if (changedThisSave && changedFromOriginalAi) {
+          const evaluation = await provider.evaluateHandwritingCorrection({
+            aiText: original.text,
+            correctedText: edited.text,
+            originalConfidence: original.confidence,
+          });
+          recordHandwritingCorrection({
+            noteId: id,
+            segmentId: original.id,
+            aiText: original.text,
+            correctedText: edited.text,
+            originalConfidence: original.confidence,
+            evaluation,
+          });
+          anyCorrectionRecorded = true;
+        }
+      } else {
+        // No AI baseline at all - a segment created client-side by
+        // splitting an existing one in two (see ReviewEditor.tsx's
+        // handleSplitSegment). There's no "AI guess" to diff a handwriting
+        // correction against, so this never touches the learning pipeline -
+        // it's a structural edit, not new handwriting content. `previous`
+        // carries its other fields forward once it's been saved at least
+        // once; the very first save of a brand-new segment (still only in
+        // this request, never persisted before) falls back to fixed
+        // defaults instead - full confidence and no flags, since a manually
+        // split segment needs no review and was never crossed out or
+        // AI-transcribed on its own.
+        const base: TranscriptSegment =
+          previous ?? {
+            id: edited.id,
+            text: edited.text,
+            structureType: "paragraph",
+            startsNewBlock: false,
+            crossedOut: false,
+            emphasis: "none",
+            confidence: 1,
+            reviewRequired: false,
+          };
+        updatedSegments.push({
+          ...base,
+          text: edited.text,
+          structureType: edited.structureType ?? base.structureType,
+          startsNewBlock: edited.startsNewBlock ?? base.startsNewBlock,
         });
-        recordHandwritingCorrection({
-          noteId: id,
-          segmentId: original.id,
-          aiText: original.text,
-          correctedText: edited.text,
-          originalConfidence: original.confidence,
-          evaluation,
-        });
-        anyCorrectionRecorded = true;
       }
     }
 
