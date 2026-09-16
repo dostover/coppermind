@@ -7,7 +7,19 @@ import { getAIProvider } from "./ai";
 import { getHandwritingContext } from "./handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "./config";
 import { derivePlaceholderTitle } from "./titleGen";
-import { rasterizePdfPages } from "./pdfPrep";
+// NOT a static top-level import of pdfPrep.ts (see runRasterizePdfJob below) -
+// this file is reached from src/instrumentation.ts (which starts the job
+// runner at server boot), and a static import here pulls pdf-to-img's whole
+// module graph - including its optional native @napi-rs/canvas dependency -
+// into that instrumentation-hook bundle. That's a different, earlier load
+// path than the one this dependency previously only went through (the
+// upload route, loaded lazily per-request), and next.config.ts already notes
+// pdf-to-img's own module-load-time behavior breaks when bundled somewhere
+// other than plain runtime `require()` - this is another instance of that,
+// surfacing as instrumentation-hook-loading failing outright in `next dev`
+// (Turbopack) on machines where the platform-specific @napi-rs/canvas
+// binary's resolution is at all fragile, even though the exact same
+// dependency loads and works fine once actually reached from a request.
 
 // Narrowed from 04-data-model.md's processing_jobs / §28's multi-stage
 // pipeline down to the one stage this app actually has: transcription (plus
@@ -202,6 +214,10 @@ async function runRasterizePdfJob(job: ProcessingJobRow): Promise<void> {
   if (!job.payload) throw new Error(`Job ${job.id} has no payload - cannot run stage "${job.stage}".`);
   const { pdfPath, pageIds } = JSON.parse(job.payload) as RasterizePdfPayload;
 
+  // Dynamic import, deliberately - see the comment on this file's imports
+  // above for why pdfPrep.ts (and the pdf-to-img/pdfjs-dist/@napi-rs/canvas
+  // chain it pulls in) must not be a static top-level import in this file.
+  const { rasterizePdfPages } = await import("./pdfPrep");
   const buffer = await readFile(pdfPath);
   const rendered = await rasterizePdfPages(buffer);
   if (rendered.length !== pageIds.length) {
