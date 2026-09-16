@@ -161,7 +161,16 @@ const TRANSCRIPTION_QUALITY_INSTRUCTIONS =
   "best literal reading of the actual letter shapes, even if the result looks unusual or is not a " +
   "dictionary word, and drop your confidence score accordingly rather than silently substituting " +
   "something that reads more naturally. Confidence should reflect how certain you actually are that the " +
-  "letters on the page say what you transcribed, not how natural the resulting sentence sounds.";
+  "letters on the page say what you transcribed, not how natural the resulting sentence sounds. " +
+  "IMPORTANT - segment boundaries follow meaning, never the page's physical line breaks: when a " +
+  "sentence or phrase continues from the end of one handwritten line onto the next, keep it as one " +
+  "segment - do not start a new segment just because the writing wrapped to a new line on the page. " +
+  "Represent that wrap as a normal space in the transcribed text, the same as any other word break. " +
+  "Only end a segment where there's an actual reason to: a word or short phrase you want to score " +
+  "confidence on separately, a crossed-out span that has to stand alone, or a genuine structural break " +
+  "(a new paragraph, heading, list item, or change of speaker in dialogue). A single segment should " +
+  "read as a normal, natural chunk of prose - often a full sentence or more - not a fragment that " +
+  "happens to end where the handwriting ran out of space on that line.";
 
 function buildHandwritingHintText(hints: HandwritingContext): string {
   return hints.vocabularyHints.length || hints.correctionPatternHints.length
