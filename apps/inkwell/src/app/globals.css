@@ -541,7 +541,10 @@ h2.segment-heading textarea.segment-input {
    carousel above a stacked transcription list): each page's photo sits in a
    fixed-width column beside its own transcription, so review no longer
    requires scrolling between a shared image and far-away text. Stacks to a
-   single column - image on top - at phone width. */
+   single column - image on top - at phone width. Sized generously (rather
+   than the original 22rem/40%) per user feedback (2026-09-16): checking
+   transcription accuracy against small/cursive handwriting means the photo
+   itself needs to read clearly at a glance, not just be present. */
 .note-page-columns {
   display: flex;
   align-items: flex-start;
@@ -549,8 +552,16 @@ h2.segment-heading textarea.segment-input {
 }
 
 .note-page-image {
-  flex: 0 0 22rem;
-  max-width: 40%;
+  flex: 0 0 34rem;
+  max-width: 55%;
+}
+
+/* The image also opens at full native resolution in a new tab on click
+   (see ReviewEditor.tsx) - for the rare case even the enlarged in-page
+   photo isn't enough to resolve a difficult word. */
+.note-image-link {
+  display: block;
+  cursor: zoom-in;
 }
 
 .note-page-text {
