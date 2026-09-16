@@ -77,6 +77,19 @@ function reclassifyValue(structureType: StructureType): StructureType {
   return CORE_STRUCTURE_TYPES.some((t) => t.value === structureType) ? structureType : "paragraph";
 }
 
+// New segment ids only ever need to be unique within this page's array -
+// nothing server-side issues or coordinates them, since segments are stored
+// as an opaque JSON array rather than SQL rows (see db.ts). crypto.randomUUID
+// needs a secure context, which every browser treats localhost as, but a
+// production deploy without TLS wouldn't count - the fallback below covers
+// that rather than crashing the split/merge feature entirely.
+function generateSegmentId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `seg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 interface Line {
   kind: LineKind;
   segments: TranscriptSegment[];
@@ -382,6 +395,136 @@ export function ReviewEditor({
     setSavedMessage(null);
   }
 
+  // Split/merge (2026-09-16, Steps C+D of the formatting roadmap - see
+  // 09-walking-skeleton-architecture.md): "Enter to split, Backspace to
+  // merge" per the earlier interaction-design decision. Both operate purely
+  // on the flat per-page segment array and its startsNewBlock flags - see
+  // toLines() above - so neither needs to know about lines/blocks directly:
+  // splitting always inserts a fresh startsNewBlock:true segment right after
+  // the split point (a new line boundary), and merging always deletes
+  // whatever segment sat at the merge point (erasing a line boundary if it
+  // happened to be one). Segment ids created here are never sent anywhere
+  // for the server to "issue" - see generateSegmentId's comment - and a
+  // segment simply not being in the array Save sends is what deletes it
+  // server-side (see the PATCH handler's per-segment loop).
+  //
+  // Both need to move the text cursor to a segment that doesn't exist in the
+  // DOM until after this render commits (the new segment from a split, or
+  // the now-larger previous segment after a merge) - textareaRefs below is
+  // how the effect finds it once it does. The pending request itself lives
+  // in a plain ref rather than state: the effect only ever needs to read it
+  // once per commit and clear it, and clearing it with setState would be a
+  // second setState call from inside an effect body purely to reset
+  // bookkeeping, not to synchronize anything - focusTick's own setState
+  // (from requestFocus, in the same event handler that already changes
+  // pageStates) is what triggers the one render this needs.
+  const textareaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
+  const pendingFocusRef = useRef<{ segmentId: string; cursorPos: number } | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
+  function requestFocus(segmentId: string, cursorPos: number) {
+    pendingFocusRef.current = { segmentId, cursorPos };
+    setFocusTick((t) => t + 1);
+  }
+  useEffect(() => {
+    const pending = pendingFocusRef.current;
+    if (!pending) return;
+    pendingFocusRef.current = null;
+    const el = textareaRefs.current.get(pending.segmentId);
+    if (el) {
+      autoGrow(el);
+      el.focus();
+      el.setSelectionRange(pending.cursorPos, pending.cursorPos);
+    }
+  }, [focusTick]);
+
+  // Enter within a segment: splits it into two segments at the cursor
+  // (replacing any selection, same as typing over it would). The new second
+  // half always starts a new block - that's what "split" means here, a new
+  // paragraph/line/list item - and inherits everything else (structureType,
+  // crossedOut, emphasis, sourceRegion) from the segment it came from, since
+  // it's literally the same handwritten span just divided in two. Cursor
+  // lands at the very start of the new segment, matching where the text
+  // that used to follow the cursor now begins.
+  function handleSplitSegment(pageId: string, segmentId: string, selStart: number, selEnd: number) {
+    const newId = generateSegmentId();
+    setPageStates((prev) =>
+      prev.map((p) => {
+        if (p.id !== pageId) return p;
+        const idx = p.segments.findIndex((s) => s.id === segmentId);
+        if (idx === -1) return p;
+        const original = p.segments[idx];
+        const before = original.text.slice(0, selStart);
+        const after = original.text.slice(selEnd);
+        const segments = [...p.segments];
+        segments.splice(
+          idx,
+          1,
+          { ...original, text: before },
+          { ...original, id: newId, text: after, startsNewBlock: true, confidence: 1, reviewRequired: false }
+        );
+        return { ...p, segments };
+      })
+    );
+    requestFocus(newId, 0);
+    setSavedMessage(null);
+  }
+
+  // Backspace at the very start of a segment (cursor collapsed, nothing
+  // selected): merges it backward into whatever segment precedes it on this
+  // page, deleting it as its own segment. This is the exact inverse of
+  // split above - if the merged-away segment happened to be the one
+  // starting a new block, that block boundary goes away with it and its
+  // text folds directly into the end of the previous line; if it was
+  // already a same-block continuation, this reduces two adjacent fragments
+  // of one line to one.
+  //
+  // Whether a space gets inserted at the join depends on which of those two
+  // cases this is, and it has to - they need opposite answers:
+  //  - startsNewBlock (a paragraph/line boundary is being removed): no
+  //    space, direct concatenation. This is what makes merge the exact
+  //    inverse of split - split always marks its new second half
+  //    startsNewBlock so backspacing it right back off exactly restores the
+  //    original, un-split text, with nothing inserted. It also matches how
+  //    every mainstream word processor merges two paragraphs.
+  //  - same-block continuation (e.g. a low-confidence word pulled out mid-
+  //    sentence, per startsNewBlock's own doc comment): these two segments
+  //    were already rendered/exported with a space between them purely by
+  //    virtue of being separate segments in the same line (see
+  //    renderLineSegments/docsExport.ts) - once merged into one segment
+  //    that convention no longer applies, so a space has to be inserted
+  //    explicitly here or the merge would visibly run two words together
+  //    ("watchtowfr" + "today." silently becoming "watchtowfrtoday.").
+  function handleMergeSegmentBackward(pageId: string, segmentId: string) {
+    // A plain mutable box, not a `let` reassigned directly inside the
+    // updater below - TS's narrowing for a `let` read after a callback that
+    // reassigns it doesn't see through the closure, and treats it as still
+    // `null` at the read site. A boxed property (the same shape a ref's
+    // `.current` has) sidesteps that entirely.
+    const focusTargetBox: { value: { segmentId: string; cursorPos: number } | null } = { value: null };
+    setPageStates((prev) =>
+      prev.map((p) => {
+        if (p.id !== pageId) return p;
+        const idx = p.segments.findIndex((s) => s.id === segmentId);
+        if (idx <= 0) return p; // nothing before it on this page to merge into
+        const current = p.segments[idx];
+        const previous = p.segments[idx - 1];
+        const needsSpace =
+          !current.startsNewBlock &&
+          previous.text.length > 0 &&
+          current.text.length > 0 &&
+          !/\s$/.test(previous.text) &&
+          !/^\s/.test(current.text);
+        focusTargetBox.value = { segmentId: previous.id, cursorPos: previous.text.length };
+        const mergedText = previous.text + (needsSpace ? " " : "") + current.text;
+        const segments = [...p.segments];
+        segments.splice(idx - 1, 2, { ...previous, text: mergedText });
+        return { ...p, segments };
+      })
+    );
+    if (focusTargetBox.value) requestFocus(focusTargetBox.value.segmentId, focusTargetBox.value.cursorPos);
+    setSavedMessage(null);
+  }
+
   // Local-only until Save - the tags/folder edits ride along with the same
   // PATCH as segments/title, so nothing is written to the server until the
   // user hits Save (matches how segment/title edits already behave).
@@ -422,7 +565,16 @@ export function ReviewEditor({
             .filter((p) => p.status === "ready_for_review")
             .map((p) => ({
               pageId: p.id,
-              segments: p.segments.map((s) => ({ id: s.id, text: s.text, structureType: s.structureType })),
+              segments: p.segments.map((s) => ({
+                id: s.id,
+                text: s.text,
+                structureType: s.structureType,
+                // Always sent now, not just for existing AI segments - the
+                // client is the source of truth for block boundaries once
+                // split/merge can create and delete segments the AI never
+                // produced (see the PATCH handler's comment).
+                startsNewBlock: s.startsNewBlock,
+              })),
             })),
           folderId,
           tags: tags.map((t) => t.name),
@@ -598,7 +750,14 @@ export function ReviewEditor({
       return (
         <textarea
           key={segment.id}
-          ref={autoGrow}
+          ref={(el) => {
+            if (el) {
+              textareaRefs.current.set(segment.id, el);
+              autoGrow(el);
+            } else {
+              textareaRefs.current.delete(segment.id);
+            }
+          }}
           rows={1}
           className={[
             "segment-input",
@@ -617,7 +776,19 @@ export function ReviewEditor({
           onBlur={handleSegmentBlur}
           onDoubleClick={() => handleSegmentDoubleClick(segment.id)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") e.preventDefault();
+            // Enter always splits (never inserts a literal newline into a
+            // segment's text - these are meant to be single flowing lines,
+            // see the <textarea>-not-<input> comment above). Backspace only
+            // triggers a merge when the cursor is collapsed at position 0 -
+            // anything else (a selection, or the cursor mid-text) is left to
+            // the textarea's own default editing behavior.
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSplitSegment(pageId, segment.id, e.currentTarget.selectionStart, e.currentTarget.selectionEnd);
+            } else if (e.key === "Backspace" && e.currentTarget.selectionStart === 0 && e.currentTarget.selectionEnd === 0) {
+              e.preventDefault();
+              handleMergeSegmentBackward(pageId, segment.id);
+            }
           }}
         />
       );
@@ -983,6 +1154,10 @@ export function ReviewEditor({
             </p>
           )}
 
+          <p className="muted">
+            Press Enter within a line to split it in two, or Backspace at the start of a line to
+            merge it into the one above.
+          </p>
           {flaggedCount > 0 && (
             <p className="muted">
               {flaggedCount} item{flaggedCount === 1 ? "" : "s"} still flagged for review - you
