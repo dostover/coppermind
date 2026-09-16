@@ -145,9 +145,19 @@ export async function overlayGrid(buffer: Buffer): Promise<Buffer> {
     );
   }
 
+  // NOTE: deliberately no full-canvas background rect here. This SVG is
+  // composited (default blend mode "over") on top of the already-extended
+  // base image below, which already has a real white margin AND the actual
+  // photo in the rest of the canvas - an opaque rect spanning the whole SVG
+  // canvas (as an earlier version of this file had) paints over that photo
+  // with solid white, silently sending the model a blank grid instead of the
+  // page. Found 2026-09-16: transcription had been quietly returning zero
+  // segments for every real (non-mock) upload since this file first shipped
+  // in PR #26, because of exactly that - see the feature log entry for the
+  // full story of how this got caught. Everything below is transparent
+  // except the lines/text/border themselves, so the photo shows through.
   const svg = `
     <svg width="${canvasWidth}" height="${canvasHeight}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="${canvasWidth}" height="${canvasHeight}" fill="white" />
       <rect x="${marginLeft}" y="${marginTop}" width="${width}" height="${height}"
             fill="none" stroke="${GRID_COLOR}" stroke-width="2" stroke-opacity="0.6" />
       ${lines.join("\n")}
