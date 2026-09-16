@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
-import { StatusBadge, StatusDot } from "@/components/StatusBadge";
+import { StatusBadge } from "@/components/StatusBadge";
 
 interface Props {
   noteId: string;
@@ -88,36 +88,6 @@ export function ReviewEditor({
   // feedback the transcription segments already give), well before Save.
   const titleIsAiSuggested = initialTitleSource === "ai" && title.trim() === (initialTitle ?? "").trim();
 
-  // Image-region highlighting (AC-6 last bullet / FR-5.5, best-effort): which
-  // segment is currently focused, so its sourceRegion (if any) can be drawn
-  // as an overlay box on the image above. Segment ids are globally unique
-  // across every page, so one id -> at most one page's image ever shows a
-  // highlight. See SourceRegion's doc comment in ai/types.ts for why 0-1
-  // fractional coordinates need no image-size bookkeeping here.
-  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
-  // Every page's image lives in one shared carousel above the transcriptions
-  // (rather than each page's image sitting inline next to its own text - see
-  // the render below), so there's exactly one "which page's image is showing"
-  // index instead of one ref per page.
-  const [activePageIndex, setActivePageIndex] = useState(0);
-  const carouselRef = useRef<HTMLDivElement | null>(null);
-
-  function handleSegmentFocus(segmentId: string, pageId: string) {
-    setActiveSegmentId(segmentId);
-    const idx = pageStates.findIndex((p) => p.id === pageId);
-    if (idx !== -1) setActivePageIndex(idx);
-    // The transcriptions sit below the shared image carousel (see
-    // 03-ux-screens.md §5's split-screen, approximated here as stacked
-    // rather than side-by-side), so once you're editing a segment further
-    // down the page that carousel is often scrolled out of view - "nearest"
-    // is a no-op if it's already visible.
-    carouselRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
-  function handleSegmentBlur() {
-    setActiveSegmentId(null);
-  }
-
   // Segments render as <textarea> rather than <input> so long text can wrap
   // onto multiple visual lines instead of forcing horizontal scrolling. The
   // mock provider's segments are word/phrase-granular (see mockProvider.ts),
@@ -140,16 +110,6 @@ export function ReviewEditor({
   const allSegments = pageStates.flatMap((p) => p.segments);
   const flaggedCount = allSegments.filter((s) => s.reviewRequired).length;
   const crossedOutCount = allSegments.filter((s) => s.crossedOut).length;
-  const activePage = pageStates[activePageIndex] ?? pageStates[0];
-  // Only show the highlight when the focused segment actually belongs to the
-  // page currently showing in the carousel - handleSegmentFocus already
-  // switches the carousel to match, so in practice this is always true while
-  // a segment is focused, but it's a cheap guard against a stale index.
-  const activeRegion = activePage?.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
-
-  function goToPage(delta: -1 | 1) {
-    setActivePageIndex((i) => Math.min(Math.max(i + delta, 0), pageStates.length - 1));
-  }
 
   // Per-page "seed once" sync: a page whose local status isn't yet
   // 'ready_for_review' adopts whatever the latest data says (still working,
@@ -394,107 +354,6 @@ export function ReviewEditor({
 
   return (
     <div>
-      {activePage && (
-        <div className="note-image-carousel" ref={carouselRef}>
-          <div className="note-image-wrap">
-            {activePage.imageRemoved ? (
-              // Original removed via "Delete original image" - the
-              // transcription below is unaffected, this just replaces the
-              // broken/missing <img> with an honest placeholder
-              // (03-ux-screens.md §6's "clear ... state rather than a broken
-              // image or blank area").
-              <div className="image-removed-placeholder">
-                <p className="muted" style={{ margin: 0 }}>
-                  Original photo deleted. The transcription below is unaffected.
-                </p>
-              </div>
-            ) : (
-              <>
-                <img
-                  src={`/${activePage.imagePath}`}
-                  alt="Uploaded handwritten page"
-                  className="note-image"
-                />
-                {activeRegion && (
-                  <div
-                    className="region-highlight"
-                    style={{
-                      left: `${activeRegion.bbox[0] * 100}%`,
-                      top: `${activeRegion.bbox[1] * 100}%`,
-                      width: `${activeRegion.bbox[2] * 100}%`,
-                      height: `${activeRegion.bbox[3] * 100}%`,
-                    }}
-                  />
-                )}
-              </>
-            )}
-          </div>
-
-          {activePage.status === "ready_for_review" && !activePage.imageRemoved && (
-            <button
-              type="button"
-              className="button secondary delete-image-button"
-              onClick={() => handleDeleteImage(activePage.id)}
-              disabled={deletingImagePageIds.has(activePage.id)}
-            >
-              {deletingImagePageIds.has(activePage.id) ? "Deleting…" : "Delete original image"}
-            </button>
-          )}
-
-          {pageStates.length > 1 && (
-            <>
-              <div className="carousel-controls">
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => goToPage(-1)}
-                  disabled={activePageIndex === 0}
-                  aria-label="Previous page"
-                >
-                  ‹ Prev
-                </button>
-                <span className="muted">
-                  Page {activePage.pageNumber} of {pageStates.length}
-                </span>
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => goToPage(1)}
-                  disabled={activePageIndex === pageStates.length - 1}
-                  aria-label="Next page"
-                >
-                  Next ›
-                </button>
-              </div>
-
-              <div className="carousel-thumbs">
-                {pageStates.map((p, i) => (
-                  <button
-                    type="button"
-                    key={p.id}
-                    className={`carousel-thumb${i === activePageIndex ? " active" : ""}`}
-                    onClick={() => setActivePageIndex(i)}
-                    aria-label={`Go to page ${p.pageNumber} (${p.status.replace(/_/g, " ")})`}
-                    aria-current={i === activePageIndex}
-                  >
-                    {p.imageRemoved ? (
-                      <span className="carousel-thumb-placeholder" aria-hidden="true">
-                        ✕
-                      </span>
-                    ) : (
-                      <img src={`/${p.imagePath}`} alt="" />
-                    )}
-                    {p.status !== "ready_for_review" && (
-                      <StatusDot status={p.status} className="carousel-thumb-dot" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
       {pageStates.map((page) => {
         const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
@@ -506,88 +365,122 @@ export function ReviewEditor({
               </p>
             )}
 
-            {(page.status === "uploaded" || page.status === "transcribing") && (
-              <p className="muted" role="status" aria-live="polite">
-                <StatusBadge status={page.status} /> - this updates automatically, no need to
-                refresh.
-              </p>
-            )}
-
-            {page.status === "error" && (
-              <p className="toast error" role="alert">
-                <StatusBadge status={page.status} />: {page.errorMessage ?? "Unknown error."} The
-                original image is intact.{" "}
-                <button
-                  className="button"
-                  onClick={() => handleRetryPage(page.id)}
-                  disabled={isRetrying}
-                >
-                  {isRetrying ? "Retrying..." : "Retry this page"}
-                </button>
-              </p>
-            )}
-
-            {page.status === "ready_for_review" && (
-              <div className="transcription">
-                {lines.map((line, i) =>
-                  line.type === "heading" ? (
-                    <h2 key={line.segments[0].id} className="segment-heading">
-                      <textarea
-                        ref={autoGrow}
-                        className="segment-input"
-                        rows={1}
-                        value={line.segments[0].text}
-                        onChange={(e) => {
-                          updateSegment(page.id, line.segments[0].id, e.target.value);
-                          autoGrow(e.currentTarget);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") e.preventDefault();
-                        }}
-                        onFocus={() => handleSegmentFocus(line.segments[0].id, page.id)}
-                        onBlur={handleSegmentBlur}
-                      />
-                    </h2>
+            <div className="note-page-columns">
+              <div className="note-page-image">
+                <div className="note-image-wrap">
+                  {page.imageRemoved ? (
+                    // Original removed via "Delete original image" - the
+                    // transcription alongside is unaffected, this just
+                    // replaces the broken/missing <img> with an honest
+                    // placeholder (03-ux-screens.md §6's "clear ... state
+                    // rather than a broken image or blank area").
+                    <div className="image-removed-placeholder">
+                      <p className="muted" style={{ margin: 0 }}>
+                        Original photo deleted. The transcription is unaffected.
+                      </p>
+                    </div>
                   ) : (
-                    <p key={i} className="flow">
-                      {line.segments.map((segment) => {
-                        const titleParts = [
-                          segment.crossedOut
-                            ? "Crossed out in the original - kept here, delete if you don't want it"
-                            : null,
-                          segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
-                        ].filter(Boolean);
-                        return (
+                    <img
+                      src={`/${page.imagePath}`}
+                      alt="Uploaded handwritten page"
+                      className="note-image"
+                    />
+                  )}
+                </div>
+
+                {page.status === "ready_for_review" && !page.imageRemoved && (
+                  <button
+                    type="button"
+                    className="button secondary delete-image-button"
+                    onClick={() => handleDeleteImage(page.id)}
+                    disabled={deletingImagePageIds.has(page.id)}
+                  >
+                    {deletingImagePageIds.has(page.id) ? "Deleting…" : "Delete original image"}
+                  </button>
+                )}
+              </div>
+
+              <div className="note-page-text">
+                {(page.status === "uploaded" || page.status === "transcribing") && (
+                  <p className="muted" role="status" aria-live="polite">
+                    <StatusBadge status={page.status} /> - this updates automatically, no need to
+                    refresh.
+                  </p>
+                )}
+
+                {page.status === "error" && (
+                  <p className="toast error" role="alert">
+                    <StatusBadge status={page.status} />: {page.errorMessage ?? "Unknown error."} The
+                    original image is intact.{" "}
+                    <button
+                      className="button"
+                      onClick={() => handleRetryPage(page.id)}
+                      disabled={isRetrying}
+                    >
+                      {isRetrying ? "Retrying..." : "Retry this page"}
+                    </button>
+                  </p>
+                )}
+
+                {page.status === "ready_for_review" && (
+                  <div className="transcription">
+                    {lines.map((line, i) =>
+                      line.type === "heading" ? (
+                        <h2 key={line.segments[0].id} className="segment-heading">
                           <textarea
-                            key={segment.id}
                             ref={autoGrow}
+                            className="segment-input"
                             rows={1}
-                            className={[
-                              "segment-input",
-                              segment.reviewRequired ? "flagged" : "",
-                              segment.crossedOut ? "crossed-out" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            title={titleParts.length ? titleParts.join(" — ") : undefined}
-                            value={segment.text}
+                            value={line.segments[0].text}
                             onChange={(e) => {
-                              updateSegment(page.id, segment.id, e.target.value);
+                              updateSegment(page.id, line.segments[0].id, e.target.value);
                               autoGrow(e.currentTarget);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") e.preventDefault();
                             }}
-                            onFocus={() => handleSegmentFocus(segment.id, page.id)}
-                            onBlur={handleSegmentBlur}
                           />
-                        );
-                      })}
-                    </p>
-                  )
+                        </h2>
+                      ) : (
+                        <p key={i} className="flow">
+                          {line.segments.map((segment) => {
+                            const titleParts = [
+                              segment.crossedOut
+                                ? "Crossed out in the original - kept here, delete if you don't want it"
+                                : null,
+                              segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
+                            ].filter(Boolean);
+                            return (
+                              <textarea
+                                key={segment.id}
+                                ref={autoGrow}
+                                rows={1}
+                                className={[
+                                  "segment-input",
+                                  segment.reviewRequired ? "flagged" : "",
+                                  segment.crossedOut ? "crossed-out" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                title={titleParts.length ? titleParts.join(" — ") : undefined}
+                                value={segment.text}
+                                onChange={(e) => {
+                                  updateSegment(page.id, segment.id, e.target.value);
+                                  autoGrow(e.currentTarget);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") e.preventDefault();
+                                }}
+                              />
+                            );
+                          })}
+                        </p>
+                      )
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         );
       })}

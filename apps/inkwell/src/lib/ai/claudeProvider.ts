@@ -2,7 +2,6 @@ import { readFile } from "fs/promises";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { prepareImageForVision } from "@/lib/imagePrep";
-import { computeLineBasedRegions } from "./regionFromLines";
 import type {
   AIProvider,
   GenerateTagsInput,
@@ -46,35 +45,8 @@ const SEGMENT_SCHEMA = {
     crossedOut: { type: "boolean" },
     emphasis: { type: "string", enum: ["none", "underline", "bold_or_heavy"] },
     confidence: { type: "number", description: "0-1 self-reported confidence" },
-    lineNumber: {
-      type: "integer",
-      description:
-        "Which physical line of handwriting this segment sits on, counting from 1 at the top " +
-        "of the page. Segments that are part of the same line of handwriting (e.g. \"the\" and " +
-        "\"wizard\" within a line reading \"Met with the wizard\") must share the same lineNumber. " +
-        "This only drives an approximate highlight region, not the transcription itself, so a " +
-        "best-effort count is fine - omit it only for a segment you genuinely can't place on any " +
-        "line (e.g. a stray mark).",
-    },
   },
   required: ["text", "structureType", "crossedOut", "emphasis", "confidence"],
-} as const;
-
-const CONTENT_AREA_SCHEMA = {
-  type: "object",
-  description:
-    "One whole-page judgment (not per segment) of roughly where the block of handwriting " +
-    "sits vertically on the page, as 0-1 fractions of the full image height from the top. " +
-    "Most pages are written on close to top-to-bottom, but when the writing only fills part " +
-    "of the page - a short note with blank space below, for example - report that real " +
-    "extent (e.g. top: 0.08, bottom: 0.3) rather than the whole page, so highlight regions " +
-    "for the last few lines don't end up placed in the blank area below the actual writing. " +
-    "Omit this field only if the writing genuinely fills the page top to bottom already.",
-  properties: {
-    top: { type: "number" },
-    bottom: { type: "number" },
-  },
-  required: ["top", "bottom"],
 } as const;
 
 const TRANSCRIBE_TOOL: Anthropic.Tool = {
@@ -86,16 +58,15 @@ const TRANSCRIBE_TOOL: Anthropic.Tool = {
     properties: {
       segments: { type: "array", items: SEGMENT_SCHEMA },
       pageLevelNotes: { type: "array", items: { type: "string" } },
-      contentArea: CONTENT_AREA_SCHEMA,
     },
     required: ["segments"],
   },
 };
 
 // Batched sibling of TRANSCRIBE_TOOL: one message carries several page
-// images, and this asks for one { segments, pageLevelNotes, contentArea }
-// entry per image, in image order - see transcribeBatch() below for the
-// rest of the batching design/rationale.
+// images, and this asks for one { segments, pageLevelNotes } entry per
+// image, in image order - see transcribeBatch() below for the rest of the
+// batching design/rationale.
 const TRANSCRIBE_BATCH_TOOL: Anthropic.Tool = {
   name: "record_transcription_batch",
   description:
@@ -114,7 +85,6 @@ const TRANSCRIBE_BATCH_TOOL: Anthropic.Tool = {
           properties: {
             segments: { type: "array", items: SEGMENT_SCHEMA },
             pageLevelNotes: { type: "array", items: { type: "string" } },
-            contentArea: CONTENT_AREA_SCHEMA,
           },
           required: ["segments"],
         },
@@ -191,14 +161,7 @@ const TRANSCRIPTION_QUALITY_INSTRUCTIONS =
   "best literal reading of the actual letter shapes, even if the result looks unusual or is not a " +
   "dictionary word, and drop your confidence score accordingly rather than silently substituting " +
   "something that reads more naturally. Confidence should reflect how certain you actually are that the " +
-  "letters on the page say what you transcribed, not how natural the resulting sentence sounds. " +
-  "For each segment, also report lineNumber - which physical line of handwriting it's on, " +
-  "counting from 1 at the top of the page (not which sentence or paragraph - an actual visual " +
-  "line as it appears on the page). Segments from the same line share the same number. Also " +
-  "report contentArea once for the whole page - roughly where the block of handwriting starts " +
-  "and ends vertically, which matters when the writing doesn't fill the whole page. Both are " +
-  "used only to draw an approximate highlight region, never the transcription itself, so your " +
-  "best estimate is fine - omit either one when you genuinely can't tell.";
+  "letters on the page say what you transcribed, not how natural the resulting sentence sounds.";
 
 function buildHandwritingHintText(hints: HandwritingContext): string {
   return hints.vocabularyHints.length || hints.correctionPatternHints.length
@@ -217,32 +180,23 @@ function buildHandwritingHintText(hints: HandwritingContext): string {
     : "No prior handwriting history for this user yet.";
 }
 
-type RawSegment = Omit<TranscribeOutput["segments"][number], "id" | "reviewRequired" | "sourceRegion"> & {
-  lineNumber?: number;
-};
+type RawSegment = Omit<TranscribeOutput["segments"][number], "id" | "reviewRequired">;
 
 // Shared by transcribe() and transcribeBatch(): turns one page's raw
-// tool-call output (segments still carrying provider-only lineNumber, plus
-// an optional contentArea) into the app's TranscribeOutput shape, computing
-// regions rather than trusting any raw coordinates - see regionFromLines.ts.
+// tool-call output into the app's TranscribeOutput shape.
 function finishPageOutput(
-  raw: { segments: RawSegment[]; pageLevelNotes?: string[]; contentArea?: { top: number; bottom: number } },
+  raw: { segments: RawSegment[]; pageLevelNotes?: string[] },
   confidenceThreshold: number
 ): TranscribeOutput {
-  const regions = computeLineBasedRegions(raw.segments, raw.contentArea);
   return {
     pageLevelNotes: raw.pageLevelNotes,
-    segments: raw.segments.map((s, i) => {
-      const { lineNumber: _lineNumber, ...rest } = s;
-      return {
-        ...rest,
-        id: crypto.randomUUID(),
-        // reviewRequired is computed at the app-configured threshold, not
-        // baked into the model call - see Phase 5 AI Contracts §1 notes.
-        reviewRequired: s.confidence < confidenceThreshold,
-        sourceRegion: regions[i],
-      };
-    }),
+    segments: raw.segments.map((s) => ({
+      ...s,
+      id: crypto.randomUUID(),
+      // reviewRequired is computed at the app-configured threshold, not
+      // baked into the model call - see Phase 5 AI Contracts §1 notes.
+      reviewRequired: s.confidence < confidenceThreshold,
+    })),
   };
 }
 
@@ -302,7 +256,6 @@ export class ClaudeAIProvider implements AIProvider {
     const raw = toolUse.input as {
       segments: RawSegment[];
       pageLevelNotes?: string[];
-      contentArea?: { top: number; bottom: number };
     };
 
     return finishPageOutput(raw, input.confidenceThreshold);
@@ -379,7 +332,6 @@ export class ClaudeAIProvider implements AIProvider {
       pages: Array<{
         segments: RawSegment[];
         pageLevelNotes?: string[];
-        contentArea?: { top: number; bottom: number };
       }>;
     };
 

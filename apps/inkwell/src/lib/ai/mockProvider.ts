@@ -115,20 +115,6 @@ function resolveSegment(
   };
 }
 
-// Fabricates a plausible-looking region per segment, evenly stacked down the
-// page in reading order. This mock never looks at the real uploaded image
-// (see file header), so these boxes don't correspond to actual handwriting -
-// they exist to exercise the review screen's highlight-on-select mechanism
-// (does the right box appear, does it move when you focus a different
-// segment) without needing a live model call. Width is loosely scaled by
-// text length purely so short and long segments don't render as identical
-// boxes; none of this should be read as a real localization heuristic.
-function mockRegion(index: number, total: number, textLength: number): TranscriptSegment["sourceRegion"] {
-  const top = 0.06 + (index / Math.max(total - 1, 1)) * 0.86;
-  const width = Math.min(0.85, Math.max(0.12, textLength * 0.018));
-  return { bbox: [0.08, top, width, 0.035] };
-}
-
 export class MockAIProvider implements AIProvider {
   // Shared by transcribe() and transcribeBatch() - the mock's per-page logic
   // never actually depends on being called individually vs. in a batch (it
@@ -138,7 +124,7 @@ export class MockAIProvider implements AIProvider {
     const pageIndex = hashToIndex(imagePath, DEMO_PAGES.length);
     const page = DEMO_PAGES[pageIndex];
 
-    const segments: TranscriptSegment[] = page.map((demo, index) => {
+    const segments: TranscriptSegment[] = page.map((demo) => {
       const { text: resolvedText, confidence } = resolveSegment(
         demo,
         handwritingContext.correctionPatternHints
@@ -151,7 +137,6 @@ export class MockAIProvider implements AIProvider {
         emphasis: demo.structureType === "heading" ? "bold_or_heavy" : "none",
         confidence,
         reviewRequired: confidence < confidenceThreshold,
-        sourceRegion: mockRegion(index, page.length, resolvedText.length),
       };
     });
 
