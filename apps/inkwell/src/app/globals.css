@@ -46,6 +46,7 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   --sidebar-width: 15rem;
+  --sidebar-collapsed-width: 4.5rem;
 }
 
 * {
@@ -120,9 +121,13 @@ a:hover {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  transition: width 0.15s ease;
 }
 
 .sidebar .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 800;
   font-size: 1.15rem;
   letter-spacing: -0.01em;
@@ -132,6 +137,9 @@ a:hover {
 }
 
 .sidebar a:not(.brand) {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   text-decoration: none;
   color: var(--muted);
   font-size: 0.92rem;
@@ -139,6 +147,7 @@ a:hover {
   padding: 0.55rem 0.75rem;
   border-radius: var(--radius);
   transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
 }
 
 .sidebar a:not(.brand):hover {
@@ -151,13 +160,74 @@ a:hover {
   color: var(--accent-strong);
 }
 
+.sidebar-icon {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Collapse toggle: sits at the bottom of the rail so it doesn't compete with
+   the nav links above it for attention, in either state. */
+.sidebar-toggle {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+/* Collapsed (icon-only rail): labels hide, links/brand center on the narrow
+   rail, and only the toggle's icon flips to point the other way - the icons
+   themselves stay put and clickable, per the chosen "icon-only rail" design
+   (not a fully-hidden sidebar). Desktop only - the sidebar becomes a
+   horizontal top bar below 720px regardless of this state, so collapsing
+   there would have no meaningful effect. */
+.sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+.sidebar.collapsed .brand {
+  justify-content: center;
+  padding: 0.4rem 0 1.1rem;
+}
+
+.sidebar.collapsed .brand-label,
+.sidebar.collapsed .sidebar-label {
+  display: none;
+}
+
+.sidebar.collapsed a:not(.brand) {
+  justify-content: center;
+  padding: 0.55rem;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  padding: 0.5rem;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     flex-direction: column;
     min-height: 0;
   }
 
-  .sidebar {
+  .sidebar,
+  .sidebar.collapsed {
     width: 100%;
     height: auto;
     position: static;
@@ -171,6 +241,15 @@ a:hover {
   .sidebar .brand {
     padding: 0.4rem 0.75rem;
   }
+
+  .sidebar.collapsed .brand-label,
+  .sidebar.collapsed .sidebar-label {
+    display: inline;
+  }
+
+  .sidebar-toggle {
+    display: none;
+  }
 }
 
 main {
@@ -178,8 +257,13 @@ main {
   min-width: 0;
 }
 
+/* Widened from the original 760px reading column so the review screen's
+   image-left/text-right rows have room to breathe - safe for every other
+   page too: Library is a simple block list and Home's hero self-constrains
+   with its own max-width (see .hero p below), so neither stretches
+   awkwardly at the wider column. */
 .main-inner {
-  max-width: 760px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 5rem;
 }
@@ -373,11 +457,10 @@ h2.segment-heading textarea.segment-input {
   white-space: pre-wrap;
 }
 
-/* Multi-page notes: every page's image lives in one shared carousel above
-   (see .note-image-carousel below); each page's transcription/status still
-   stacks as its own block down here, with a divider between pages once
-   there's more than one so it reads as "several pages of one note," not a
-   run-on wall of text. */
+/* Multi-page notes: each page gets its own image-left/text-right row (see
+   .note-page-columns below), stacked top to bottom, with a divider between
+   pages once there's more than one so it reads as "several pages of one
+   note," not a run-on wall of text. */
 .note-page-block {
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
@@ -428,10 +511,7 @@ h2.segment-heading textarea.segment-input {
 .note-image-wrap {
   position: relative;
   display: block;
-  margin-bottom: 1.5rem;
-  /* Defensive: a region is now computed geometry (regionFromLines.ts), not
-     raw model output, so it should never land outside [0,1] - but this
-     guarantees a stray value can never visually spill past the photo. */
+  margin-bottom: 0.75rem;
   overflow: hidden;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
@@ -443,71 +523,37 @@ h2.segment-heading textarea.segment-input {
   border-radius: var(--radius-lg);
 }
 
-/* Image-region highlighting (AC-6 / FR-5.5): position/size come straight
-   from a segment's 0-1 fractional sourceRegion as percentages, since the
-   wrapper's box always matches the rendered image's box exactly. */
-.region-highlight {
-  position: absolute;
-  border: 2px solid var(--dusk-blue);
-  background: rgba(65, 90, 119, 0.18);
-  border-radius: 5px;
-  pointer-events: none;
-  transition: left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease;
-}
-
-/* Multi-page notes: one shared image carousel above every page's
-   transcription (instead of each page's image sitting next to its own
-   text) - see ReviewEditor.tsx. For a single-page note this renders with no
-   controls/thumbs at all, so it looks exactly like the old plain image. */
-.note-image-carousel {
-  margin-bottom: 2rem;
-}
-
-.carousel-controls {
+/* Per-page image-left/text-right row (replaces the old shared image
+   carousel above a stacked transcription list): each page's photo sits in a
+   fixed-width column beside its own transcription, so review no longer
+   requires scrolling between a shared image and far-away text. Stacks to a
+   single column - image on top - at phone width. */
+.note-page-columns {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin: 0.85rem 0;
+  align-items: flex-start;
+  gap: 1.75rem;
 }
 
-.carousel-controls .muted {
-  min-width: 8ch;
-  text-align: center;
+.note-page-image {
+  flex: 0 0 22rem;
+  max-width: 40%;
 }
 
-.carousel-thumbs {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding: 0.25rem 0.1rem;
+.note-page-text {
+  flex: 1;
+  min-width: 0;
 }
 
-.carousel-thumb {
-  flex: 0 0 auto;
-  padding: 2px;
-  border: 2px solid transparent;
-  border-radius: var(--radius);
-  background: none;
-  cursor: pointer;
-  line-height: 0;
-  transition: border-color 0.15s ease;
-}
+@media (max-width: 720px) {
+  .note-page-columns {
+    flex-direction: column;
+  }
 
-.carousel-thumb:hover {
-  border-color: var(--border-strong);
-}
-
-.carousel-thumb img {
-  display: block;
-  width: 4.5rem;
-  height: 4.5rem;
-  object-fit: cover;
-  border-radius: calc(var(--radius) - 4px);
-}
-
-.carousel-thumb.active {
-  border-color: var(--dusk-blue);
+  .note-page-image {
+    flex: 0 0 auto;
+    max-width: 100%;
+    width: 100%;
+  }
 }
 
 .note-card {
@@ -701,9 +747,9 @@ h2.segment-heading textarea.segment-input {
 }
 
 /* Processing visibility: one small colored-dot-plus-label pattern reused in
-   the Library grid, the review screen's per-page blocks, and the carousel
-   thumbnails, so "what's happening with this note/page" always looks the
-   same wherever it shows up (03-ux-screens.md's cross-screen note). */
+   the Library grid and the review screen's per-page blocks, so "what's
+   happening with this note/page" always looks the same wherever it shows up
+   (03-ux-screens.md's cross-screen note). */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -833,7 +879,7 @@ h2.segment-heading textarea.segment-input {
 
 /* Delete-original-image placeholder (03-ux-screens.md §6): an honest empty
    state in place of the photo, sized like the image it replaces so the
-   carousel/layout doesn't jump. */
+   layout doesn't jump. */
 .image-removed-placeholder {
   display: flex;
   align-items: center;
@@ -848,29 +894,6 @@ h2.segment-heading textarea.segment-input {
 
 .delete-image-button {
   margin-bottom: 0.75rem;
-}
-
-.carousel-thumb {
-  position: relative;
-}
-
-.carousel-thumb-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 4.5rem;
-  height: 4.5rem;
-  border-radius: calc(var(--radius) - 4px);
-  background: var(--surface-alt);
-  color: var(--muted);
-  font-size: 1.1rem;
-}
-
-.carousel-thumb-dot {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  box-shadow: 0 0 0 2px var(--surface);
 }
 
 /* Trash: same folder-pill look, dashed to read as "a different kind of
