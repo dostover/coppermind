@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { extractErrorMessage } from "@/lib/fetchError";
 
 interface Props {
   configured: boolean;
@@ -24,7 +25,7 @@ export function GoogleConnectionControl({ configured, connected, errorFromCallba
     setError(null);
     try {
       const res = await fetch("/api/integrations/google/disconnect", { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Could not disconnect.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Could not disconnect."));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not disconnect.");

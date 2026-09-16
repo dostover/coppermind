@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo } from "@/lib/db";
+import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo, foldersRepo } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import {
   recordHandwritingCorrection,
   updateHandwritingProfile,
 } from "@/lib/handwritingProfile";
-import type { StructureType, TranscriptSegment } from "@/lib/ai/types";
+import { isStructureType, type StructureType, type TranscriptSegment } from "@/lib/ai/types";
 
 export async function GET(
   _req: NextRequest,
@@ -43,6 +43,83 @@ interface PatchBody {
   tags?: string[];
 }
 
+// Hand-rolled validation rather than a schema library (none is a dependency
+// here) - strict about shape (wrong types/missing required fields => 400,
+// nothing is silently coerced) but permissive about which optional fields
+// are present, matching PatchBody's own comment about older clients. This
+// exists because the route used to trust the parsed JSON's shape completely:
+// a non-array `segments` (e.g. a string - `for...of` happily iterates its
+// characters) silently replaced a page's whole transcription with garbage,
+// and a missing `pages` or a non-string `text` threw an uncaught exception
+// (bare 500, no error body) instead of a clean 400. Every check below
+// verifies the thing that a real bug report showed being trusted blindly.
+// Neither cap is enforced by the DB (tags.name/notes.title are plain TEXT
+// columns, unbounded), so nothing stopped a pathological client from saving
+// a many-kilobyte "tag" or note title. Generous enough for any real use.
+const MAX_TAG_NAME_LENGTH = 50;
+const MAX_TITLE_LENGTH = 300;
+
+function validatePatchBody(raw: unknown): { error: string } | { body: PatchBody } {
+  if (typeof raw !== "object" || raw === null) {
+    return { error: "Request body must be a JSON object." };
+  }
+  const body = raw as Record<string, unknown>;
+
+  if (body.title !== undefined && body.title !== null && typeof body.title !== "string") {
+    return { error: "title must be a string or null." };
+  }
+
+  if (!Array.isArray(body.pages)) {
+    return { error: "pages must be an array." };
+  }
+  for (const pageBody of body.pages) {
+    if (typeof pageBody !== "object" || pageBody === null) {
+      return { error: "Each entry in pages must be an object." };
+    }
+    const p = pageBody as Record<string, unknown>;
+    if (typeof p.pageId !== "string") {
+      return { error: "Each page entry needs a string pageId." };
+    }
+    if (!Array.isArray(p.segments)) {
+      return { error: `pages[pageId=${p.pageId}].segments must be an array.` };
+    }
+    for (const seg of p.segments) {
+      if (typeof seg !== "object" || seg === null) {
+        return { error: "Each segment must be an object." };
+      }
+      const s = seg as Record<string, unknown>;
+      if (typeof s.id !== "string" || typeof s.text !== "string") {
+        return { error: "Each segment needs a string id and a string text." };
+      }
+      if (s.structureType !== undefined && !isStructureType(s.structureType)) {
+        return { error: `Invalid structureType: ${String(s.structureType)}.` };
+      }
+      if (s.startsNewBlock !== undefined && typeof s.startsNewBlock !== "boolean") {
+        return { error: "startsNewBlock must be a boolean." };
+      }
+    }
+  }
+
+  if (body.folderId !== undefined && body.folderId !== null && typeof body.folderId !== "string") {
+    return { error: "folderId must be a string or null." };
+  }
+
+  if (body.tags !== undefined) {
+    if (!Array.isArray(body.tags) || body.tags.some((t) => typeof t !== "string")) {
+      return { error: "tags must be an array of strings." };
+    }
+    if (body.tags.some((t) => t.trim().length > MAX_TAG_NAME_LENGTH)) {
+      return { error: `Tag names must be ${MAX_TAG_NAME_LENGTH} characters or fewer.` };
+    }
+  }
+
+  if (typeof body.title === "string" && body.title.trim().length > MAX_TITLE_LENGTH) {
+    return { error: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.` };
+  }
+
+  return { body: body as unknown as PatchBody };
+}
+
 // Save flow (FR-5.4/FR-5.6/FR-6.1): saves even if some segments are still
 // flagged (partial review is allowed), persists the corrected transcription
 // as authoritative without discarding the original AI output, and diffs
@@ -58,8 +135,38 @@ export async function PATCH(
   const { id } = await params;
   const note = notesRepo.getById(id);
   if (!note) return NextResponse.json({ error: "Note not found." }, { status: 404 });
+  // A stale editor tab opened before this note was moved to Trash could
+  // otherwise still write to it - the UI itself blocks this (a trashed note
+  // renders the restore/purge card, never ReviewEditor - see
+  // app/notes/[id]/page.tsx), but the API had no equivalent guard.
+  if (note.deleted_at) {
+    return NextResponse.json({ error: "This note is in Trash - restore it before editing." }, { status: 409 });
+  }
 
-  const body = (await req.json()) as PatchBody;
+  let rawBody: unknown;
+  try {
+    rawBody = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+  }
+  const validated = validatePatchBody(rawBody);
+  if ("error" in validated) {
+    return NextResponse.json({ error: validated.error }, { status: 400 });
+  }
+  const body = validated.body;
+
+  // folderId is validated against the folders table up front, before any
+  // write happens below - setFolder's UPDATE would otherwise throw a raw
+  // FOREIGN KEY constraint violation (folders.id, PRAGMA foreign_keys=ON)
+  // for a stale/deleted folder id, which surfaced as a bare 500 *after*
+  // title/segment changes earlier in this same handler had already been
+  // written - a partial save the client had no way to detect (the 500's
+  // empty body itself failed to parse as JSON client-side). Checking this
+  // before any repo call keeps the save all-or-nothing.
+  if (body.folderId !== undefined && body.folderId !== null && !foldersRepo.getById(body.folderId)) {
+    return NextResponse.json({ error: "That folder no longer exists." }, { status: 400 });
+  }
+
   const pagesById = new Map(note.pages.map((p) => [p.id, p]));
   const provider = getAIProvider();
   const now = new Date().toISOString();
@@ -69,6 +176,13 @@ export async function PATCH(
   for (const pageBody of body.pages) {
     const page = pagesById.get(pageBody.pageId);
     if (!page) continue; // ignore unknown page ids rather than failing the whole save
+    // A page whose transcription has been deleted (see delete-transcription/
+    // route.ts) has both segments_ai and segments_current wiped to '[]' -
+    // any segment ids a client sends for it are necessarily stale (from
+    // before the deletion, e.g. a save request already in flight, or a
+    // second tab that never reloaded). Processing them would silently
+    // resurrect the "deleted" transcription instead of leaving it gone.
+    if (page.transcriptionRemoved) continue;
 
     const aiById = new Map(page.segmentsAi.map((s) => [s.id, s]));
     // Last-saved state, so re-opening and re-saving an already-reviewed note

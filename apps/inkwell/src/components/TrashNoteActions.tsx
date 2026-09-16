@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { extractErrorMessage } from "@/lib/fetchError";
 
 // Trash's two actions (03-ux-screens.md's soft-delete grace period): put a
 // note back, or actually get rid of it for good. Deliberately not wrapped in
@@ -17,7 +18,7 @@ export function TrashNoteActions({ noteId }: { noteId: string }) {
     setError(null);
     try {
       const res = await fetch(`/api/notes/${noteId}/restore`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Restore failed.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Restore failed."));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Restore failed.");
@@ -35,7 +36,7 @@ export function TrashNoteActions({ noteId }: { noteId: string }) {
     setError(null);
     try {
       const res = await fetch(`/api/notes/${noteId}/purge`, { method: "DELETE" });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Delete failed.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Delete failed."));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed.");

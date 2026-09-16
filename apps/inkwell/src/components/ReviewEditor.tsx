@@ -6,6 +6,7 @@ import { GRID_ROWS } from "@/lib/ai/gridConstants";
 import type { SourceRegion, StructureType, TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
+import { extractErrorMessage } from "@/lib/fetchError";
 
 // How many extra lines of context to show above and below the focused line
 // in the pop-out zoom's close-up (see verticalCrop() and popoutVisible
@@ -580,7 +581,7 @@ export function ReviewEditor({
           tags: tags.map((t) => t.name),
         }),
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Save failed.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Save failed."));
       setSavedMessage(
         changedCount > 0
           ? `Saved - ${changedCount} correction${changedCount === 1 ? "" : "s"} recorded.`
@@ -603,7 +604,7 @@ export function ReviewEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pageId }),
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Retry failed.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Retry failed."));
       router.refresh();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Retry failed.");
@@ -631,7 +632,7 @@ export function ReviewEditor({
       const res = await fetch(`/api/notes/${noteId}/pages/${pageId}/delete-image`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Couldn't delete the image.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Couldn't delete the image."));
       setPageStates((prev) => prev.map((p) => (p.id === pageId ? { ...p, imageRemoved: true } : p)));
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Couldn't delete the image.");
@@ -663,7 +664,7 @@ export function ReviewEditor({
       const res = await fetch(`/api/notes/${noteId}/pages/${pageId}/delete-transcription`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Couldn't delete the transcription.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Couldn't delete the transcription."));
       setPageStates((prev) =>
         prev.map((p) => (p.id === pageId ? { ...p, transcriptionRemoved: true, segments: [] } : p))
       );
@@ -688,8 +689,8 @@ export function ReviewEditor({
     setGoogleExportError(null);
     try {
       const res = await fetch(`/api/notes/${noteId}/export-to-docs`, { method: "POST" });
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Export failed."));
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Export failed.");
       setGoogleDocUrl(data.url);
       window.open(data.url, "_blank", "noopener,noreferrer");
     } catch (err) {
@@ -707,7 +708,7 @@ export function ReviewEditor({
     setErrorMessage(null);
     try {
       const res = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Delete failed.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Delete failed."));
       router.push("/library");
       router.refresh();
     } catch (err) {

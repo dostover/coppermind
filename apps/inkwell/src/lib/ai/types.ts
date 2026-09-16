@@ -28,6 +28,24 @@ export type StructureType =
   | "table_cell"
   | "line";
 
+// Runtime list mirroring the union above, one source of truth for anything
+// that needs to check a value against it at runtime (currently: the PATCH
+// handler's input validation in api/notes/[id]/route.ts, which can't trust
+// a client-supplied structureType string is actually one of these).
+export const STRUCTURE_TYPES: readonly StructureType[] = [
+  "paragraph",
+  "heading",
+  "list_item",
+  "numbered_item",
+  "dialogue",
+  "table_cell",
+  "line",
+];
+
+export function isStructureType(value: unknown): value is StructureType {
+  return typeof value === "string" && (STRUCTURE_TYPES as readonly string[]).includes(value);
+}
+
 // Where a segment lives on the source page image - attempt #4 at this
 // feature (see gridOverlay.ts for the full history/rationale). Derived from
 // the grid cell(s) the model reports touching, not from raw coordinates.
