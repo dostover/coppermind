@@ -1025,6 +1025,10 @@ h2.segment-heading textarea.segment-input {
   margin-bottom: 0.75rem;
 }
 
+.delete-transcription-button {
+  margin-top: 1rem;
+}
+
 /* Trash: same folder-pill look, dashed to read as "a different kind of
    place" rather than another folder, and pushed to the end of the bar. */
 .trash-pill {

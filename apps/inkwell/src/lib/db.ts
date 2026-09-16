@@ -229,6 +229,18 @@ if (!pageColumns.some((c) => c.name === "image_removed")) {
   db.exec(`ALTER TABLE note_pages ADD COLUMN image_removed INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Delete-transcription-only, the mirror image of delete-original-image
+// above: keep the photo, discard the transcribed text. Unlike
+// image_removed (which just flags a file already unlinked from disk),
+// there's no separate "real" copy to remove out of band, so
+// notePagesRepo.setTranscriptionRemoved clears segments_ai/segments_current
+// to '[]' itself (see below) - transcription_removed here only records that
+// this happened, so the review screen can render a placeholder instead of
+// an editor with nothing in it.
+if (!pageColumns.some((c) => c.name === "transcription_removed")) {
+  db.exec(`ALTER TABLE note_pages ADD COLUMN transcription_removed INTEGER NOT NULL DEFAULT 0`);
+}
+
 // One-time backfill: any note that predates note_pages (created when a note
 // was still one row = one page) gets a single page-1 row built from its own
 // legacy image_path/segments_ai/segments_current/status/error_message
@@ -310,14 +322,20 @@ export interface NotePageRow {
   segments_ai: string;
   segments_current: string;
   image_removed: number;
+  transcription_removed: number;
   created_at: string;
   updated_at: string;
 }
 
-export interface NotePage extends Omit<NotePageRow, "segments_ai" | "segments_current" | "image_removed"> {
+export interface NotePage
+  extends Omit<
+    NotePageRow,
+    "segments_ai" | "segments_current" | "image_removed" | "transcription_removed"
+  > {
   segmentsAi: TranscriptSegment[];
   segmentsCurrent: TranscriptSegment[];
   imageRemoved: boolean;
+  transcriptionRemoved: boolean;
 }
 
 // A note's own segmentsAi/segmentsCurrent are the concatenation of all its
@@ -359,6 +377,7 @@ function rowToPage(row: NotePageRow): NotePage {
     segmentsAi: applyReviewRequired(JSON.parse(row.segments_ai)),
     segmentsCurrent: applyReviewRequired(JSON.parse(row.segments_current)),
     imageRemoved: Boolean(row.image_removed),
+    transcriptionRemoved: Boolean(row.transcription_removed),
   };
 }
 
@@ -635,6 +654,27 @@ export const notePagesRepo = {
       updatedAt,
       id
     );
+  },
+
+  // "Delete transcription only" - the mirror of setImageRemoved above, kept
+  // in the same "flag + leave everything else alone" shape: status is
+  // untouched (still 'ready_for_review', same as an image-removed page), so
+  // this never interacts with the note-wide aggregate-status/polling rules.
+  // Unlike the image (a file the caller has already unlinked before calling
+  // setImageRemoved), the transcription's only copy is these two columns,
+  // so clearing them to '[]' here *is* the deletion - both segments_ai (the
+  // immutable AI output) and segments_current (the edited version) are
+  // wiped, not just segments_current, so no trace of the transcribed text
+  // survives. A later Save is safe regardless: PATCH /api/notes/[id] maps
+  // each edited segment against a fresh read of segments_ai and silently
+  // drops any id it can't find there (see that route), so a stale client
+  // still holding the old text in memory can't resurrect it by saving.
+  setTranscriptionRemoved(id: string, updatedAt: string): void {
+    db.prepare(
+      `UPDATE note_pages
+       SET transcription_removed = 1, segments_ai = '[]', segments_current = '[]', updated_at = ?
+       WHERE id = ?`
+    ).run(updatedAt, id);
   },
 };
 

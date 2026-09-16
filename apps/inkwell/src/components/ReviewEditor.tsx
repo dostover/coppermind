@@ -73,6 +73,7 @@ interface PageState {
   errorMessage: string | null;
   segments: TranscriptSegment[];
   imageRemoved: boolean;
+  transcriptionRemoved: boolean;
 }
 
 function toPageState(p: NotePage): PageState {
@@ -86,6 +87,7 @@ function toPageState(p: NotePage): PageState {
     // render no editor at all, so an empty array here is never shown.
     segments: p.status === "ready_for_review" ? p.segmentsCurrent : [],
     imageRemoved: p.imageRemoved,
+    transcriptionRemoved: p.transcriptionRemoved,
   };
 }
 
@@ -114,6 +116,9 @@ export function ReviewEditor({
   const [saving, setSaving] = useState(false);
   const [retryingPageIds, setRetryingPageIds] = useState<Set<string>>(new Set());
   const [deletingImagePageIds, setDeletingImagePageIds] = useState<Set<string>>(new Set());
+  const [deletingTranscriptionPageIds, setDeletingTranscriptionPageIds] = useState<Set<string>>(
+    new Set()
+  );
   const [deleting, setDeleting] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -401,6 +406,40 @@ export function ReviewEditor({
     }
   }
 
+  // "Delete transcription only" - the mirror of handleDeleteImage above:
+  // keeps the photo and just discards the transcribed text, irreversibly.
+  // Clears segments locally too (not just transcriptionRemoved), so an
+  // already-open textarea for this page doesn't keep showing text that's
+  // gone server-side - and so a later Save has nothing stale to send for
+  // this page (the server independently guards against this anyway, see
+  // delete-transcription/route.ts's doc comment).
+  async function handleDeleteTranscription(pageId: string) {
+    const ok = window.confirm(
+      "Delete this page's transcription? The photo stays, but the transcribed text can't be recovered afterward."
+    );
+    if (!ok) return;
+
+    setDeletingTranscriptionPageIds((prev) => new Set(prev).add(pageId));
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/pages/${pageId}/delete-transcription`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Couldn't delete the transcription.");
+      setPageStates((prev) =>
+        prev.map((p) => (p.id === pageId ? { ...p, transcriptionRemoved: true, segments: [] } : p))
+      );
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Couldn't delete the transcription.");
+    } finally {
+      setDeletingTranscriptionPageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(pageId);
+        return next;
+      });
+    }
+  }
+
   // Exports (or re-exports, updating the same Doc in place - see
   // docsExport.ts) the note as it's currently saved on the server. Uses
   // last-saved content, not in-progress unsaved edits, same as how Save
@@ -585,7 +624,19 @@ export function ReviewEditor({
                   </p>
                 )}
 
-                {page.status === "ready_for_review" && (
+                {page.status === "ready_for_review" && page.transcriptionRemoved && (
+                  // Transcription removed via "Delete transcription" - the
+                  // photo alongside is unaffected, this just replaces the
+                  // segment editor with an honest placeholder, same pattern
+                  // as the image-removed placeholder above.
+                  <div className="image-removed-placeholder">
+                    <p className="muted" style={{ margin: 0 }}>
+                      Transcription deleted. The original photo is unaffected.
+                    </p>
+                  </div>
+                )}
+
+                {page.status === "ready_for_review" && !page.transcriptionRemoved && (
                   <div className="transcription">
                     {lines.map((line, i) =>
                       line.type === "heading" ? (
@@ -647,6 +698,17 @@ export function ReviewEditor({
                       )
                     )}
                   </div>
+                )}
+
+                {page.status === "ready_for_review" && !page.transcriptionRemoved && (
+                  <button
+                    type="button"
+                    className="button secondary delete-transcription-button"
+                    onClick={() => handleDeleteTranscription(page.id)}
+                    disabled={deletingTranscriptionPageIds.has(page.id)}
+                  >
+                    {deletingTranscriptionPageIds.has(page.id) ? "Deleting…" : "Delete transcription"}
+                  </button>
                 )}
               </div>
             </div>
