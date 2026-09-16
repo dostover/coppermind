@@ -11,8 +11,21 @@ import { StatusBadge } from "@/components/StatusBadge";
 // (2026-09-16 follow-up to the first zoom-on-focus pass: cropping tightly
 // around just the segment's own width cut words off at the edges, and for a
 // long segment - a whole sentence, common since PR #25 - the "crop" was
-// barely smaller than the full photo, so it barely zoomed at all). Tune this
-// if real usage wants more or fewer lines of surrounding context.
+// barely smaller than the full photo, so it barely zoomed at all).
+//
+// NOTE, same day: a same-day follow-up briefly lowered this to 1 on the
+// theory that showing fewer lines in the same box would make each line
+// look bigger. That was wrong - worked through the actual math below and
+// reverted back to 2. This value only decides how much vertical context is
+// visible in the crop window; it has no effect on magnification at all.
+// The image is always rendered at width: 100% of .note-page-image, so the
+// scale factor from source pixels to screen pixels is exactly
+// (column width in px) / (photo's natural width in px), full stop - the
+// vertical crop (implemented via aspect-ratio + overflow: hidden on
+// .note-image-wrap, see the JSX below) only picks which already-scaled
+// band of the image is visible, it never rescales anything. So the real
+// zoom-more lever is the column's rendered width, not this constant - see
+// .note-page-image.zoomed's breakout width in globals.css.
 const ZOOM_CONTEXT_LINES = 2;
 
 // Turns a segment's already-computed source region (see gridOverlay.ts's

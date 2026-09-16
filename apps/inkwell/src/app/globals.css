@@ -255,6 +255,14 @@ a:hover {
 main {
   flex: 1;
   min-width: 0;
+  /* Query container for zoom-on-focus's breakout/stacking math below (see
+     .note-page-columns:has(.note-page-image.zoomed)) - that math needs
+     main's own real content width (viewport minus the sidebar), not the
+     raw viewport, since .main-inner's 1080px cap only ever loses room to
+     the sidebar. container-type: inline-size exposes that as cqw units to
+     descendants, and it stays correct automatically whether the sidebar
+     is expanded or collapsed - no need to track --sidebar-width by hand. */
+  container-type: inline-size;
 }
 
 /* Widened from the original 760px reading column so the review screen's
@@ -537,12 +545,12 @@ h2.segment-heading textarea.segment-input {
    needs position: relative + overflow: hidden (already set above). Its
    top/height are re-derived from the current zoom window (see
    ReviewEditor.tsx), so this box stays pinned to the same handwriting
-   whether or not the photo is currently zoomed. */
+   whether or not the photo is currently zoomed. Outline only, no fill
+   (2026-09-16 feedback: a solid tinted fill sat on top of the handwriting
+   and made it harder to read exactly where the box was meant to help). */
 .region-highlight {
   position: absolute;
   border: 2px solid var(--accent-strong);
-  background: var(--accent-tint);
-  opacity: 0.45;
   border-radius: 3px;
   pointer-events: none;
   transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
@@ -560,6 +568,12 @@ h2.segment-heading textarea.segment-input {
   display: flex;
   align-items: flex-start;
   gap: 1.75rem;
+  /* Declared here (not just on the :has() breakout rule below) so the
+     margin change animates symmetrically on the way back out too, the same
+     way .note-page-image's own flex-basis/max-width transition already
+     does - a transition only declared on the "zoomed" side of a toggle
+     animates going in but snaps instantly going out. */
+  transition: margin 0.2s ease;
 }
 
 .note-page-image {
@@ -574,10 +588,82 @@ h2.segment-heading textarea.segment-input {
    always width: 100% of its column). A wider column plus verticalCrop()'s
    shorter window is what actually magnifies the handwriting: same image,
    rendered across more on-screen pixels, no distortion since the <img>
-   itself never changes its own width/height rules. */
+   itself never changes its own width/height rules.
+
+   2026-09-16, later same day ("I think I want it even more"): tried
+   widening this further within the fixed 1080px reading column (60rem
+   flex-basis / calc(100% - 13rem - 1.75rem) max-width), but that turned
+   out to be a false lever - .main-inner's cap means .note-page-columns's
+   own content width was already ~1032px regardless, so this only
+   reshuffled the *same* budget between image and text; measured against
+   the previously-shipped 50rem/78% version it was flat-to-worse. Real
+   "more zoom" needs the row to actually get wider, which is what the
+   breakout below (on .note-page-columns) now does - flex-basis here is
+   just an initial ask, and max-width is now a plain fraction of that
+   wider row rather than a hand-tuned budget split. */
 .note-page-image.zoomed {
-  flex-basis: 50rem;
-  max-width: 78%;
+  flex-basis: 60rem;
+  max-width: calc(100% - 13rem - 1.75rem);
+}
+
+/* Lets the zoomed row itself grow past .main-inner's normal 1080px
+   reading-width cap, instead of fighting over a fixed budget between the
+   image and text columns within it (see .note-page-image.zoomed above for
+   why that approach plateaued). Scoped to main's own rendered width via
+   cqw (see `main`'s container-type above), not the viewport, since the
+   sidebar - not the reading-width cap - is the only thing standing between
+   .main-inner and main's actual edge.
+
+   --zoom-extra is how far the row is allowed to spill past .main-inner on
+   each side: clamped above at 200px so a very wide external monitor
+   doesn't stretch it absurdly far, and clamped below at 0px via max() so a
+   window with no real slack (main no wider than .main-inner's own cap)
+   doesn't produce a negative margin and pull the row the *other* way.
+   Between those, it's however much slack main actually has beyond
+   .main-inner's 1080px, minus a 24px gutter so the row never touches
+   main's own edge. Because this is derived from actual available space
+   rather than a fixed guess, it degrades gracefully instead of needing a
+   width-specific breakpoint: ~0 extra on a normal laptop window (no visual
+   change from a plain reading-width row), growing smoothly as the window
+   gets wider. */
+.note-page-columns:has(.note-page-image.zoomed) {
+  --zoom-extra: max(0px, min(200px, (100cqw - 1080px) / 2 - 24px));
+  margin-left: calc(-1 * var(--zoom-extra));
+  margin-right: calc(-1 * var(--zoom-extra));
+}
+
+/* Past a certain point, even the widened row above still has to split its
+   width between the image and the text (see .note-page-text's floor
+   below) - on a genuinely wide monitor, stacking the image above the text
+   instead (each then gets the row's *full* width, one at a time, rather
+   than sharing it) gives a meaningfully bigger image than the split ever
+   could. Gated on main's own width, not the raw viewport, for the same
+   sidebar-accounting reason as the breakout above; 1440px is comfortably
+   past a maximized laptop window (main is viewport-minus-sidebar, so this
+   needs a genuinely large or ultra-wide display, or a very wide split
+   window, to trigger) - ordinary usage keeps the smooth side-by-side
+   layout with no reflow, and only a window with real room to spare pays
+   the "layout reflows on focus change" cost from switching to this. */
+@container (min-width: 1440px) {
+  .note-page-columns:has(.note-page-image.zoomed) {
+    flex-direction: column;
+  }
+
+  .note-page-columns:has(.note-page-image.zoomed) .note-page-image.zoomed {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .note-page-columns:has(.note-page-image.zoomed) .note-page-text {
+    width: 100%;
+    /* Unlike the side-by-side layout, stacked text isn't sharing the row
+       with the image, so it's free to run the row's full (wide) width -
+       capped here for its own sake, so a paragraph of transcription text
+       doesn't stretch into an uncomfortably long line just because the
+       window happened to be wide. */
+    max-width: 42rem;
+  }
 }
 
 /* The image also opens at full native resolution in a new tab on click
@@ -590,7 +676,17 @@ h2.segment-heading textarea.segment-input {
 
 .note-page-text {
   flex: 1;
-  min-width: 0;
+  /* A real floor, not 0: 0 is what let the zoomed image column (above) push
+     this down to an unreadable sliver. Must match the 13rem reserved by
+     .note-page-image.zoomed's max-width calc() above - these two numbers
+     are two halves of the same budget, so they have to move together.
+     13rem still wraps comfortably at normal reading widths, and the 720px
+     breakpoint below drops this whole row to a single stacked column
+     anyway, where this stops applying in practice (the column is 100%
+     width there). Also stops applying, deliberately, once the @container
+     rule above switches to the stacked layout on a wide window - that
+     block sets its own width instead. */
+  min-width: 13rem;
 }
 
 @media (max-width: 720px) {
