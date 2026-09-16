@@ -1149,6 +1149,72 @@ h2.segment-heading textarea.segment-input {
   }
 }
 
+/* Processing progress bars: a determinate one for "N of M pages processed"
+   (pages-progress, shown above the page list for a multi-page note) and an
+   indeterminate one per page still uploaded/transcribing (page-processing) -
+   see ReviewEditor.tsx for why the per-page one can't honestly show a real
+   percentage or ETA. Both share the same track/fill look so they read as one
+   pattern rather than two different widgets. */
+.pages-progress {
+  margin: 0 0 1.25rem;
+}
+
+.pages-progress-label {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+}
+
+.page-processing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.page-processing-caption {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.progress-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dusk-blue);
+  transition: width 0.4s ease;
+}
+
+.progress-fill.indeterminate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  animation: progressSweep 1.4s ease-in-out infinite;
+}
+
+@keyframes progressSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill.indeterminate {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+
 .note-card-meta {
   display: flex;
   align-items: center;
