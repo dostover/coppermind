@@ -653,12 +653,18 @@ export function ReviewEditor({
       })}
 
       {popoutVisible && popoutPage && popoutRegion && (
-        // Clicking anywhere in here - the dimmed backdrop, the close-up
-        // image itself, or the explicit close button - dismisses the
-        // pop-out (see popoutDismissed above); nothing inside needs its own
-        // stopPropagation guard since every one of them is meant to close
-        // it the same way.
-        <div className="zoom-popout-backdrop" onClick={() => setPopoutDismissed(true)}>
+        // pointer-events: none on this backdrop and the .zoom-popout box
+        // below (see globals.css) - only the close button opts back in -
+        // so this purely-visual overlay never blocks a click meant for the
+        // real page underneath (2026-09-16 fix: it used to catch every
+        // click while open, including one landing on the very segment
+        // textarea its close-up was showing, with no way to click into the
+        // text to edit it). Dismissing otherwise happens via the close
+        // button, Escape (see the effect above), or simply the normal
+        // focus/blur flow: clicking a different segment reassigns this to
+        // that segment, and clicking anything non-focusable blurs the
+        // current one, which closes this the same way it always has.
+        <div className="zoom-popout-backdrop">
           <div className="zoom-popout">
             <button type="button" className="zoom-popout-close" aria-label="Close close-up" onClick={() => setPopoutDismissed(true)}>
               ×
