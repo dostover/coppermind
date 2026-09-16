@@ -37,8 +37,11 @@
 import sharp from "sharp";
 import type { SourceRegion } from "./types";
 
-export const GRID_COLS = 6;
-export const GRID_ROWS = 12;
+// Re-exported from gridConstants.ts (not defined here) so a client component
+// can import just these two numbers without pulling in this file's `sharp`
+// dependency - see that file's comment for why.
+export { GRID_COLS, GRID_ROWS } from "./gridConstants";
+import { GRID_COLS, GRID_ROWS } from "./gridConstants";
 
 const GRID_COLOR = "#ff2fd0"; // bright magenta - visually distinct from ink
 

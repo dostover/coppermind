@@ -515,27 +515,29 @@ h2.segment-heading textarea.segment-input {
   overflow: hidden;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
+  /* Zoom-on-focus (see ReviewEditor's verticalCrop()): focusing a segment
+     with a known source region sets an explicit aspect-ratio here, shorter
+     than the photo's own, so only a handful of lines' worth of height is
+     visible; .note-image below is shifted up/down (never sideways - a line
+     is never cropped horizontally) so the focused line lands inside that
+     shorter window, and overflow: hidden (above) clips the rest. */
+  transition: aspect-ratio 0.2s ease;
 }
 
 .note-image {
   display: block;
   width: 100%;
   border-radius: var(--radius-lg);
-  /* Zoom-on-focus (see ReviewEditor's cropTransform()): focusing a segment
-     with a known source region scales this image up around that region's
-     center, and .note-image-wrap's overflow: hidden clips the rest - a plain
-     CSS transform rather than swapping images or cropping server-side, so
-     it's free of any new request/asset and animates smoothly. */
-  transition: transform 0.18s ease, transform-origin 0.18s ease;
+  transition: transform 0.2s ease;
 }
 
 /* Highlights the source handwriting for whichever segment textarea currently
    has focus (see ReviewEditor's activeRegion / gridOverlay.ts's SourceRegion).
    Positioned as a fraction of .note-image-wrap, which is why that wrapper
-   needs position: relative + overflow: hidden (already set above). Gets the
-   same scale() transform as .note-image above when zoomed, so the box stays
-   pinned to the same handwriting rather than just sitting at its unzoomed
-   position/size while the photo underneath moves. */
+   needs position: relative + overflow: hidden (already set above). Its
+   top/height are re-derived from the current zoom window (see
+   ReviewEditor.tsx), so this box stays pinned to the same handwriting
+   whether or not the photo is currently zoomed. */
 .region-highlight {
   position: absolute;
   border: 2px solid var(--accent-strong);
@@ -543,8 +545,7 @@ h2.segment-heading textarea.segment-input {
   opacity: 0.45;
   border-radius: 3px;
   pointer-events: none;
-  transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease,
-    transform 0.18s ease;
+  transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
 }
 
 /* Per-page image-left/text-right row (replaces the old shared image
@@ -564,6 +565,19 @@ h2.segment-heading textarea.segment-input {
 .note-page-image {
   flex: 0 0 34rem;
   max-width: 55%;
+  transition: flex-basis 0.2s ease, max-width 0.2s ease;
+}
+
+/* Zoom-on-focus also grows the column itself (2026-09-16 follow-up - the
+   first version only cropped tighter within the same fixed-size column,
+   which alone doesn't make anything look bigger/clearer since .note-image is
+   always width: 100% of its column). A wider column plus verticalCrop()'s
+   shorter window is what actually magnifies the handwriting: same image,
+   rendered across more on-screen pixels, no distortion since the <img>
+   itself never changes its own width/height rules. */
+.note-page-image.zoomed {
+  flex-basis: 50rem;
+  max-width: 78%;
 }
 
 /* The image also opens at full native resolution in a new tab on click
@@ -584,7 +598,8 @@ h2.segment-heading textarea.segment-input {
     flex-direction: column;
   }
 
-  .note-page-image {
+  .note-page-image,
+  .note-page-image.zoomed {
     flex: 0 0 auto;
     max-width: 100%;
     width: 100%;
