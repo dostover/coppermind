@@ -13,6 +13,7 @@
     "archiver": "^8.0.0",
     "better-sqlite3": "^13.0.2",
     "next": "^16.3.5",
+    "pdf-to-img": "^7.0.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "^0.35.4",

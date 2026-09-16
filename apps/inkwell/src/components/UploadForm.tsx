@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 
 // Multi-page notes (FR-2.3/FR-2.4): the user can select several page images
-// at once (or add more in a follow-up selection - the file input stays
-// available after a pick), see them listed in the order they'll be saved as
-// pages, remove one before uploading, and reorder with simple up/down moves
-// rather than a full drag gesture - lighter to build and just as effective
-// for "put page 3 before page 2," which is the actual need (03-ux-screens.md's
-// full filmstrip-with-drag is the fuller version of this same interaction).
+// (or a PDF, whose own pages are expanded server-side - see
+// api/notes/upload/route.ts's preparePages) at once, or add more in a
+// follow-up selection - the file input stays available after a pick - see
+// them listed in the order they'll be saved as pages, remove one before
+// uploading, and reorder with simple up/down moves rather than a full drag
+// gesture - lighter to build and just as effective for "put page 3 before
+// page 2," which is the actual need (03-ux-screens.md's full
+// filmstrip-with-drag is the fuller version of this same interaction).
 export function UploadForm() {
   const router = useRouter();
   const inputId = useId();
@@ -70,14 +72,15 @@ export function UploadForm() {
   return (
     <form onSubmit={handleSubmit} className="card">
       <label htmlFor={inputId}>
-        Handwritten page image(s) (JPEG, PNG, or WebP) - select multiple, or add more below, to
-        capture a multi-page note as one entry
+        Handwritten page image(s) (JPEG, PNG, or WebP) or a PDF - select multiple, or add more
+        below, to capture a multi-page note as one entry. A PDF&apos;s own pages are all included,
+        in order, wherever it sits in the list below.
       </label>
       <input
         id={inputId}
         className="field"
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
         // On a phone/tablet with a camera, "capture" is what puts the
         // camera itself (not just the photo library) at the top of the
         // options a tap on this input offers - the mobile-first "camera
@@ -95,9 +98,17 @@ export function UploadForm() {
 
       {files.length > 0 && (
         <ul className="page-filmstrip">
+          {/* Labeled by position among picked items, not a final page
+              number: a PDF here contributes all of its own pages, in order,
+              at this spot - so anything picked after it may land at a
+              different page number than its position in this list suggests.
+              Reordering/removing still operates on whole items (a PDF moves
+              or drops as one unit, its internal page order intact). */}
           {files.map((file, i) => (
             <li key={`${file.name}-${i}`} className="page-filmstrip-item">
-              <span className="muted">Page {i + 1}</span>
+              <span className="muted">
+                {file.type === "application/pdf" ? "PDF" : `Item ${i + 1}`}
+              </span>
               <span className="page-filmstrip-name">{file.name}</span>
               <button
                 type="button"
@@ -134,7 +145,7 @@ export function UploadForm() {
         {status === "uploading"
           ? "Uploading..."
           : files.length > 1
-            ? `Upload ${files.length} pages as one note`
+            ? `Upload ${files.length} items as one note`
             : "Upload & Transcribe"}
       </button>
       {status === "error" && (
