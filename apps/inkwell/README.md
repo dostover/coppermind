@@ -87,6 +87,32 @@ Tokens are stored in the same local SQLite database as everything else
 Disconnecting from `/library` only forgets them locally; to revoke access on
 Google's side too, visit https://myaccount.google.com/permissions.
 
+### Feature flags
+
+`src/lib/featureFlags.ts` has a small `flag(envVar, defaultValue)` helper for
+gating work-in-progress or experimental behavior behind an environment
+variable, without deleting code or shipping it to everyone at once - unset
+means off, same spirit as `ANTHROPIC_API_KEY` and `GOOGLE_CLIENT_ID` above.
+None are defined yet; adding one is:
+
+```ts
+// src/lib/featureFlags.ts
+export const FEATURE_MY_THING = flag("FEATURE_MY_THING", false);
+```
+
+```bash
+# .env.local
+FEATURE_MY_THING=true
+```
+
+then restart `npm run dev` and check `FEATURE_MY_THING` where it matters.
+Flags are read server-side only (`process.env` isn't available in the
+browser unless a var is prefixed `NEXT_PUBLIC_`, which bakes it into the
+build instead of reading it at request time) - a flag a client component
+like `ReviewEditor` needs to check should be read in its parent Server
+Component and passed down as a prop, the same way `NotePage` already passes
+`googleConfigured`/`googleConnected`.
+
 ## Project structure
 
 ```
@@ -107,6 +133,7 @@ src/
   lib/
     db.ts                    SQLite schema + repositories (notes, handwriting_examples, handwriting_profile, google_auth)
     config.ts                CONFIDENCE_THRESHOLD, GOOGLE_* and other tunables
+    featureFlags.ts          flag() helper + feature flag definitions (env-based, off by default)
     handwritingProfile.ts    getHandwritingContext / recordHandwritingCorrection / updateHandwritingProfile
     ai/
       types.ts               AIProvider interface (narrowed to transcribe + evaluateHandwritingCorrection)
