@@ -4,9 +4,16 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { notesRepo, notePagesRepo } from "@/lib/db";
 import { enqueueNoteTranscribeJob, enqueueRasterizePdfJob } from "@/lib/jobs";
-import { PdfTooLargeError, getPdfPageCount } from "@/lib/pdfPrep";
+import { PdfEmptyError, PdfTooLargeError, getPdfPageCount } from "@/lib/pdfPrep";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+
+// A safety cap, not a product limit (same spirit as pdfPrep's MAX_PDF_PAGES):
+// nothing previously stopped an arbitrarily large file from being buffered
+// into memory in full (preparePages reads the whole thing via
+// file.arrayBuffer()) and written to disk. 50MB comfortably covers a
+// high-resolution phone photo or a scanned multi-page PDF.
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
 // One page-to-be, in upload order, before any note_pages row exists. An
 // image is ready to write as-is. A PDF is *not* rasterized here - that's the
@@ -87,6 +94,14 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        {
+          error: `"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(1)}MB - the limit per file is ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB.`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   // Expand every file into its final page slot(s) - a PDF becomes N
@@ -100,7 +115,7 @@ export async function POST(req: NextRequest) {
   try {
     pages = (await Promise.all(files.map(preparePages))).flat();
   } catch (err) {
-    if (err instanceof PdfTooLargeError) {
+    if (err instanceof PdfTooLargeError || err instanceof PdfEmptyError) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
     const message = err instanceof Error ? err.message : "Couldn't read one of the uploaded PDFs.";

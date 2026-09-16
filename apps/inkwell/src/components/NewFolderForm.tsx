@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { extractErrorMessage } from "@/lib/fetchError";
 
 // Manual-only folder creation (no AI folder suggestion this phase) - a
 // small inline form rather than a modal, consistent with this app's plain
@@ -24,7 +25,7 @@ export function NewFolderForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Could not create folder.");
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Could not create folder."));
       setName("");
       setOpen(false);
       router.refresh();

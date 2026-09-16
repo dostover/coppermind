@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
+import { extractErrorMessage } from "@/lib/fetchError";
 
 // Multi-page notes (FR-2.3/FR-2.4): the user can select several page images
 // (or a PDF, whose own pages are expanded server-side - see
@@ -60,8 +61,8 @@ export function UploadForm() {
 
     try {
       const res = await fetch("/api/notes/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Upload failed."));
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed.");
       router.push(`/notes/${data.id}`);
     } catch (err) {
       setStatus("error");

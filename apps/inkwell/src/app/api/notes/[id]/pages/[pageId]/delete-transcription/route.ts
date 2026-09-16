@@ -13,9 +13,11 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; pageId: string }> }
 ) {
-  const { pageId } = await params;
+  const { id, pageId } = await params;
   const page = notePagesRepo.getById(pageId);
-  if (!page) return NextResponse.json({ error: "Page not found." }, { status: 404 });
+  if (!page || page.note_id !== id) {
+    return NextResponse.json({ error: "Page not found." }, { status: 404 });
+  }
   if (page.transcriptionRemoved) return NextResponse.json({ ok: true }); // already gone, idempotent
 
   notePagesRepo.setTranscriptionRemoved(pageId, new Date().toISOString());

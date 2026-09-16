@@ -29,7 +29,7 @@ export async function POST(
   }
 
   const targets = body.pageId
-    ? note.pages.filter((p) => p.id === body.pageId)
+    ? note.pages.filter((p) => p.id === body.pageId && p.status === "error")
     : note.pages.filter((p) => p.status === "error");
 
   if (targets.length === 0) {

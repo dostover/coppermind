@@ -90,6 +90,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS folders (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    normalized_name TEXT,  -- lowercased/trimmed, for case-insensitive dedup - see the migration below for existing DBs
     created_at TEXT NOT NULL
   );
 
@@ -216,6 +217,25 @@ if (!noteColumns.some((c) => c.name === "title_source")) {
 // and the /purge route) is a separate, explicit action taken from Trash.
 if (!noteColumns.some((c) => c.name === "deleted_at")) {
   db.exec(`ALTER TABLE notes ADD COLUMN deleted_at TEXT`);
+}
+
+// folders.normalized_name was added after the original table shape shipped,
+// to close a gap tags already avoided: nothing stopped creating "Recipes"
+// and "recipes" as two distinct folders. Backfilled for any pre-existing
+// rows, then a unique index enforces it going forward the same way tags'
+// own normalized_name column does - see foldersRepo.create.
+const folderColumns = db.prepare(`PRAGMA table_info(folders)`).all() as { name: string }[];
+if (!folderColumns.some((c) => c.name === "normalized_name")) {
+  db.exec(`ALTER TABLE folders ADD COLUMN normalized_name TEXT`);
+  db.exec(`UPDATE folders SET normalized_name = LOWER(TRIM(name)) WHERE normalized_name IS NULL`);
+}
+try {
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_normalized_name ON folders (normalized_name)`);
+} catch {
+  // A pre-existing DB that already has two folders differing only by case
+  // (created before this migration existed) would fail to index - don't
+  // block startup over it; foldersRepo.create's own findByNormalizedName
+  // check still prevents new duplicates from this point on.
 }
 
 // Delete-original-image, independent of deleting the note itself
@@ -695,16 +715,15 @@ export const notePagesRepo = {
 export interface FolderRow {
   id: string;
   name: string;
+  normalized_name: string;
   created_at: string;
 }
 
 export const foldersRepo = {
   create(input: { id: string; name: string; createdAt: string }): void {
-    db.prepare(`INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)`).run(
-      input.id,
-      input.name,
-      input.createdAt
-    );
+    db.prepare(
+      `INSERT INTO folders (id, name, normalized_name, created_at) VALUES (?, ?, ?, ?)`
+    ).run(input.id, input.name, input.name.trim().toLowerCase(), input.createdAt);
   },
 
   listAll(): FolderRow[] {
@@ -713,6 +732,16 @@ export const foldersRepo = {
 
   getById(id: string): FolderRow | undefined {
     return db.prepare(`SELECT * FROM folders WHERE id = ?`).get(id) as FolderRow | undefined;
+  },
+
+  // Case-insensitive dedup check (mirrors tagsRepo.findOrCreate's own
+  // normalized-name lookup) - used by POST /api/folders to reject "Recipes"
+  // when "recipes" already exists, with a clean 400 rather than a raw
+  // UNIQUE-constraint 500 from the index above.
+  findByNormalizedName(name: string): FolderRow | undefined {
+    return db
+      .prepare(`SELECT * FROM folders WHERE normalized_name = ?`)
+      .get(name.trim().toLowerCase()) as FolderRow | undefined;
   },
 
   // Notes in this folder are reassigned to "no folder" first (04-data-model.md:

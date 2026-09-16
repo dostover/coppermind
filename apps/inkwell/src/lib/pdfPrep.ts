@@ -25,6 +25,13 @@ export class PdfTooLargeError extends Error {
   }
 }
 
+export class PdfEmptyError extends Error {
+  constructor() {
+    super("This PDF has no pages.");
+    this.name = "PdfEmptyError";
+  }
+}
+
 // Just enough of pdf-to-img's work to validate an upload and learn how many
 // placeholder note_pages rows to create - reading a PDF's own page count/
 // metadata is cheap (confirmed ~300ms even on an 8.4MB/14-page real scan)
@@ -39,6 +46,14 @@ export async function getPdfPageCount(buffer: Buffer): Promise<number> {
   try {
     if (doc.length > MAX_PDF_PAGES) {
       throw new PdfTooLargeError(doc.length);
+    }
+    // A 0-page PDF (a valid-but-empty document, distinct from the
+    // corrupted/password-protected case pdf-to-img already throws on) would
+    // otherwise sail through as a "successful" upload that creates a note
+    // with zero pages - stuck permanently on the review screen with nothing
+    // to show and no page to retry.
+    if (doc.length === 0) {
+      throw new PdfEmptyError();
     }
     return doc.length;
   } finally {

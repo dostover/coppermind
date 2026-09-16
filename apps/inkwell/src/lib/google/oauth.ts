@@ -22,7 +22,15 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 // reaches Google.
 const REFRESH_SAFETY_MARGIN_MS = 2 * 60 * 1000;
 
-export function buildGoogleAuthUrl(): string {
+// `state` is a per-attempt random token the caller generates, stashes in a
+// short-lived cookie, and verifies against Google's callback (see
+// connect/route.ts and callback/route.ts) - the standard CSRF defense for an
+// authorization-code flow. Without it, an attacker can plant their own
+// authorization code by getting the victim's browser to hit the callback URL
+// (e.g. via an <img> tag), linking the victim's Inkwell instance to the
+// attacker's Google Docs account - the single-implicit-user design doesn't
+// change this threat, since the attacker here is external to the app.
+export function buildGoogleAuthUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: GOOGLE_REDIRECT_URI,
@@ -33,6 +41,7 @@ export function buildGoogleAuthUrl(): string {
     // given client+scope combination; forcing the consent screen every time
     // guarantees we get one even on a reconnect after a prior disconnect.
     prompt: "consent",
+    state,
   });
   return `${AUTH_URL}?${params.toString()}`;
 }
