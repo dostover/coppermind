@@ -151,43 +151,66 @@ export function ReviewEditor({
     setActivePageIndex((i) => Math.min(Math.max(i + delta, 0), pageStates.length - 1));
   }
 
+  // Per-page "seed once" sync: a page whose local status isn't yet
+  // 'ready_for_review' adopts whatever the latest data says (still working,
+  // now ready, or now errored). The moment a page reaches 'ready_for_review'
+  // locally, it's marked seeded and future syncs stop touching it, so a
+  // later poll (from some *other* page still working) can never overwrite
+  // edits already in progress on this one.
+  //
+  // The set-membership check/update used to live *inside* the setPageStates
+  // updater below (mutating seededPagesRef.current as a side effect of
+  // computing the next state). That's an impure updater, and it broke
+  // exactly the way impure updaters do: React (in development) invokes a
+  // state updater function twice to surface exactly this kind of bug - once
+  // to check, once for real - and reuses whichever call ran last. The first
+  // call's mutation marked the page "already seeded" *before* the second,
+  // official call ran, so the second call saw nothing left to do and handed
+  // back the untouched previous state. The visible symptom: the network
+  // request came back with "ready_for_review", the updater clearly received
+  // it (confirmed by logging), and the screen still never left "Transcribing"
+  // without a hard reload - production never double-invokes, so this exact
+  // sequence never happened there, which is what made it look like a
+  // dev-only Next.js quirk rather than an app bug. Fix: read+decide what to
+  // seed *before* calling setPageStates (a plain, non-reentrant read), keep
+  // the updater itself a pure function of (prev, incoming), and only mutate
+  // the ref once that decision is made - never inside the updater.
+  const seededPagesRef = useRef<Set<string>>(
+    new Set(pages.filter((p) => p.status === "ready_for_review").map((p) => p.id))
+  );
+  function applyIncomingPages(incoming: NotePage[]) {
+    const unseeded = incoming.filter((page) => !seededPagesRef.current.has(page.id));
+    if (unseeded.length === 0) return;
+
+    setPageStates((prev) => {
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      for (const page of unseeded) byId.set(page.id, toPageState(page));
+      // Preserve page order (byId may have inserted in prop order already,
+      // but incoming is always sorted by page_number - safe to re-derive).
+      return incoming.map((p) => byId.get(p.id) ?? toPageState(p));
+    });
+
+    for (const page of unseeded) {
+      if (page.status === "ready_for_review") seededPagesRef.current.add(page.id);
+    }
+  }
+
+  useEffect(() => {
+    applyIncomingPages(pages);
+  }, [pages]);
+
   // Async processing (see src/lib/jobs.ts): upload/retry now enqueue a job
   // per page and return immediately, so this screen has to poll rather than
   // assume every page is done by the time it renders. Polling re-fetches the
   // server component via router.refresh(), which re-renders this component
-  // with a fresh `pages` prop - the effect below re-runs on that prop change
-  // and stops itself once no page is still uploaded/transcribing.
+  // with a fresh `pages` prop - the effect above re-runs on that prop change
+  // and applies it through the same seed-merge, and this effect stops itself
+  // once no page is still uploaded/transcribing.
   useEffect(() => {
     if (!anyPageWorking) return;
     const interval = setInterval(() => router.refresh(), 2000);
     return () => clearInterval(interval);
   }, [anyPageWorking, router]);
-
-  // Per-page "seed once" sync: a page whose local status isn't yet
-  // 'ready_for_review' adopts whatever the latest prop says (still working,
-  // now ready, or now errored). The moment a page reaches 'ready_for_review'
-  // locally, it's marked seeded and this effect stops touching it, so a
-  // later poll (from some *other* page still working) can never overwrite
-  // edits already in progress on this one.
-  const seededPagesRef = useRef<Set<string>>(
-    new Set(pages.filter((p) => p.status === "ready_for_review").map((p) => p.id))
-  );
-  useEffect(() => {
-    setPageStates((prev) => {
-      const byId = new Map(prev.map((p) => [p.id, p]));
-      let changed = false;
-      for (const incoming of pages) {
-        if (seededPagesRef.current.has(incoming.id)) continue;
-        byId.set(incoming.id, toPageState(incoming));
-        changed = true;
-        if (incoming.status === "ready_for_review") seededPagesRef.current.add(incoming.id);
-      }
-      if (!changed) return prev;
-      // Preserve page order (byId may have inserted in prop order already,
-      // but pages is always sorted by page_number - safe to just re-derive).
-      return pages.map((p) => byId.get(p.id) ?? toPageState(p));
-    });
-  }, [pages]);
 
   function updateSegment(pageId: string, segmentId: string, text: string) {
     setPageStates((prev) =>
