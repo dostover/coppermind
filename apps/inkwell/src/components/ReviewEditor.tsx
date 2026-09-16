@@ -2,56 +2,44 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { GRID_ROWS } from "@/lib/ai/gridConstants";
 import type { SourceRegion, TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 
-// Never zoom tighter than this fraction of the photo on a side. This is a
-// crop-and-enlarge of the same fixed-resolution photo, not a re-fetch of more
-// detail, so past a certain point "more zoom" just means "more blur" - a
-// floor keeps a single short/narrow segment from blowing up into an
-// illegibly pixelated sliver. Tune this (and the "double the area" factor
-// below) if real usage shows it's too tight or too loose either way.
-const ZOOM_MIN_CROP_FRACTION = 0.12;
+// How many extra lines of context to show above and below the focused line
+// (2026-09-16 follow-up to the first zoom-on-focus pass: cropping tightly
+// around just the segment's own width cut words off at the edges, and for a
+// long segment - a whole sentence, common since PR #25 - the "crop" was
+// barely smaller than the full photo, so it barely zoomed at all). Tune this
+// if real usage wants more or fewer lines of surrounding context.
+const ZOOM_CONTEXT_LINES = 2;
 
 // Turns a segment's already-computed source region (see gridOverlay.ts's
-// regionFromCells - this reuses the exact geometry the highlight box already
-// draws, so this needs no new AI call, no schema change, and no added
-// per-transcription cost) into a CSS transform-origin + scale that zooms the
-// photo in on that region, expanded to roughly double its area and centered
-// on it - per the user's 2026-09-16 request, as the simple alternative to a
-// full auto-zoom feature.
+// regionFromCells - this reuses the exact geometry the .region-highlight box
+// already draws, so this needs no new AI call, no schema change, and no
+// added per-transcription cost) into a vertical crop: the focused line plus
+// ZOOM_CONTEXT_LINES lines of context above and below, expressed as a
+// fraction of the photo's height ("line height" is approximated as one
+// gridOverlay.ts grid row, GRID_ROWS - the grid was already sized so its
+// rows roughly track handwriting lines).
 //
-// Deliberately expressed as an origin point + a uniform scale factor on the
-// *whole* photo, rather than computing an explicit crop rectangle in pixels:
-// CSS's own transform-origin/scale math does the equivalent of clamping the
-// crop to the photo's bounds for free when the origin sits near an edge (the
-// browser has no "outside the photo" pixels to show, so it naturally pulls
-// the visible window back in rather than exposing blank space) - no manual
-// bounds-clamping code needed. The same {originX, originY, scale} is applied
-// to both the <img> and the .region-highlight box below, so the highlight
-// stays visually aligned with the correct handwriting at any zoom level.
-function cropTransform(region: SourceRegion | undefined): {
-  originX: number;
-  originY: number;
-  scale: number;
-} {
-  if (!region) return { originX: 50, originY: 50, scale: 1 };
-  const [x, y, w, h] = region.bbox;
-  // sqrt(2*w*h) is the side of a square-in-fractional-terms box with double
-  // this region's area; max(w, h) is the smallest such box that still fully
-  // contains the region, needed whenever the region's own shape is far from
-  // square (e.g. one wide, short line of text) - otherwise "double area"
-  // alone could crop off part of the very segment being zoomed to.
-  const cropFraction = Math.min(
-    1,
-    Math.max(w, h, Math.sqrt(2 * w * h), ZOOM_MIN_CROP_FRACTION)
-  );
-  return {
-    originX: (x + w / 2) * 100,
-    originY: (y + h / 2) * 100,
-    scale: 1 / cropFraction,
-  };
+// Deliberately never crops horizontally - full line width, every time - so
+// a full-width line is never cut off at the edges the way the first version
+// of this feature could be. That also means this alone doesn't visually
+// enlarge anything (the image's own width is untouched); the actual "zoom"
+// comes from ReviewEditor pairing this with a wider .note-page-image column
+// while a segment is focused (see the "zoomed" class below) - the same
+// image content, shown wider, renders bigger without any distortion, since
+// the <img> stays at width: 100%/height: auto throughout.
+function verticalCrop(region: SourceRegion | undefined): { lineFraction: number; offsetY: number } {
+  if (!region) return { lineFraction: 1, offsetY: 0 };
+  const [, y, , h] = region.bbox;
+  const lineHeight = Math.max(h, 1 / GRID_ROWS);
+  const lineFraction = Math.min(1, lineHeight * (1 + 2 * ZOOM_CONTEXT_LINES));
+  const center = y + h / 2;
+  const offsetY = Math.min(Math.max(center - lineFraction / 2, 0), 1 - lineFraction);
+  return { lineFraction, offsetY };
 }
 
 interface Props {
@@ -136,6 +124,26 @@ export function ReviewEditor({
   }
   function handleSegmentBlur() {
     setActiveSegmentId(null);
+  }
+
+  // The zoom-on-focus crop (see verticalCrop() above) needs to shrink each
+  // page's image wrapper to a fraction of its normal height without
+  // distorting it - which needs the photo's own natural aspect ratio, not
+  // just its on-screen rendered size. Captured once per page from the <img>
+  // itself the moment it finishes loading.
+  const [imgAspects, setImgAspects] = useState<Record<string, number>>({});
+  function handleImageLoad(pageId: string, el: HTMLImageElement) {
+    if (!el.naturalWidth || !el.naturalHeight) return;
+    const aspect = el.naturalWidth / el.naturalHeight;
+    // Bail out (return the *same* prev object) once this page's aspect is
+    // already recorded. The <img>'s ref callback below runs on every render
+    // (it's an inline arrow function, so React treats it as a new ref each
+    // time), not just on first mount - without this guard, each render's
+    // call would set a *new* object into state, which is itself a change
+    // that triggers another render, which calls the new ref again... an
+    // infinite loop (surfaced as React error #185, "Maximum update depth
+    // exceeded") rather than the intended "record it once" behavior.
+    setImgAspects((prev) => (prev[pageId] === aspect ? prev : { ...prev, [pageId]: aspect }));
   }
 
   // AI-trust visual language (03-ux-screens.md's cross-screen note), extended
@@ -416,7 +424,16 @@ export function ReviewEditor({
         const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
         const activeRegion = page.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
-        const { originX, originY, scale } = cropTransform(activeRegion);
+        const aspect = imgAspects[page.id];
+        // Only actually zoom once the image's aspect ratio is known - a
+        // narrow timing edge case (focus landing before the <img> has fired
+        // onLoad) otherwise shifts the image without the matching wrapper
+        // resize, showing the wrong slice of the photo. Falls back to the
+        // identity crop (the untouched full photo) until then.
+        const zoomActive = Boolean(activeRegion) && Boolean(aspect);
+        const { lineFraction, offsetY } = zoomActive
+          ? verticalCrop(activeRegion)
+          : { lineFraction: 1, offsetY: 0 };
         return (
           <div key={page.id} className="note-page-block">
             {pageStates.length > 1 && (
@@ -426,8 +443,11 @@ export function ReviewEditor({
             )}
 
             <div className="note-page-columns">
-              <div className="note-page-image">
-                <div className="note-image-wrap">
+              <div className={`note-page-image${zoomActive ? " zoomed" : ""}`}>
+                <div
+                  className="note-image-wrap"
+                  style={zoomActive ? { aspectRatio: `${aspect! / lineFraction}` } : undefined}
+                >
                   {page.imageRemoved ? (
                     // Original removed via "Delete original image" - the
                     // transcription alongside is unaffected, this just
@@ -472,10 +492,24 @@ export function ReviewEditor({
                           src={`/${page.imagePath}`}
                           alt="Uploaded handwritten page"
                           className="note-image"
-                          style={{
-                            transformOrigin: `${originX}% ${originY}%`,
-                            transform: `scale(${scale})`,
+                          // Both a ref callback and onLoad: a cached image
+                          // can finish loading (and fire its native `load`
+                          // event) before React ever attaches the onLoad
+                          // listener, so relying on onLoad alone silently
+                          // never captures the aspect ratio - and therefore
+                          // never zooms - on a repeat visit to an already-
+                          // cached photo. The ref callback catches that case
+                          // via el.complete; onLoad still covers a fresh,
+                          // not-yet-loaded image normally.
+                          ref={(el) => {
+                            if (el && el.complete && el.naturalWidth) handleImageLoad(page.id, el);
                           }}
+                          onLoad={(e) => handleImageLoad(page.id, e.currentTarget)}
+                          style={
+                            zoomActive
+                              ? { transform: `translateY(-${offsetY * 100}%)` }
+                              : undefined
+                          }
                         />
                       </a>
                       {activeRegion && (
@@ -483,16 +517,17 @@ export function ReviewEditor({
                           className="region-highlight"
                           style={{
                             left: `${activeRegion.bbox[0] * 100}%`,
-                            top: `${activeRegion.bbox[1] * 100}%`,
                             width: `${activeRegion.bbox[2] * 100}%`,
-                            height: `${activeRegion.bbox[3] * 100}%`,
-                            // No explicit transform-origin here: this div's
-                            // own box *is* the bbox, so its center (the
-                            // default 50%/50% origin) is already the same
-                            // point cropTransform() zoomed around - applying
-                            // the same scale keeps it pinned to the same
-                            // handwriting as the now-zoomed photo under it.
-                            transform: `scale(${scale})`,
+                            // Re-expressed relative to the visible vertical
+                            // band (identity - i.e. the plain bbox percentage
+                            // - when not zoomed, since lineFraction=1 and
+                            // offsetY=0 then): the wrapper's height now
+                            // represents only lineFraction of the full
+                            // photo's height, starting at offsetY, so the
+                            // highlight has to track that same window to
+                            // stay pinned over the right handwriting.
+                            top: `${((activeRegion.bbox[1] - offsetY) / lineFraction) * 100}%`,
+                            height: `${(activeRegion.bbox[3] / lineFraction) * 100}%`,
                           }}
                         />
                       )}
