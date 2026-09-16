@@ -44,6 +44,26 @@ export interface TranscriptSegment {
   id: string;
   text: string;
   structureType: StructureType;
+  /** True when this segment begins a new structural block (a new paragraph,
+   *  heading, list item, etc.) distinct from whatever came before it on the
+   *  page; false when it's a continuation of the *same* block as the
+   *  immediately preceding segment - e.g. a single low-confidence word or a
+   *  crossed-out span pulled out of the middle of a sentence for its own
+   *  confidence score, per TRANSCRIPTION_QUALITY_INSTRUCTIONS.
+   *
+   *  This exists because structureType alone can't tell two adjacent
+   *  "paragraph" segments apart: they could be two separate paragraphs, or
+   *  one paragraph split mid-sentence for confidence reasons. Without an
+   *  explicit signal, the review UI has no way to know which - see the
+   *  review history in claude/09-walking-skeleton-architecture.md for how
+   *  this was found (the flattening bug this field fixes).
+   *
+   *  Old notes transcribed before this field existed have it absent from
+   *  their stored JSON; db.ts treats that as `false` (continues the
+   *  previous block) for every segment but the page's first, which
+   *  reproduces exactly how those notes rendered before this field was
+   *  added - so nothing shifts under an old note until its owner edits it. */
+  startsNewBlock: boolean;
   crossedOut: boolean;
   emphasis: "none" | "underline" | "bold_or_heavy";
   /** 0-1, model's raw self-reported confidence for this segment. */
