@@ -188,6 +188,16 @@ if (!jobColumns.some((c) => c.name === "page_id")) {
   db.exec(`ALTER TABLE processing_jobs ADD COLUMN page_id TEXT REFERENCES note_pages(id)`);
 }
 
+// payload holds small stage-specific JSON that doesn't fit the note_id/
+// page_id shape - added for STAGE_RASTERIZE_PDF (jobs.ts/pdfPrep.ts), whose
+// job covers several note_pages rows at once (every page rendered from one
+// uploaded PDF) and needs to remember which raw PDF file to read and which
+// placeholder page rows to fill in, in order. Nullable/unused by every other
+// stage.
+if (!jobColumns.some((c) => c.name === "payload")) {
+  db.exec(`ALTER TABLE processing_jobs ADD COLUMN payload TEXT`);
+}
+
 // title_source distinguishes "the placeholder titleGen.ts derived" from "the
 // user actually typed/edited this" - the same ai/user distinction note_tags
 // already carries for tags, extended to titles so the review screen can show
@@ -540,6 +550,13 @@ export const notesRepo = {
 };
 
 export const notePagesRepo = {
+  // imagePath: "" is a deliberate, valid value - it marks a placeholder page
+  // created for a PDF page whose upload has been accepted (page count
+  // validated) but not yet rasterized (see api/notes/upload/route.ts and
+  // jobs.ts's rasterize_pdf stage). Kept as a sentinel rather than a nullable
+  // column/new status value to avoid a bigger migration - every other status/
+  // aggregate/polling rule already treats an empty-path 'uploaded' page
+  // exactly like any other not-yet-finished page.
   create(input: { id: string; noteId: string; pageNumber: number; imagePath: string; createdAt: string }): void {
     db.prepare(
       `INSERT INTO note_pages (id, note_id, page_number, image_path, status, segments_ai, segments_current, created_at, updated_at)
@@ -579,6 +596,22 @@ export const notePagesRepo = {
     db.prepare(
       `UPDATE note_pages SET status = 'error', error_message = ?, updated_at = ? WHERE id = ?`
     ).run(message, updatedAt, id);
+  },
+
+  // Fills in a placeholder page's real image once it's been rasterized out of
+  // its source PDF in the background (jobs.ts's rasterize_pdf stage) - see
+  // create() below, which accepts imagePath: "" up front specifically so this
+  // page has a row (and a known page_number/position) from the moment of
+  // upload, before its actual image exists on disk. Deliberately leaves
+  // `status` untouched ('uploaded'): the note-wide flip to 'transcribing'
+  // happens once via enqueueNoteTranscribeJob, the same moment for every page
+  // in the note (images and freshly-rasterized PDF pages alike) - see jobs.ts.
+  setImagePath(id: string, imagePath: string, updatedAt: string): void {
+    db.prepare(`UPDATE note_pages SET image_path = ?, updated_at = ? WHERE id = ?`).run(
+      imagePath,
+      updatedAt,
+      id
+    );
   },
 
   // Called on Save (PATCH /api/notes/[id]) with this page's corrected
@@ -888,6 +921,7 @@ export interface ProcessingJobRow {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+  payload: string | null;
 }
 
 export const processingJobsRepo = {
@@ -895,11 +929,20 @@ export const processingJobsRepo = {
   // sets it, but a note-level batch job (STAGE_TRANSCRIBE_BATCH, jobs.ts)
   // covers every page of the note at once and has no single page_id to set -
   // its failure handling instead walks notePagesRepo.listForNote itself.
-  enqueue(input: { id: string; noteId: string; pageId: string | null; stage: string; createdAt: string }): void {
+  // payload is likewise nullable/stage-specific - see the payload column
+  // comment above (only STAGE_RASTERIZE_PDF uses it today).
+  enqueue(input: {
+    id: string;
+    noteId: string;
+    pageId: string | null;
+    stage: string;
+    createdAt: string;
+    payload?: string | null;
+  }): void {
     db.prepare(
-      `INSERT INTO processing_jobs (id, note_id, page_id, stage, status, attempts, created_at)
-       VALUES (?, ?, ?, ?, 'queued', 0, ?)`
-    ).run(input.id, input.noteId, input.pageId, input.stage, input.createdAt);
+      `INSERT INTO processing_jobs (id, note_id, page_id, stage, status, attempts, created_at, payload)
+       VALUES (?, ?, ?, ?, 'queued', 0, ?, ?)`
+    ).run(input.id, input.noteId, input.pageId, input.stage, input.createdAt, input.payload ?? null);
   },
 
   // Claims the oldest queued job atomically (single UPDATE...WHERE guarded by

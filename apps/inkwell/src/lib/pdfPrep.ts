@@ -25,6 +25,27 @@ export class PdfTooLargeError extends Error {
   }
 }
 
+// Just enough of pdf-to-img's work to validate an upload and learn how many
+// placeholder note_pages rows to create - reading a PDF's own page count/
+// metadata is cheap (confirmed ~300ms even on an 8.4MB/14-page real scan)
+// entirely independent of rendering any page, which is the genuinely slow,
+// page-count-scaled part (see rasterizePdfPages below). This is what the
+// upload route calls synchronously; actual rendering happens later, off the
+// request, in jobs.ts's rasterize_pdf stage. Still throws PdfTooLargeError/a
+// corrupted-PDF error exactly like rasterizePdfPages used to, so upload-time
+// validation is unchanged - only the expensive rendering moved.
+export async function getPdfPageCount(buffer: Buffer): Promise<number> {
+  const doc = await pdf(buffer, { format: "jpg", scale: 2 });
+  try {
+    if (doc.length > MAX_PDF_PAGES) {
+      throw new PdfTooLargeError(doc.length);
+    }
+    return doc.length;
+  } finally {
+    await doc.destroy();
+  }
+}
+
 // Renders every page of a PDF to its own JPEG buffer, in page order. Scale 2
 // (~144 DPI off a standard 72dpi PDF unit) comfortably covers a phone-photo's
 // worth of handwriting detail without producing huge files - imagePrep.ts's

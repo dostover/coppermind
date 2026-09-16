@@ -1,10 +1,13 @@
 import { randomUUID } from "crypto";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
+import path from "path";
 import type { ProcessingJobRow } from "./db";
 import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo, processingJobsRepo } from "./db";
 import { getAIProvider } from "./ai";
 import { getHandwritingContext } from "./handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "./config";
 import { derivePlaceholderTitle } from "./titleGen";
+import { rasterizePdfPages } from "./pdfPrep";
 
 // Narrowed from 04-data-model.md's processing_jobs / §28's multi-stage
 // pipeline down to the one stage this app actually has: transcription (plus
@@ -34,6 +37,23 @@ const STAGE_TRANSCRIBE = "transcribe";
 // retry one failed page would waste exactly the tokens batching is meant to
 // save.
 const STAGE_TRANSCRIBE_BATCH = "transcribe_batch";
+
+// One job per uploaded PDF file, enqueued by the upload route instead of it
+// rasterizing inline (see api/notes/upload/route.ts's comment - rendering a
+// real multi-page scan synchronously took ~15s and was tripping the
+// browser's own fetch timeout). Runs the actual per-page rendering
+// (pdfPrep.ts's rasterizePdfPages) off the request, then fills in the
+// placeholder note_pages rows the upload route already created for this
+// PDF's pages (job.payload's pageIds, in order). Note-scoped like
+// STAGE_TRANSCRIBE_BATCH, not page-scoped: a failure here means none of
+// *this PDF's* pages rendered, not that the whole note failed - other files
+// in the same upload (images, or other PDFs) proceed independently.
+const STAGE_RASTERIZE_PDF = "rasterize_pdf";
+
+interface RasterizePdfPayload {
+  pdfPath: string;
+  pageIds: string[];
+}
 
 // Best-effort AI tag suggestion, shared by both the per-page and batch job
 // runners below. Runs once per *note*, gated by hasAnyForNote so a later
@@ -79,6 +99,17 @@ async function maybeSuggestTags(noteId: string, provider: ReturnType<typeof getA
 async function runTranscribeJob(pageId: string): Promise<void> {
   const page = notePagesRepo.getById(pageId);
   if (!page) throw new Error(`Note page ${pageId} not found - it may have been deleted mid-job.`);
+  // A page whose PDF failed to rasterize (rasterize_pdf's own failure path
+  // above) stays 'error' with no image_path ever having been set - the
+  // Retry button on that page must not be allowed to reach the AI provider
+  // with no image to send it. This is the one case runTranscribeJob can
+  // reach directly from a user action (retry) rather than only after
+  // enqueueNoteTranscribeJob/enqueuePageTranscribeJob's own normal path, both
+  // of which only ever enqueue this stage for a page that already has a real
+  // image.
+  if (!page.image_path) {
+    throw new Error("This page's PDF couldn't be extracted. Try re-uploading that PDF.");
+  }
 
   const provider = getAIProvider();
   const result = await provider.transcribe({
@@ -141,12 +172,71 @@ async function runBatchTranscribeJob(noteId: string): Promise<void> {
   await maybeSuggestTags(noteId, provider);
 }
 
+// Once a note has no page left pending PDF rasterization (image_path still
+// "" - see notePagesRepo's create/setImagePath comments), it's safe to kick
+// off the batch transcribe job exactly like an images-only upload always
+// has. Called after every rasterize_pdf job for a note finishes, success or
+// failure - a failed page moves to 'error' (still image_path "", but no
+// longer 'uploaded', so it no longer counts as "pending") rather than
+// blocking the rest of the note forever. Safe to call more than once: it's
+// only ever reached when the check just below is already false-turned-true
+// for the first time, since the single-worker runner processes one
+// rasterize_pdf job at a time (no two calls can race on the same note).
+function maybeEnqueueTranscribeForNote(noteId: string): void {
+  const stillPending = notePagesRepo
+    .listForNote(noteId)
+    .some((p) => p.status === "uploaded" && p.image_path === "");
+  if (stillPending) return;
+  enqueueNoteTranscribeJob(noteId);
+}
+
+// Runs the rasterize_pdf stage for one uploaded PDF: reads the raw bytes
+// saved by the upload route, renders every page (the slow part - this is
+// what moved off the request), writes each as a JPEG under public/uploads
+// exactly like a photographed page, and points its placeholder note_pages
+// row at the new file. Throws on failure - runOneJob below records that
+// against the job and (since page_id is null for this stage) walks this
+// job's own payload.pageIds to flag just those pages as errored, not the
+// whole note.
+async function runRasterizePdfJob(job: ProcessingJobRow): Promise<void> {
+  if (!job.payload) throw new Error(`Job ${job.id} has no payload - cannot run stage "${job.stage}".`);
+  const { pdfPath, pageIds } = JSON.parse(job.payload) as RasterizePdfPayload;
+
+  const buffer = await readFile(pdfPath);
+  const rendered = await rasterizePdfPages(buffer);
+  if (rendered.length !== pageIds.length) {
+    // Shouldn't happen - the upload route already read this same PDF's page
+    // count via getPdfPageCount - but a mismatch here would otherwise
+    // silently mis-assign pages, so fail loudly instead.
+    throw new Error(
+      `Rasterized ${rendered.length} page(s) but expected ${pageIds.length} for ${pdfPath}.`
+    );
+  }
+
+  const now = new Date().toISOString();
+  for (let i = 0; i < pageIds.length; i++) {
+    const relativePath = `uploads/${pageIds[i]}.jpg`;
+    const absolutePath = path.join(process.cwd(), "public", relativePath);
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, rendered[i]);
+    notePagesRepo.setImagePath(pageIds[i], relativePath, now);
+  }
+
+  // Best-effort cleanup - the raw PDF has served its purpose once every page
+  // is rendered. Not fatal if this fails (e.g. already gone); nothing reads
+  // pdf-sources/ again after this job succeeds.
+  await unlink(pdfPath).catch(() => {});
+
+  maybeEnqueueTranscribeForNote(job.note_id);
+}
+
 const STAGE_RUNNERS: Record<string, (job: ProcessingJobRow) => Promise<void>> = {
   [STAGE_TRANSCRIBE]: (job) => {
     if (!job.page_id) throw new Error(`Job ${job.id} has no page_id - cannot run stage "${job.stage}".`);
     return runTranscribeJob(job.page_id);
   },
   [STAGE_TRANSCRIBE_BATCH]: (job) => runBatchTranscribeJob(job.note_id),
+  [STAGE_RASTERIZE_PDF]: runRasterizePdfJob,
 };
 
 // Kept for per-page retry (POST /api/notes/[id]/retry) - a single page,
@@ -164,8 +254,38 @@ export function enqueuePageTranscribeJob(pageId: string, noteId: string): void {
   notesRepo.recomputeStatus(noteId, now);
 }
 
+// Used at upload time (POST /api/notes/upload), once per uploaded PDF file:
+// enqueues the background rendering for that PDF's already-created
+// placeholder pages (pageIds, in page order). Deliberately does NOT touch
+// page/note status - placeholder pages stay 'uploaded' (their create()
+// default) until they either get a real image (setImagePath, still
+// 'uploaded') or fail (setError) - see runRasterizePdfJob/maybeEnqueueTranscribeForNote
+// above for what happens once every page like this for the note is resolved.
+export function enqueueRasterizePdfJob(noteId: string, pdfPath: string, pageIds: string[]): void {
+  const now = new Date().toISOString();
+  const payload: RasterizePdfPayload = { pdfPath, pageIds };
+  processingJobsRepo.enqueue({
+    id: randomUUID(),
+    noteId,
+    pageId: null,
+    stage: STAGE_RASTERIZE_PDF,
+    createdAt: now,
+    payload: JSON.stringify(payload),
+  });
+}
+
 // Used at upload time (POST /api/notes/upload): one job for the whole note,
 // covering every page created so far, instead of one job per page.
+//
+// Only flips pages that are still 'uploaded' - at the original call site
+// (upload, images only) that's every page, since none of them exist yet. But
+// this is now also called after the *last* pending PDF page for a note
+// finishes rasterizing (jobs.ts's maybeEnqueueTranscribeForNote), and by then
+// a *different* page from the same note may already be 'error' (its own PDF
+// failed to rasterize). That page must stay 'error', not get silently pulled
+// back into 'transcribing' just because a sibling page's job happened to
+// finish last - runBatchTranscribeJob's own `pending` filter already expects
+// 'error' pages to be left alone, this is what makes that true.
 export function enqueueNoteTranscribeJob(noteId: string): void {
   const now = new Date().toISOString();
   processingJobsRepo.enqueue({
@@ -176,7 +296,9 @@ export function enqueueNoteTranscribeJob(noteId: string): void {
     createdAt: now,
   });
   for (const page of notePagesRepo.listForNote(noteId)) {
-    notePagesRepo.setTranscribing(page.id, now);
+    if (page.status === "uploaded") {
+      notePagesRepo.setTranscribing(page.id, now);
+    }
   }
   notesRepo.recomputeStatus(noteId, now);
 }
@@ -197,7 +319,20 @@ async function runOneJob(): Promise<boolean> {
     const message = err instanceof Error ? err.message : "Processing failed.";
     const now = new Date().toISOString();
     processingJobsRepo.markFailed(job.id, message, now);
-    if (job.page_id) {
+    if (job.stage === STAGE_RASTERIZE_PDF) {
+      // Failure belongs to just this PDF's own pages, not the whole note -
+      // other files in the same upload (images, or other PDFs) may already
+      // be done or still pending, and shouldn't be dragged into 'error' by
+      // this one file failing to render.
+      const pageIds: string[] = job.payload ? (JSON.parse(job.payload) as RasterizePdfPayload).pageIds : [];
+      for (const pageId of pageIds) {
+        notePagesRepo.setError(pageId, message, now);
+      }
+      // These pages just left 'uploaded' (moved to 'error'), so they no
+      // longer block the rest of the note's pages from proceeding to
+      // transcription once nothing else is still pending.
+      maybeEnqueueTranscribeForNote(job.note_id);
+    } else if (job.page_id) {
       // Failure belongs to the one page that failed, not the whole note -
       // the other pages may have already succeeded or may still be
       // transcribing (per-page retry path).
