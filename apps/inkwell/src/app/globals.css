@@ -521,12 +521,21 @@ h2.segment-heading textarea.segment-input {
   display: block;
   width: 100%;
   border-radius: var(--radius-lg);
+  /* Zoom-on-focus (see ReviewEditor's cropTransform()): focusing a segment
+     with a known source region scales this image up around that region's
+     center, and .note-image-wrap's overflow: hidden clips the rest - a plain
+     CSS transform rather than swapping images or cropping server-side, so
+     it's free of any new request/asset and animates smoothly. */
+  transition: transform 0.18s ease, transform-origin 0.18s ease;
 }
 
 /* Highlights the source handwriting for whichever segment textarea currently
    has focus (see ReviewEditor's activeRegion / gridOverlay.ts's SourceRegion).
    Positioned as a fraction of .note-image-wrap, which is why that wrapper
-   needs position: relative + overflow: hidden (already set above). */
+   needs position: relative + overflow: hidden (already set above). Gets the
+   same scale() transform as .note-image above when zoomed, so the box stays
+   pinned to the same handwriting rather than just sitting at its unzoomed
+   position/size while the photo underneath moves. */
 .region-highlight {
   position: absolute;
   border: 2px solid var(--accent-strong);
@@ -534,7 +543,8 @@ h2.segment-heading textarea.segment-input {
   opacity: 0.45;
   border-radius: 3px;
   pointer-events: none;
-  transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
+  transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease,
+    transform 0.18s ease;
 }
 
 /* Per-page image-left/text-right row (replaces the old shared image

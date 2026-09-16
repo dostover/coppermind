@@ -2,9 +2,57 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { TranscriptSegment } from "@/lib/ai/types";
+import type { SourceRegion, TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
+
+// Never zoom tighter than this fraction of the photo on a side. This is a
+// crop-and-enlarge of the same fixed-resolution photo, not a re-fetch of more
+// detail, so past a certain point "more zoom" just means "more blur" - a
+// floor keeps a single short/narrow segment from blowing up into an
+// illegibly pixelated sliver. Tune this (and the "double the area" factor
+// below) if real usage shows it's too tight or too loose either way.
+const ZOOM_MIN_CROP_FRACTION = 0.12;
+
+// Turns a segment's already-computed source region (see gridOverlay.ts's
+// regionFromCells - this reuses the exact geometry the highlight box already
+// draws, so this needs no new AI call, no schema change, and no added
+// per-transcription cost) into a CSS transform-origin + scale that zooms the
+// photo in on that region, expanded to roughly double its area and centered
+// on it - per the user's 2026-09-16 request, as the simple alternative to a
+// full auto-zoom feature.
+//
+// Deliberately expressed as an origin point + a uniform scale factor on the
+// *whole* photo, rather than computing an explicit crop rectangle in pixels:
+// CSS's own transform-origin/scale math does the equivalent of clamping the
+// crop to the photo's bounds for free when the origin sits near an edge (the
+// browser has no "outside the photo" pixels to show, so it naturally pulls
+// the visible window back in rather than exposing blank space) - no manual
+// bounds-clamping code needed. The same {originX, originY, scale} is applied
+// to both the <img> and the .region-highlight box below, so the highlight
+// stays visually aligned with the correct handwriting at any zoom level.
+function cropTransform(region: SourceRegion | undefined): {
+  originX: number;
+  originY: number;
+  scale: number;
+} {
+  if (!region) return { originX: 50, originY: 50, scale: 1 };
+  const [x, y, w, h] = region.bbox;
+  // sqrt(2*w*h) is the side of a square-in-fractional-terms box with double
+  // this region's area; max(w, h) is the smallest such box that still fully
+  // contains the region, needed whenever the region's own shape is far from
+  // square (e.g. one wide, short line of text) - otherwise "double area"
+  // alone could crop off part of the very segment being zoomed to.
+  const cropFraction = Math.min(
+    1,
+    Math.max(w, h, Math.sqrt(2 * w * h), ZOOM_MIN_CROP_FRACTION)
+  );
+  return {
+    originX: (x + w / 2) * 100,
+    originY: (y + h / 2) * 100,
+    scale: 1 / cropFraction,
+  };
+}
 
 interface Props {
   noteId: string;
@@ -368,6 +416,7 @@ export function ReviewEditor({
         const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
         const activeRegion = page.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
+        const { originX, originY, scale } = cropTransform(activeRegion);
         return (
           <div key={page.id} className="note-page-block">
             {pageStates.length > 1 && (
@@ -423,6 +472,10 @@ export function ReviewEditor({
                           src={`/${page.imagePath}`}
                           alt="Uploaded handwritten page"
                           className="note-image"
+                          style={{
+                            transformOrigin: `${originX}% ${originY}%`,
+                            transform: `scale(${scale})`,
+                          }}
                         />
                       </a>
                       {activeRegion && (
@@ -433,6 +486,13 @@ export function ReviewEditor({
                             top: `${activeRegion.bbox[1] * 100}%`,
                             width: `${activeRegion.bbox[2] * 100}%`,
                             height: `${activeRegion.bbox[3] * 100}%`,
+                            // No explicit transform-origin here: this div's
+                            // own box *is* the bbox, so its center (the
+                            // default 50%/50% origin) is already the same
+                            // point cropTransform() zoomed around - applying
+                            // the same scale keeps it pinned to the same
+                            // handwriting as the now-zoomed photo under it.
+                            transform: `scale(${scale})`,
                           }}
                         />
                       )}
