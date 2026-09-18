@@ -111,18 +111,37 @@ codes get issued against it, not by the schema).
 | column | type | notes |
 |---|---|---|
 | id | TEXT (uuid) | primary key |
-| type | TEXT | `roster` \| `moment` \| `character` \| `trade_only` \| `milestone` |
+| type | TEXT | `roster` \| `moment` \| `character` \| `trade_only` \| `milestone` \| `team` \| `venue` \| `special_item` |
 | title | TEXT | |
 | description | TEXT | the story/bit, not stats |
 | image_path | TEXT | |
 | event_id | TEXT (uuid) | nullable FK → `events.id`; set for `moment` cards tied to a specific game, null for evergreen `roster`/`character` cards |
 | player_name | TEXT | nullable — only meaningful for `roster` cards |
+| stats | TEXT | nullable JSON-encoded object, added via a guarded `ALTER TABLE` after the table first shipped (same pattern as `fans.email`) |
 | created_at | TEXT (ISO) | |
 
 `trade_only` templates are never attached to a redemption code directly issued
 to a claimant as a "keep" — they're seeded into circulation via a small initial
 distribution and from then on only move by trade. (Mechanism for that initial
 seeding is a v1-build decision, not a schema one.)
+
+`team`, `venue`, and `special_item` were added to the taxonomy once real mock
+content needed them: team cards (league standings-style W/L/PCT/PF/PA/DIFF/
+TRICKS), stadium cards for real BBCL tour stops, and flavor-only gimmick-prop
+cards (a cape, stilts, and the like) respectively. Extending a `CHECK`
+constraint isn't something SQLite's `ALTER TABLE` can do, so — like the
+`stats` column — this only takes effect on a fresh database; harmless here
+since the app has no real fan data yet and `scripts/seed.ts` always wipes
+first.
+
+`stats` is a JSON blob rather than fixed columns because different card
+types need entirely different shapes: a team's `W`/`L`/`PCT`/`PF`/`PA`/
+`DIFF`/`TRICKS`, a hitter's `AVG`/`HR`/`RBI`/`SB`, a pitcher's `W`/`L`/`ERA`/
+`SO`, a venue's `Location`/`Capacity`, or nothing at all for a flavor-only
+card. `parseCardStats()` in `db.ts` is the one place that reads it back into
+an object; every caller (the redemption response, the collection view, the
+trade lookup/pick UI) renders whatever keys are present generically rather
+than hardcoding a shape per type.
 
 ### `redemption_codes`
 One row per physical token issued. v1 issuance is staff/kiosk-distributed only,

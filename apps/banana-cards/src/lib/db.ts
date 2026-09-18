@@ -76,10 +76,19 @@ db.exec(`
   -- fan's copy of it. card_instances (below) is the owned copy. Separating
   -- these is what lets the physical token stay a cheap, generic code: the
   -- rich content lives here, digitally, not on the physical object.
+  -- 'team', 'venue', and 'special_item' were added to this taxonomy after
+  -- the table first shipped. SQLite can't ALTER a CHECK constraint, so
+  -- (like the stats column below) this only takes effect on a fresh
+  -- database - this app has no real fan data yet, so the data directory is
+  -- always disposable in practice (see scripts/seed.ts, and every smoke
+  -- test in this repo's history starts by deleting it first).
   CREATE TABLE IF NOT EXISTS card_templates (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL
-      CHECK (type IN ('roster', 'moment', 'character', 'trade_only', 'milestone')),
+      CHECK (type IN (
+        'roster', 'moment', 'character', 'trade_only', 'milestone',
+        'team', 'venue', 'special_item'
+      )),
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     image_path TEXT,
@@ -160,6 +169,30 @@ const fanColumns = db.prepare(`PRAGMA table_info(fans)`).all() as { name: string
 if (!fanColumns.some((c) => c.name === "email")) {
   db.exec(`ALTER TABLE fans ADD COLUMN email TEXT`);
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fans_email ON fans(email)`);
+}
+
+// card_templates.stats was added once card content started needing
+// structured numbers (team records, player batting/pitching lines) rather
+// than just title/description flavor text. Same guarded-ALTER pattern as
+// fans.email above. Stored as a JSON-encoded object rather than fixed
+// columns because different card types need entirely different stat shapes
+// (a team's W/L/PCT/PF/PA/DIFF/TRICKS vs. a player's AVG/HR/RBI vs. a
+// pitcher's ERA/SO vs. no stats at all for a venue or special-item card) -
+// see parseCardStats() below for how a caller reads it back out.
+const cardTemplateColumns = db.prepare(`PRAGMA table_info(card_templates)`).all() as {
+  name: string;
+}[];
+if (!cardTemplateColumns.some((c) => c.name === "stats")) {
+  db.exec(`ALTER TABLE card_templates ADD COLUMN stats TEXT`);
+}
+
+export function parseCardStats(stats: string | null): Record<string, string | number> | null {
+  if (!stats) return null;
+  try {
+    return JSON.parse(stats) as Record<string, string | number>;
+  } catch {
+    return null;
+  }
 }
 
 export interface FanRow {
@@ -396,12 +429,21 @@ export const eventsRepo = {
 
 export interface CardTemplateRow {
   id: string;
-  type: "roster" | "moment" | "character" | "trade_only" | "milestone";
+  type:
+    | "roster"
+    | "moment"
+    | "character"
+    | "trade_only"
+    | "milestone"
+    | "team"
+    | "venue"
+    | "special_item";
   title: string;
   description: string;
   image_path: string | null;
   event_id: string | null;
   player_name: string | null;
+  stats: string | null;
   created_at: string;
 }
 
@@ -414,12 +456,13 @@ export const cardTemplatesRepo = {
     imagePath?: string;
     eventId?: string;
     playerName?: string;
+    stats?: Record<string, string | number>;
     createdAt: string;
   }): void {
     db.prepare(
       `INSERT INTO card_templates
-         (id, type, title, description, image_path, event_id, player_name, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, type, title, description, image_path, event_id, player_name, stats, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       input.id,
       input.type,
@@ -428,6 +471,7 @@ export const cardTemplatesRepo = {
       input.imagePath ?? null,
       input.eventId ?? null,
       input.playerName ?? null,
+      input.stats ? JSON.stringify(input.stats) : null,
       input.createdAt
     );
   },
@@ -565,7 +609,7 @@ export const cardInstancesRepo = {
   // they're the same, but for a traded card updated_at is when *this* fan
   // took ownership, which is what "when did I get this" actually means.
   listByOwnerWithTemplate(fanId: string): OwnedCardView[] {
-    return db
+    const rows = db
       .prepare(
         `SELECT
            ci.id AS instance_id,
@@ -575,6 +619,7 @@ export const cardInstancesRepo = {
            ct.description AS description,
            ct.image_path AS image_path,
            ct.player_name AS player_name,
+           ct.stats AS stats,
            ci.acquired_via AS acquired_via,
            ci.updated_at AS acquired_at
          FROM card_instances ci
@@ -582,7 +627,8 @@ export const cardInstancesRepo = {
          WHERE ci.owner_fan_id = ?
          ORDER BY ci.updated_at DESC`
       )
-      .all(fanId) as OwnedCardView[];
+      .all(fanId) as (Omit<OwnedCardView, "stats"> & { stats: string | null })[];
+    return rows.map((row) => ({ ...row, stats: parseCardStats(row.stats) }));
   },
 };
 
@@ -594,6 +640,7 @@ export interface OwnedCardView {
   description: string;
   image_path: string | null;
   player_name: string | null;
+  stats: Record<string, string | number> | null;
   acquired_via: "redemption" | "trade";
   acquired_at: string;
 }

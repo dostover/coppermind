@@ -171,6 +171,13 @@ export function TradeBoard({
                   >
                     <span className="card-tile-type">{card.type}</span>
                     <h2>{card.title}</h2>
+                    {card.stats && (
+                      <p className="card-tile-stats">
+                        {Object.entries(card.stats)
+                          .map(([label, value]) => `${label} ${value}`)
+                          .join(" · ")}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -193,6 +200,13 @@ export function TradeBoard({
                   >
                     <span className="card-tile-type">{card.type}</span>
                     <h2>{card.title}</h2>
+                    {card.stats && (
+                      <p className="card-tile-stats">
+                        {Object.entries(card.stats)
+                          .map(([label, value]) => `${label} ${value}`)
+                          .join(" · ")}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
