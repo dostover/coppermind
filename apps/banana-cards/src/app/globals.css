@@ -327,3 +327,76 @@ body {
   color: var(--accent-foreground);
   cursor: pointer;
 }
+
+.collection-board {
+  margin-top: 1.5rem;
+}
+
+.collection-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.collection-stat-total {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-right: 0.25rem;
+}
+
+.collection-stat-pill {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--border);
+  font-size: 0.8rem;
+}
+
+.collection-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.collection-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.filter-pill {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.filter-pill-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 600;
+}
+
+.collection-sort {
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.collection-sort select {
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.85rem;
+}
