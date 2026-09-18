@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "crypto";
+import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { fansRepo, sessionsRepo, type FanRow } from "./db";
 
@@ -48,6 +49,22 @@ function extractToken(req: NextRequest): string | null {
 
 export function getFanFromRequest(req: NextRequest): FanRow | null {
   const token = extractToken(req);
+  if (!token) return null;
+
+  const session = sessionsRepo.getValidByToken(token, new Date().toISOString());
+  if (!session) return null;
+
+  const fan = fansRepo.getById(session.fan_id);
+  return fan ?? null;
+}
+
+// Server-component equivalent of getFanFromRequest - reads the session
+// cookie directly via next/headers rather than off a NextRequest, since a
+// server component (page.tsx) doesn't have one. Used by every page that
+// needs to know who's signed in without a round trip to /api/auth/me.
+export async function getFanFromCookies(): Promise<FanRow | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
   const session = sessionsRepo.getValidByToken(token, new Date().toISOString());

@@ -113,3 +113,116 @@ body {
   gap: 0.75rem;
   align-items: flex-start;
 }
+
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* Redeem + collection pages need more room than the narrow auth flow. */
+.page-wide {
+  max-width: 720px;
+}
+
+.redeem-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.redeem-form label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.redeem-form input {
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  text-transform: uppercase;
+}
+
+.redeem-form button[type="submit"] {
+  margin-top: 0.25rem;
+  padding: 0.65rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+}
+
+.redeem-form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.redeemed-card {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+}
+
+.redeemed-card-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.redeem-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.redeem-actions button {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.card-tile {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.card-tile-type {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.card-tile-player {
+  color: var(--muted);
+  font-size: 0.9rem;
+}

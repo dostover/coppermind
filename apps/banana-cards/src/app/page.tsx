@@ -1,18 +1,9 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { fansRepo, sessionsRepo } from "@/lib/db";
-import { SESSION_COOKIE } from "@/lib/authSession";
+import { getFanFromCookies } from "@/lib/authSession";
 import { SignOutButton } from "@/components/SignOutButton";
 
-// Server component: reads the session cookie directly (no round trip to
-// /api/auth/me needed since this runs in the same process against the same
-// db) to decide which state to render. Mirrors apps/inkwell's plain
-// server-rendered page pattern.
 export default async function Home() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  const session = token ? sessionsRepo.getValidByToken(token, new Date().toISOString()) : undefined;
-  const fan = session ? fansRepo.getById(session.fan_id) : undefined;
+  const fan = await getFanFromCookies();
 
   return (
     <main className="page">
@@ -24,6 +15,10 @@ export default async function Home() {
           <p>
             Signed in as <strong>{fan.display_name}</strong>.
           </p>
+          <nav className="nav-links">
+            <Link href="/redeem">Redeem a code</Link>
+            <Link href="/collection">My collection</Link>
+          </nav>
           <SignOutButton />
         </div>
       ) : (

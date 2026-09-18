@@ -188,13 +188,29 @@ On a trade's `status` moving to `confirmed`, each `trade_items` row's
 `card_instance` gets `owner_fan_id` updated to `to_fan_id`, `acquired_via` set to
 `trade`, and `updated_at` bumped. This is done as a single transaction.
 
+## Collection view
+
+`cardInstancesRepo.listByOwnerWithTemplate(fanId)` joins `card_instances` to
+`card_templates` for a fan's owned cards, ordered by `updated_at` (most
+recently acquired first — for a traded card this is when *this* fan took
+ownership, not when the instance was originally minted). This is the query
+behind both the `/collection` page (server component, reads it directly) and
+`GET /api/cards/mine` (its JSON twin for a future mobile client).
+
+The redemption flow itself is `POST /api/cards/redeem`: auth-required,
+resolves a code via `redemptionCodesRepo.redeem()` (the atomic
+redemption_codes + card_instances transaction described above), and returns
+the newly-created card's template content. The `/redeem` page wraps this in
+a form and gates on sign-in, prompting the fan to sign in first rather than
+exposing the form at all when there's no session.
+
 ## What's deliberately not here yet
 
 - No pricing/value fields anywhere — intentional, per the "no marketplace
   grammar" constraint.
-- No auth/session model — fans exist as a bare identity table until that's
-  designed.
 - No collective/shared-card table — ownership decision was strictly
   single-owner (see `card-value-model.md`).
 - No geolocation verification implementation — `verification_method` is a
   reserved column, not a built feature.
+- No trade UI yet — `trades`/`trade_items` exist in the schema but nothing
+  in the app reads or writes them yet.
