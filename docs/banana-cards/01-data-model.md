@@ -28,14 +28,65 @@ building against, matching the "sketch, then iterate in the build" plan.
 ## Entities
 
 ### `fans`
-A fan's account. Minimal for now — no auth system is being designed yet, this is
-just the identity that owns cards and participates in trades.
+A fan's account. `email` was added after the original table shipped (auth
+wasn't designed yet) via a guarded `ALTER TABLE`, matching apps/inkwell's own
+migration pattern for evolving an existing table.
 
 | column | type | notes |
 |---|---|---|
 | id | TEXT (uuid) | primary key |
-| display_name | TEXT | shown on cards traded to others |
+| display_name | TEXT | chosen at registration; shown on cards traded to others |
+| email | TEXT | unique (enforced via index, not a column constraint); how a fan logs back in |
 | created_at | TEXT (ISO) | |
+
+### `login_codes`
+One-time codes emailed to verify an address (see
+`claude/technical-decisions.md`'s email + one-time-code auth decision). Not
+tied to a `fan_id` — the fan may not exist yet on first login. Deliberately
+neutral on delivery format (a typed code and a clickable link both work
+against this shape); v1 ships a typed numeric code.
+
+| column | type | notes |
+|---|---|---|
+| id | TEXT (uuid) | primary key |
+| email | TEXT | normalized lowercase |
+| code | TEXT | |
+| expires_at | TEXT (ISO) | 10 minutes from issuance in v1 |
+| consumed_at | TEXT (ISO) | nullable; set atomically on the finalize call, not on the read-only check |
+| created_at | TEXT (ISO) | |
+
+### `sessions`
+A bearer session token the client stores and sends back
+(`Authorization: Bearer <token>`), not a cookie-only session — see
+`claude/technical-decisions.md`'s API-first decision. The web reference
+client additionally mirrors the token into an httpOnly cookie purely for its
+own convenience; the token itself is the canonical mechanism a future mobile
+client would use directly.
+
+| column | type | notes |
+|---|---|---|
+| token | TEXT | primary key |
+| fan_id | TEXT (uuid) | FK → `fans.id` |
+| created_at | TEXT (ISO) | |
+| expires_at | TEXT (ISO) | 90 days from creation in v1 ("stay signed in") |
+| revoked_at | TEXT (ISO) | nullable; set on sign-out |
+
+### Two-phase login flow
+`checkCode` is read-only — it tells the caller whether the code is valid and
+whether this email belongs to an existing fan, without spending the code.
+The client then calls one of two finalize operations, each of which
+re-validates and *atomically consumes* the code (an `UPDATE ... WHERE
+consumed_at IS NULL AND expires_at > ?` whose affected-row count is the
+race guard, not just the earlier read):
+
+- `completeSignIn` — existing fan, code consumed, session minted.
+- `completeRegistration` — new fan, code consumed, fan row created with the
+  chosen display name, session minted.
+
+This two-step split (rather than one combined "verify and log in" call) is
+what lets the client show a username-selection screen for new fans without
+a separate "pending registration" table — the code just stays unconsumed
+until whichever finalize call actually runs.
 
 ### `events`
 A single game/promo night. Cards get tied to events for presence value
