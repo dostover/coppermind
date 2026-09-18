@@ -409,3 +409,53 @@ body {
   color: var(--foreground);
   font-size: 0.85rem;
 }
+
+.demo-switcher {
+  margin-top: 2.5rem;
+  padding: 1rem;
+  border: 1px dashed var(--muted);
+  border-radius: 8px;
+}
+
+.demo-switcher h2 {
+  font-size: 1rem;
+}
+
+.demo-switcher p {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.demo-switcher-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.demo-switcher-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.demo-switcher-pill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.demo-switcher-blurb {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
