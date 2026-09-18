@@ -11,6 +11,12 @@
 # local env files
 .env*.local
 
+# runtime data
+/data/*.sqlite
+/data/*.sqlite-journal
+/data/*.sqlite-wal
+/data/*.sqlite-shm
+
 # misc
 .DS_Store
 *.tsbuildinfo
