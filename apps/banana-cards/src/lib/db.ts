@@ -558,7 +558,45 @@ export const cardInstancesRepo = {
       .prepare(`SELECT * FROM card_instances WHERE owner_fan_id = ? ORDER BY created_at DESC`)
       .all(fanId) as CardInstanceRow[];
   },
+
+  // Joined view for the collection screen / API - a fan's cards with their
+  // template content, not just the bare ownership row. acquired_at is
+  // card_instances.updated_at rather than created_at: for a redeemed card
+  // they're the same, but for a traded card updated_at is when *this* fan
+  // took ownership, which is what "when did I get this" actually means.
+  listByOwnerWithTemplate(fanId: string): OwnedCardView[] {
+    return db
+      .prepare(
+        `SELECT
+           ci.id AS instance_id,
+           ci.template_id AS template_id,
+           ct.type AS type,
+           ct.title AS title,
+           ct.description AS description,
+           ct.image_path AS image_path,
+           ct.player_name AS player_name,
+           ci.acquired_via AS acquired_via,
+           ci.updated_at AS acquired_at
+         FROM card_instances ci
+         JOIN card_templates ct ON ct.id = ci.template_id
+         WHERE ci.owner_fan_id = ?
+         ORDER BY ci.updated_at DESC`
+      )
+      .all(fanId) as OwnedCardView[];
+  },
 };
+
+export interface OwnedCardView {
+  instance_id: string;
+  template_id: string;
+  type: CardTemplateRow["type"];
+  title: string;
+  description: string;
+  image_path: string | null;
+  player_name: string | null;
+  acquired_via: "redemption" | "trade";
+  acquired_at: string;
+}
 
 export interface TradeRow {
   id: string;
