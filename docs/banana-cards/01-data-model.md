@@ -268,6 +268,22 @@ back the "trade-eligible" filtering above — a card already offered or
 requested in one pending trade can't be pulled into a second one until that
 trade resolves.
 
+## Demo data
+
+`scripts/seed.ts` also creates four demo fan personas with pre-populated
+collections (Peel Master Flex, a broad collector; Rookie Nanas, a brand-new
+fan with two starter cards; Sluggo and Zesty, mid-size collections that
+between them exercise a confirmed trade and a pending one) — see the
+"Demo fan personas" block near the end of the file for exact contents. Cards
+are granted via the real `redemptionCodesRepo.redeem()` path against
+disposable `DEMO-GRANT-*` codes, and trades via the real `tradesRepo.create()`
+/ `confirm()` path, so a persona's data is exactly as valid as a genuinely
+redeemed/traded fan's — nothing is inserted directly. Sign in as any persona
+at `/sign-in` with the email `seed.ts` logs; since no email service is wired
+up yet, `request-code` echoes the one-time code back as `devCode` instead of
+sending it (see `redemption_codes`/two-phase-login notes above), so there's
+nothing further to configure to demo with them.
+
 ## What's deliberately not here yet
 
 - No pricing/value fields anywhere — intentional, per the "no marketplace
