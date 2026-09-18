@@ -10,17 +10,23 @@ type ViaFilter = "all" | "redemption" | "trade";
 // pills only show types the fan actually owns at least one of, in this
 // order, so the row never has more options than there are cards to find.
 const TYPE_ORDER: OwnedCardView["type"][] = [
+  "team",
   "roster",
   "moment",
   "character",
+  "venue",
+  "special_item",
   "trade_only",
   "milestone",
 ];
 
 const TYPE_LABELS: Record<OwnedCardView["type"], string> = {
+  team: "Team",
   roster: "Roster",
   moment: "Moment",
   character: "Character",
+  venue: "Venue",
+  special_item: "Special item",
   trade_only: "Trade only",
   milestone: "Milestone",
 };
@@ -135,6 +141,13 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
               <h2>{card.title}</h2>
               {card.player_name && <p className="card-tile-player">{card.player_name}</p>}
               {card.description && <p>{card.description}</p>}
+              {card.stats && (
+                <p className="card-tile-stats">
+                  {Object.entries(card.stats)
+                    .map(([label, value]) => `${label} ${value}`)
+                    .join(" · ")}
+                </p>
+              )}
             </div>
           ))}
         </div>

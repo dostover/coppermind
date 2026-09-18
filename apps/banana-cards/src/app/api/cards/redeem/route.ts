@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { redemptionCodesRepo, cardTemplatesRepo } from "@/lib/db";
+import { redemptionCodesRepo, cardTemplatesRepo, parseCardStats } from "@/lib/db";
 import { getFanFromRequest } from "@/lib/authSession";
 
 export async function POST(req: NextRequest) {
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       title: template?.title ?? "Unknown card",
       description: template?.description ?? "",
       type: template?.type ?? null,
+      stats: parseCardStats(template?.stats ?? null),
     },
   });
 }

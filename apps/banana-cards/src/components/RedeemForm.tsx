@@ -13,6 +13,7 @@ type RedeemedCard = {
   title: string;
   description: string;
   type: string | null;
+  stats: Record<string, string | number> | null;
 };
 
 export function RedeemForm() {
@@ -55,6 +56,13 @@ export function RedeemForm() {
         <h2>You got a card!</h2>
         <p className="redeemed-card-title">{redeemed.title}</p>
         {redeemed.description && <p>{redeemed.description}</p>}
+        {redeemed.stats && (
+          <p className="card-tile-stats">
+            {Object.entries(redeemed.stats)
+              .map(([label, value]) => `${label} ${value}`)
+              .join(" · ")}
+          </p>
+        )}
         <div className="redeem-actions">
           <button type="button" onClick={() => setRedeemed(null)}>
             Redeem another code

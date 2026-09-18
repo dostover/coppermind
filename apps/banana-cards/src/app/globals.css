@@ -227,6 +227,15 @@ body {
   font-size: 0.9rem;
 }
 
+.card-tile-stats {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  color: var(--muted);
+}
+
 .trade-board {
   margin-top: 1.5rem;
   display: flex;
