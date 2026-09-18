@@ -92,11 +92,25 @@ cardTemplatesRepo.create({
   createdAt: now,
 });
 
+const milestoneTemplateId = randomUUID();
+cardTemplatesRepo.create({
+  id: milestoneTemplateId,
+  type: "milestone",
+  title: "First Home Run of the Season",
+  description: "Commemorates the record-setting swing.",
+  eventId: completedEventId,
+  createdAt: now,
+});
+
 console.log("Issuing unredeemed codes...");
+// Two codes each for two fans (BB-*-001 / BB-*-002) so there's something on
+// both sides to test the trade flow with, not just redemption.
 const codes: { code: string; template: string }[] = [
   { code: "BB-ROSTER-001", template: rosterTemplateId },
   { code: "BB-MOMENT-001", template: momentTemplateId },
   { code: "BB-CHAR-001", template: characterTemplateId },
+  { code: "BB-ROSTER-002", template: rosterTemplateId },
+  { code: "BB-MILESTONE-001", template: milestoneTemplateId },
 ];
 
 for (const { code, template } of codes) {
