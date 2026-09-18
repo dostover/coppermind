@@ -681,7 +681,106 @@ export const tradesRepo = {
       id
     );
   },
+
+  // True if this card instance is already committed to some other pending
+  // trade. Checked before creating a new proposal (so a fan can't offer, or
+  // have requested from them, the same card in two trades at once) and used
+  // to filter which cards show up as pickable in the propose flow.
+  isCardInPendingTrade(cardInstanceId: string): boolean {
+    const row = db
+      .prepare(
+        `SELECT 1 FROM trade_items ti
+         JOIN trades t ON t.id = ti.trade_id
+         WHERE t.status = 'pending' AND ti.card_instance_id = ?
+         LIMIT 1`
+      )
+      .get(cardInstanceId);
+    return row !== undefined;
+  },
+
+  // Every card instance this fan currently has tied up in a pending trade
+  // (on either side of it - from_fan_id is always the current owner while a
+  // trade is pending, ownership only moves on confirm). Used to filter a
+  // fan's own collection down to what's actually offerable right now.
+  pendingCardInstanceIds(fanId: string): Set<string> {
+    const rows = db
+      .prepare(
+        `SELECT ti.card_instance_id FROM trade_items ti
+         JOIN trades t ON t.id = ti.trade_id
+         WHERE t.status = 'pending' AND ti.from_fan_id = ?`
+      )
+      .all(fanId) as { card_instance_id: string }[];
+    return new Set(rows.map((r) => r.card_instance_id));
+  },
+
+  // Every trade this fan is party to (either side, any status), newest
+  // first, with the counterpart's name and both sides' card content resolved
+  // - what the UI actually needs to render a trade list without N+1 lookups
+  // from the caller.
+  listForFan(fanId: string): TradeView[] {
+    const trades = db
+      .prepare(
+        `SELECT * FROM trades WHERE fan_a_id = ? OR fan_b_id = ? ORDER BY created_at DESC`
+      )
+      .all(fanId, fanId) as TradeRow[];
+    if (trades.length === 0) return [];
+
+    const tradeIds = trades.map((t) => t.id);
+    const placeholders = tradeIds.map(() => "?").join(",");
+    const items = db
+      .prepare(
+        `SELECT ti.trade_id, ti.card_instance_id, ti.from_fan_id, ti.to_fan_id,
+                ct.title, ct.type
+         FROM trade_items ti
+         JOIN card_instances ci ON ci.id = ti.card_instance_id
+         JOIN card_templates ct ON ct.id = ci.template_id
+         WHERE ti.trade_id IN (${placeholders})`
+      )
+      .all(...tradeIds) as {
+      trade_id: string;
+      card_instance_id: string;
+      from_fan_id: string;
+      to_fan_id: string;
+      title: string;
+      type: CardTemplateRow["type"];
+    }[];
+
+    return trades.map((trade) => {
+      const isProposer = trade.fan_a_id === fanId;
+      const counterpartId = isProposer ? trade.fan_b_id : trade.fan_a_id;
+      const counterpart = fansRepo.getById(counterpartId);
+      const tradeItems = items.filter((i) => i.trade_id === trade.id);
+
+      return {
+        id: trade.id,
+        status: trade.status,
+        direction: isProposer ? "outgoing" : "incoming",
+        counterpartFanId: counterpartId,
+        counterpartName: counterpart?.display_name ?? "Unknown fan",
+        offeredByMe: tradeItems
+          .filter((i) => i.from_fan_id === fanId)
+          .map((i) => ({ instanceId: i.card_instance_id, title: i.title, type: i.type })),
+        offeredByThem: tradeItems
+          .filter((i) => i.from_fan_id === counterpartId)
+          .map((i) => ({ instanceId: i.card_instance_id, title: i.title, type: i.type })),
+        createdAt: trade.created_at,
+        confirmedAt: trade.confirmed_at,
+      };
+    });
+  },
 };
+
+export interface TradeView {
+  id: string;
+  status: TradeRow["status"];
+  direction: "outgoing" | "incoming";
+  counterpartFanId: string;
+  counterpartName: string;
+  offeredByMe: { instanceId: string; title: string; type: CardTemplateRow["type"] }[];
+  offeredByThem: { instanceId: string; title: string; type: CardTemplateRow["type"] }[];
+  createdAt: string;
+  confirmedAt: string | null;
+}
 
 // Convenience for callers that need a fresh id/timestamp without importing
 // crypto directly (mirrors how apps/inkwell's API routes generate these).

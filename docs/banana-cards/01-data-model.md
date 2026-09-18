@@ -204,6 +204,44 @@ the newly-created card's template content. The `/redeem` page wraps this in
 a form and gates on sign-in, prompting the fan to sign in first rather than
 exposing the form at all when there's no session.
 
+## Trading
+
+The `/trade` page is the web reference client's take on the mutual-QR-scan
+mechanism decided in `card-value-model.md`. Since both fans have to be
+physically together anyway, the "scan" is a fan's own id, shown as text and
+as a QR image (generated server-side with the `qrcode` package and handed to
+the page as a data URL — no QR library needed in the browser bundle); a real
+mobile client could later replace typing that code in with an actual camera
+scan without any backend change, since both resolve to the same fan id.
+
+- `GET /api/trades/lookup/[fanId]` — resolves one already-known fan id (from
+  the code exchange above) into their display name and their trade-eligible
+  cards (their collection minus anything already tied up in another pending
+  trade). Deliberately not a searchable directory — you can only look up a
+  fan whose id you already have, which is what keeps this from becoming a
+  browsable "who has what" listing.
+- `POST /api/trades` — the proposer offers one of their own cards and
+  requests one of the other fan's (both already validated as owned and
+  trade-eligible), creating a `pending` trade via `tradesRepo.create()` with
+  both `trade_items` rows set. Nothing moves yet.
+- `POST /api/trades/[id]/confirm` — only the recipient (`fan_b`) can call
+  this. The proposer already committed to the terms by building them after
+  seeing the recipient's collection in person; the recipient's confirm is the
+  second of the two confirmations the mechanism requires, and the only thing
+  that actually calls `tradesRepo.confirm()` (the atomic ownership swap).
+- `POST /api/trades/[id]/cancel` — either side of a pending trade can back
+  out (the proposer changing their mind, or the recipient declining instead
+  of confirming). Confirmed trades don't unwind — see the single-atomic-event
+  framing in `card-value-model.md`.
+- `GET /api/trades` — the fan's own trades (pending incoming, pending
+  outgoing, and history), as the API-first JSON twin of `/trade`'s server-
+  rendered lists, via the new `tradesRepo.listForFan()`.
+
+`tradesRepo.isCardInPendingTrade()` and `tradesRepo.pendingCardInstanceIds()`
+back the "trade-eligible" filtering above — a card already offered or
+requested in one pending trade can't be pulled into a second one until that
+trade resolves.
+
 ## What's deliberately not here yet
 
 - No pricing/value fields anywhere — intentional, per the "no marketplace
@@ -212,5 +250,6 @@ exposing the form at all when there's no session.
   single-owner (see `card-value-model.md`).
 - No geolocation verification implementation — `verification_method` is a
   reserved column, not a built feature.
-- No trade UI yet — `trades`/`trade_items` exist in the schema but nothing
-  in the app reads or writes them yet.
+- No real camera-based QR scanning — the web reference client uses typed/
+  displayed codes; an actual scan is a mobile-client enhancement on top of
+  the same `fanId`-based lookup, not a schema change.

@@ -18,6 +18,7 @@ export default async function Home() {
           <nav className="nav-links">
             <Link href="/redeem">Redeem a code</Link>
             <Link href="/collection">My collection</Link>
+            <Link href="/trade">Trade with a fan</Link>
           </nav>
           <SignOutButton />
         </div>
