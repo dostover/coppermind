@@ -16,7 +16,14 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
-import { eventsRepo, cardTemplatesRepo, redemptionCodesRepo, type CardTemplateRow } from "../src/lib/db";
+import {
+  eventsRepo,
+  cardTemplatesRepo,
+  redemptionCodesRepo,
+  fansRepo,
+  tradesRepo,
+  type CardTemplateRow,
+} from "../src/lib/db";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -398,3 +405,116 @@ console.log(
   `\n(trade_only template "${tradeOnlyTemplateId}" and the Rally Kazoo, Tutu of Triumph, and ` +
     `Breakdancing First-Base Coach templates were seeded with no code - not directly redeemable, by design)`
 );
+
+// --- Demo fan personas: a few fans with pre-populated collections, so
+// there's something real to click through immediately after `npm run seed`
+// without first working through the redeem flow by hand. Sign in as any of
+// them at /sign-in with the email below - request-code has no real email
+// service wired up yet (see src/app/api/auth/request-code/route.ts), so it
+// echoes the one-time code back as devCode and logs it, which is all you
+// need to complete sign-in as that persona.
+
+type Persona = { id: string; displayName: string; email: string };
+
+const peelMasterFlex: Persona = {
+  id: randomUUID(),
+  displayName: "Peel Master Flex",
+  email: "peelmaster@example.com",
+};
+const rookieNanas: Persona = {
+  id: randomUUID(),
+  displayName: "Rookie Nanas",
+  email: "rookienanas@example.com",
+};
+const sluggo: Persona = { id: randomUUID(), displayName: "Sluggo", email: "sluggo@example.com" };
+const zesty: Persona = { id: randomUUID(), displayName: "Zesty", email: "zesty@example.com" };
+
+console.log("\nSeeding demo fan personas...");
+for (const p of [peelMasterFlex, rookieNanas, sluggo, zesty]) {
+  fansRepo.create({ id: p.id, displayName: p.displayName, email: p.email, createdAt: now });
+}
+
+// Issues a fresh, dedicated code for `templateId` and redeems it straight
+// into `fan`'s collection, via the same redemptionCodesRepo.redeem() path a
+// real fan's redemption hits - not a raw insert, so a seeded persona's cards
+// are exactly as valid as a genuinely redeemed one. Codes are "DEMO-GRANT-"
+// prefixed and consumed the instant they're issued, so they never show up
+// in (or collide with) the "codes to try" list printed above.
+let demoGrantCount = 0;
+function grantCard(fan: Persona, templateId: string): string {
+  demoGrantCount += 1;
+  const code = `DEMO-GRANT-${String(demoGrantCount).padStart(3, "0")}`;
+  redemptionCodesRepo.issue({ id: randomUUID(), code, templateId, issuedVia: "staff", createdAt: now });
+  return redemptionCodesRepo.redeem({ code, fanId: fan.id, newInstanceId: randomUUID(), redeemedAt: now })
+    .id;
+}
+
+// Peel Master Flex: the collector - a broad, mixed collection so the
+// collection view's type filters, source filters, and stats all have
+// several categories to show at once.
+grantCard(peelMasterFlex, rosterTemplateId);
+grantCard(peelMasterFlex, teams[0].id); // Savannah Bananas
+grantCard(peelMasterFlex, teams[1].id); // Party Animals
+grantCard(peelMasterFlex, players[0].id); // Static
+const peelMasterFlexMarmalade = grantCard(peelMasterFlex, players[1].id); // Marmalade
+grantCard(peelMasterFlex, venues[0].id); // Grayson Stadium
+grantCard(peelMasterFlex, specialItems[0].id); // The Home Run Cape
+grantCard(peelMasterFlex, characters[0].id); // Dancing Umpire
+grantCard(peelMasterFlex, milestoneTemplateId);
+
+// Rookie Nanas: a brand-new fan with just a couple of starter cards - the
+// realistic common case, not a collector's account.
+grantCard(rookieNanas, momentTemplateId);
+grantCard(rookieNanas, characters[1].id); // Banana Nanas
+
+// Sluggo: a mid-size collection, and one side of a trade that's already
+// gone through (below), so acquired_via: 'trade' has something real to
+// render, not just redemption.
+grantCard(sluggo, teams[2].id); // Firefighters
+const sluggoSizzle = grantCard(sluggo, players[2].id); // Sizzle
+const sluggoTruist = grantCard(sluggo, venues[1].id); // Truist Park
+grantCard(sluggo, specialItems[1].id); // The Pinch-Hit Stilts
+
+// Zesty: a mid-size collection, and the other side of a trade still
+// awaiting confirmation, so the "waiting on you" / "waiting on them" states
+// on /trade have something to show without a live two-phone demo.
+const zestyTwoStep = grantCard(zesty, players[3].id); // Two-Step
+grantCard(zesty, teams[3].id); // Texas Tailgaters
+grantCard(zesty, venues[2].id); // Wrigley Field
+
+console.log("Seeding a confirmed trade (Sluggo <-> Peel Master Flex)...");
+const confirmedTradeId = randomUUID();
+tradesRepo.create({
+  id: confirmedTradeId,
+  fanAId: sluggo.id,
+  fanBId: peelMasterFlex.id,
+  createdAt: now,
+  items: [
+    { id: randomUUID(), cardInstanceId: sluggoSizzle, fromFanId: sluggo.id, toFanId: peelMasterFlex.id },
+    {
+      id: randomUUID(),
+      cardInstanceId: peelMasterFlexMarmalade,
+      fromFanId: peelMasterFlex.id,
+      toFanId: sluggo.id,
+    },
+  ],
+});
+tradesRepo.confirm(confirmedTradeId, now);
+
+console.log("Seeding a pending trade (Zesty -> Sluggo, awaiting Sluggo's confirmation)...");
+tradesRepo.create({
+  id: randomUUID(),
+  fanAId: zesty.id,
+  fanBId: sluggo.id,
+  createdAt: now,
+  items: [
+    { id: randomUUID(), cardInstanceId: zestyTwoStep, fromFanId: zesty.id, toFanId: sluggo.id },
+    { id: randomUUID(), cardInstanceId: sluggoTruist, fromFanId: sluggo.id, toFanId: zesty.id },
+  ],
+});
+
+console.log("\nDemo personas ready - request a sign-in code for any of these at /sign-in:");
+console.log("  peelmaster@example.com   Peel Master Flex   9 cards, broad mixed collection");
+console.log("  rookienanas@example.com  Rookie Nanas       2 cards, brand-new fan");
+console.log("  sluggo@example.com       Sluggo             4 cards, 1 confirmed trade, 1 pending trade to confirm");
+console.log("  zesty@example.com        Zesty              3 cards, 1 pending trade awaiting Sluggo");

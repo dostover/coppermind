@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getFanFromCookies } from "@/lib/authSession";
 import { SignOutButton } from "@/components/SignOutButton";
+import { DemoPersonaSwitcher } from "@/components/DemoPersonaSwitcher";
 
 export default async function Home() {
   const fan = await getFanFromCookies();
@@ -27,6 +28,11 @@ export default async function Home() {
           <Link href="/sign-in">Sign in</Link> to get started.
         </p>
       )}
+
+      {/* Dev-only - hidden from a production build. Lets a demo jump
+          straight between seeded personas without re-typing email/code each
+          time, whether or not someone's currently signed in. */}
+      {process.env.NODE_ENV !== "production" && <DemoPersonaSwitcher />}
     </main>
   );
 }
