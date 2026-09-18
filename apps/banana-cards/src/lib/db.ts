@@ -29,6 +29,38 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
+  -- One-time codes emailed to verify a fan's address (see
+  -- claude/technical-decisions.md's email + one-time-code auth decision).
+  -- Deliberately neutral on delivery format (typed code vs. clickable link
+  -- both work against this shape) - that's a UI-layer choice, not a schema
+  -- one. Not tied to a fan_id: the fan may not exist yet on first login.
+  CREATE TABLE IF NOT EXISTS login_codes (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    code TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email);
+
+  -- A bearer session token the client stores and sends back
+  -- (Authorization: Bearer <token>), not a cookie-only session - chosen so a
+  -- future native mobile client can use the exact same auth as the web
+  -- reference client, no rewrite needed (see claude/technical-decisions.md's
+  -- API-first decision). Long expiry by design: this is the "stay signed in"
+  -- session, not re-verified by email on every app open.
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    fan_id TEXT NOT NULL REFERENCES fans(id),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_fan ON sessions(fan_id);
+
   CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY,
     team TEXT NOT NULL,
@@ -118,25 +150,208 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_trade_items_trade ON trade_items(trade_id);
 `);
 
+// fans.email was added after the original table shape shipped (auth wasn't
+// designed yet) - ALTER TABLE ADD COLUMN, guarded so it's a no-op on a
+// database that already has it, matching apps/inkwell's migration pattern.
+// Nullable at the schema level (SQLite can't add a NOT NULL column without a
+// default), but every fansRepo.create caller is expected to always pass one -
+// email is how a fan logs back in, per claude/technical-decisions.md.
+const fanColumns = db.prepare(`PRAGMA table_info(fans)`).all() as { name: string }[];
+if (!fanColumns.some((c) => c.name === "email")) {
+  db.exec(`ALTER TABLE fans ADD COLUMN email TEXT`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fans_email ON fans(email)`);
+}
+
 export interface FanRow {
   id: string;
   display_name: string;
+  email: string | null;
   created_at: string;
 }
 
 export const fansRepo = {
-  create(input: { id: string; displayName: string; createdAt: string }): void {
-    db.prepare(`INSERT INTO fans (id, display_name, created_at) VALUES (?, ?, ?)`).run(
-      input.id,
-      input.displayName,
-      input.createdAt
-    );
+  create(input: { id: string; displayName: string; email: string; createdAt: string }): void {
+    db.prepare(
+      `INSERT INTO fans (id, display_name, email, created_at) VALUES (?, ?, ?, ?)`
+    ).run(input.id, input.displayName, input.email, input.createdAt);
   },
 
   getById(id: string): FanRow | undefined {
     return db.prepare(`SELECT * FROM fans WHERE id = ?`).get(id) as FanRow | undefined;
   },
+
+  getByEmail(email: string): FanRow | undefined {
+    return db.prepare(`SELECT * FROM fans WHERE email = ?`).get(email) as FanRow | undefined;
+  },
 };
+
+// Emails are normalized to lowercase at this boundary so "Alice@x.com" and
+// "alice@x.com" can't create two fans or fail to match an existing one.
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export interface LoginCodeRow {
+  id: string;
+  email: string;
+  code: string;
+  expires_at: string;
+  consumed_at: string | null;
+  created_at: string;
+}
+
+export const loginCodesRepo = {
+  issue(input: { id: string; email: string; code: string; expiresAt: string; createdAt: string }): void {
+    db.prepare(
+      `INSERT INTO login_codes (id, email, code, expires_at, created_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(input.id, normalizeEmail(input.email), input.code, input.expiresAt, input.createdAt);
+  },
+};
+
+export interface SessionRow {
+  token: string;
+  fan_id: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+}
+
+export const sessionsRepo = {
+  create(input: { token: string; fanId: string; createdAt: string; expiresAt: string }): void {
+    db.prepare(
+      `INSERT INTO sessions (token, fan_id, created_at, expires_at) VALUES (?, ?, ?, ?)`
+    ).run(input.token, input.fanId, input.createdAt, input.expiresAt);
+  },
+
+  // Returns the session only if it's neither revoked nor expired - an API
+  // route treats any other result as "not signed in", not a distinct error.
+  getValidByToken(token: string, now: string): SessionRow | undefined {
+    return db
+      .prepare(
+        `SELECT * FROM sessions
+         WHERE token = ? AND revoked_at IS NULL AND expires_at > ?`
+      )
+      .get(token, now) as SessionRow | undefined;
+  },
+
+  revoke(token: string, revokedAt: string): void {
+    db.prepare(`UPDATE sessions SET revoked_at = ? WHERE token = ?`).run(revokedAt, token);
+  },
+};
+
+// Two-phase login: checkCode is a read-only peek so the client can decide
+// which screen to show next (an existing fan goes straight through; a new
+// email needs a username-selection screen first) without spending the code.
+// The code is only actually consumed by whichever finalize call the client
+// makes next (completeSignIn or completeRegistration) - both do the
+// check-and-consume atomically via the UPDATE's WHERE clause + changes
+// count, so two concurrent finalize attempts on the same code can't both
+// win (the loser sees "invalid or expired code", not a duplicate session).
+export const authRepo = {
+  checkCode(input: { email: string; code: string; now: string }): {
+    valid: boolean;
+    isNewFan: boolean;
+  } {
+    const email = normalizeEmail(input.email);
+    const match = db
+      .prepare(
+        `SELECT id FROM login_codes
+         WHERE email = ? AND code = ? AND consumed_at IS NULL AND expires_at > ?
+         ORDER BY created_at DESC LIMIT 1`
+      )
+      .get(email, input.code, input.now) as { id: string } | undefined;
+
+    if (!match) return { valid: false, isNewFan: false };
+
+    const fan = db.prepare(`SELECT id FROM fans WHERE email = ?`).get(email) as
+      | { id: string }
+      | undefined;
+
+    return { valid: true, isNewFan: !fan };
+  },
+
+  // For an email that already has a fan. Throws if the code can't be
+  // consumed (wrong/expired/already used) or if no fan exists for this email
+  // (client should have routed to completeRegistration instead).
+  completeSignIn(input: {
+    email: string;
+    code: string;
+    now: string;
+    sessionExpiresAt: string;
+    newSessionToken: string;
+  }): { fan: FanRow; session: SessionRow } {
+    const email = normalizeEmail(input.email);
+
+    const tx = db.transaction(() => {
+      const consumed = consumeCode(email, input.code, input.now);
+      if (!consumed) throw new Error("Invalid or expired code.");
+
+      const fan = db.prepare(`SELECT * FROM fans WHERE email = ?`).get(email) as
+        | FanRow
+        | undefined;
+      if (!fan) throw new Error("No account exists for this email yet.");
+
+      const session = createSession(fan.id, input.newSessionToken, input.now, input.sessionExpiresAt);
+      return { fan, session };
+    });
+
+    return tx();
+  },
+
+  // For a brand-new email. Throws if the code can't be consumed, or if a fan
+  // was created for this email in the gap since checkCode ran (a second
+  // registration attempt for the same email racing this one) - the client
+  // should treat that as "actually, sign in instead."
+  completeRegistration(input: {
+    email: string;
+    code: string;
+    now: string;
+    sessionExpiresAt: string;
+    newFanId: string;
+    displayName: string;
+    newSessionToken: string;
+  }): { fan: FanRow; session: SessionRow } {
+    const email = normalizeEmail(input.email);
+
+    const tx = db.transaction(() => {
+      const consumed = consumeCode(email, input.code, input.now);
+      if (!consumed) throw new Error("Invalid or expired code.");
+
+      const existing = db.prepare(`SELECT id FROM fans WHERE email = ?`).get(email);
+      if (existing) throw new Error("An account already exists for this email.");
+
+      db.prepare(
+        `INSERT INTO fans (id, display_name, email, created_at) VALUES (?, ?, ?, ?)`
+      ).run(input.newFanId, input.displayName, email, input.now);
+      const fan = db.prepare(`SELECT * FROM fans WHERE id = ?`).get(input.newFanId) as FanRow;
+
+      const session = createSession(fan.id, input.newSessionToken, input.now, input.sessionExpiresAt);
+      return { fan, session };
+    });
+
+    return tx();
+  },
+};
+
+// Shared by both finalize paths. The WHERE clause repeats consumed_at IS
+// NULL / expires_at > now (already checked by checkCode) so the UPDATE
+// itself is the atomic guard against a race, not just the earlier read.
+function consumeCode(email: string, code: string, now: string): boolean {
+  const result = db
+    .prepare(
+      `UPDATE login_codes SET consumed_at = ?
+       WHERE email = ? AND code = ? AND consumed_at IS NULL AND expires_at > ?`
+    )
+    .run(now, email, code, now);
+  return result.changes > 0;
+}
+
+function createSession(fanId: string, token: string, createdAt: string, expiresAt: string): SessionRow {
+  db.prepare(
+    `INSERT INTO sessions (token, fan_id, created_at, expires_at) VALUES (?, ?, ?, ?)`
+  ).run(token, fanId, createdAt, expiresAt);
+  return db.prepare(`SELECT * FROM sessions WHERE token = ?`).get(token) as SessionRow;
+}
 
 export interface EventRow {
   id: string;
