@@ -197,6 +197,13 @@ ownership, not when the instance was originally minted). This is the query
 behind both the `/collection` page (server component, reads it directly) and
 `GET /api/cards/mine` (its JSON twin for a future mobile client).
 
+`/collection` renders that list through `CollectionBoard`, a client
+component that filters (by card type and by acquired-via), sorts (newest/
+oldest/title/type), and summarizes (total count, per-type counts,
+redeemed-vs-traded counts) entirely over the already-fetched list — no new
+query or API needed, since a fan's collection is small enough that doing
+this server-side would just add round trips for no benefit.
+
 The redemption flow itself is `POST /api/cards/redeem`: auth-required,
 resolves a code via `redemptionCodesRepo.redeem()` (the atomic
 redemption_codes + card_instances transaction described above), and returns
