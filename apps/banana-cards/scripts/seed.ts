@@ -129,6 +129,7 @@ type SeedTemplate = {
   playerName?: string;
   stats?: Record<string, string | number>;
   code?: string;
+  eventId?: string;
 };
 
 console.log("Seeding stadium cards...");
@@ -299,12 +300,68 @@ const players: SeedTemplate[] = [
     stats: { W: 8, L: 7, ERA: "3.02", SO: 94, IP: 121 },
     code: "BB-PLAYER-006",
   },
+  // Second roster spot per team, added to round the set out to a dozen -
+  // same fictional-nickname-only rule as the six above.
+  {
+    id: randomUUID(),
+    type: "roster",
+    title: "Sunburst",
+    playerName: "Sunburst",
+    description: "Right fielder for the Savannah Bananas with a throwing arm that ends arguments at third.",
+    stats: { AVG: ".301", HR: 19, RBI: 63, SB: 8 },
+    code: "BB-PLAYER-007",
+  },
+  {
+    id: randomUUID(),
+    type: "roster",
+    title: "Confetti",
+    playerName: "Confetti",
+    description: "Second baseman for the Party Animals. Sprays singles the way her nickname sprays everything else.",
+    stats: { AVG: ".329", HR: 4, RBI: 38, SB: 22 },
+    code: "BB-PLAYER-008",
+  },
+  {
+    id: randomUUID(),
+    type: "roster",
+    title: "Blaze",
+    playerName: "Blaze",
+    description: "Starting pitcher for the Firefighters, first name up whenever the bullpen needs a strikeout fast.",
+    stats: { W: 11, L: 5, ERA: "2.41", SO: 118, IP: 132 },
+    code: "BB-PLAYER-009",
+  },
+  {
+    id: randomUUID(),
+    type: "roster",
+    title: "Lasso",
+    playerName: "Lasso",
+    description: "Third baseman for the Texas Tailgaters who ropes down anything hit anywhere near the line.",
+    stats: { AVG: ".295", HR: 11, RBI: 49, SB: 17 },
+    code: "BB-PLAYER-010",
+  },
+  {
+    id: randomUUID(),
+    type: "roster",
+    title: "Tidal",
+    playerName: "Tidal",
+    description: "Center fielder for the Loco Beach Coconuts, covering more grass than anyone else in the league.",
+    stats: { AVG: ".267", HR: 7, RBI: 34, SB: 29 },
+    code: "BB-PLAYER-011",
+  },
+  {
+    id: randomUUID(),
+    type: "roster",
+    title: "Juggler",
+    playerName: "Juggler",
+    description: "Sidearm reliever for the Indianapolis Clowns, working three pitches that all look like the same one.",
+    stats: { W: 3, L: 4, SV: 9, ERA: "3.65", SO: 57 },
+    code: "BB-PLAYER-012",
+  },
 ];
 
 console.log("Seeding special item cards...");
-// Gimmick props, not player content - flavor only, no stats. Two are
-// directly redeemable; the other two are seeded already in circulation
-// (trade-only in practice), the same pattern as "Yellow Tux" above.
+// Gimmick props, not player content - flavor only, no stats. Every one is
+// directly redeemable via its own code, the same pattern as "Home Run Cape"
+// originally used.
 const specialItems: SeedTemplate[] = [
   {
     id: randomUUID(),
@@ -324,15 +381,39 @@ const specialItems: SeedTemplate[] = [
   {
     id: randomUUID(),
     type: "special_item",
-    title: "The Rally Kazoo",
+    title: "The Cosmic Rally Helmet",
     description:
-      "Passed hand to hand around the dugout during a two-out rally. The tone gets worse the longer the inning goes.",
+      "Handed to whoever's on deck during a two-out rally - the bit is that the next hit was apparently 'written in the stars.'",
+    code: "BB-ITEM-003",
   },
   {
     id: randomUUID(),
     type: "special_item",
-    title: "Tutu of Triumph",
-    description: "Worn by the last player to make an error, and retired the moment someone else claims the title.",
+    title: "The Victory Unicycle",
+    description: "One lap around the infield for whoever closes out a win. Nobody's fallen off. Yet.",
+    code: "BB-ITEM-004",
+  },
+  {
+    id: randomUUID(),
+    type: "special_item",
+    title: "The Ten-Gallon Cowboy Hat",
+    description: "Passed to the game's loudest walk-up-song pick. Stays on through the next at-bat no matter what.",
+    code: "BB-ITEM-005",
+  },
+];
+
+console.log("Seeding a second moment card...");
+// A second highlight from the same completed game as "Behind-the-back
+// catch" above - two different bits from one night, not two separate games.
+const moments: SeedTemplate[] = [
+  {
+    id: randomUUID(),
+    type: "moment",
+    title: "The Human Slingshot",
+    description:
+      "Two teammates launched the on-deck hitter toward the plate for his walk-up. He still went 2-for-3.",
+    eventId: completedEventId,
+    code: "BB-MOMENT-002",
   },
 ];
 
@@ -361,7 +442,7 @@ const characters: SeedTemplate[] = [
   },
 ];
 
-const newTemplates = [...venues, ...teams, ...players, ...specialItems, ...characters];
+const newTemplates = [...venues, ...teams, ...players, ...specialItems, ...characters, ...moments];
 for (const t of newTemplates) {
   cardTemplatesRepo.create({
     id: t.id,
@@ -370,6 +451,7 @@ for (const t of newTemplates) {
     description: t.description,
     playerName: t.playerName,
     stats: t.stats,
+    eventId: t.eventId,
     createdAt: now,
   });
 }
@@ -388,12 +470,22 @@ const codes: { code: string; template: string }[] = [
     .map((t) => ({ code: t.code, template: t.id })),
 ];
 
+// Redemption codes for event-tied cards (moments/characters/milestones)
+// carry the same event id as their template, so the redeem flow can show
+// "which game this is from." Combines the two originally-hardcoded ids
+// with any new event-tied template (e.g. the second moment card above).
+const templateEventIds = new Map<string, string>([
+  [momentTemplateId, completedEventId],
+  [characterTemplateId, completedEventId],
+  ...newTemplates.filter((t) => t.eventId).map((t): [string, string] => [t.id, t.eventId!]),
+]);
+
 for (const { code, template } of codes) {
   redemptionCodesRepo.issue({
     id: randomUUID(),
     code,
     templateId: template,
-    eventId: template === momentTemplateId || template === characterTemplateId ? completedEventId : undefined,
+    eventId: templateEventIds.get(template),
     issuedVia: "staff",
     createdAt: now,
   });
@@ -402,8 +494,8 @@ for (const { code, template } of codes) {
 console.log("\nSeeded. Unredeemed codes to try at /redeem:");
 for (const { code } of codes) console.log(`  ${code}`);
 console.log(
-  `\n(trade_only template "${tradeOnlyTemplateId}" and the Rally Kazoo, Tutu of Triumph, and ` +
-    `Breakdancing First-Base Coach templates were seeded with no code - not directly redeemable, by design)`
+  `\n(trade_only template "${tradeOnlyTemplateId}" and the Breakdancing First-Base Coach template ` +
+    `were seeded with no code - not directly redeemable, by design)`
 );
 
 // --- Demo fan personas: a few fans with pre-populated collections, so

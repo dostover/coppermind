@@ -302,26 +302,138 @@ body {
   margin-top: 1.5rem;
 }
 
-/* --- CardFace: the one shared card visual (see CardFace.tsx) --- */
+/* --- CardFace: the one shared card visual (see CardFace.tsx / cardArt.tsx) ---
+   Two layouts:
+   - .card-face-full: a real trading-card shape - illustrated art panel on
+     top, dark text plate below. Used anywhere a fan sits with one card
+     (redeem reveal, a future card-detail view).
+   - .card-face-compact: denser grid tile (collection grid, trade pick
+     tiles) - the same illustration sits as a low-opacity watermark behind
+     a compact text block instead of a dedicated panel. */
 
 .card-face {
   border-radius: var(--radius);
-  padding: 1rem;
-  min-height: 172px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
   color: #fff;
   position: relative;
   overflow: hidden;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
 }
 
+/* Shared SVG art sizing/behavior - see cardArt.tsx for what's drawn. */
+.card-art-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.card-art-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  opacity: 0.5;
+}
+.card-art-dot {
+  fill: var(--ink);
+}
+.card-art-visor {
+  fill: rgba(23, 20, 15, 0.35);
+}
+.card-art-monogram {
+  font-size: 30px;
+  font-weight: 800;
+  fill: currentColor;
+  font-family: inherit;
+}
+
+/* ---- Full layout ---- */
+
+.card-face-full {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-face-art-panel {
+  height: 132px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.1rem;
+  position: relative;
+  color: #fff;
+}
+
+.card-face-art-panel .card-art-svg {
+  width: 92px;
+  height: 92px;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.25));
+}
+
+.card-face-type-onart {
+  position: absolute;
+  top: 0.7rem;
+  left: 0.8rem;
+}
+
+.card-face-plate {
+  background: var(--ink);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 1;
+  border-top: 3px solid transparent;
+}
+
+.card-face-plate .card-face-title {
+  color: #fdf6e3;
+}
+.card-face-plate .card-face-player {
+  color: rgba(253, 246, 227, 0.75);
+}
+.card-face-plate .card-face-description {
+  color: rgba(253, 246, 227, 0.75);
+}
+.card-face-plate .card-face-stats {
+  border-top-color: rgba(253, 246, 227, 0.18);
+}
+.card-face-plate .card-face-stat strong {
+  color: var(--banana);
+}
+.card-face-plate .card-face-stat em {
+  color: rgba(253, 246, 227, 0.55);
+}
+
+/* ---- Compact layout ---- */
+
 .card-face-compact {
-  min-height: 136px;
   padding: 0.85rem;
+  min-height: 136px;
+  display: flex;
+  flex-direction: column;
   gap: 0.4rem;
 }
+
+.card-face-art-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.1rem;
+  opacity: 0.16;
+  pointer-events: none;
+}
+.card-face-roster .card-face-art-watermark {
+  opacity: 0.22;
+}
+
+.card-face-compact .card-face-top,
+.card-face-compact .card-face-body,
+.card-face-compact .card-face-stats {
+  position: relative;
+}
+
+/* ---- Shared text elements ---- */
 
 .card-face-top {
   display: flex;
@@ -397,41 +509,72 @@ body {
   letter-spacing: 0.04em;
 }
 
-/* One color treatment per card_templates.type - see icons.tsx for the
-   matching icon. roster uses dark text/ink accents for contrast against the
-   light banana-yellow gradient; every other type is light-on-dark. */
-.card-face-team {
+/* ---- One color treatment per card_templates.type - see cardArt.tsx for
+   the matching illustration. Compact mode uses the gradient as the whole
+   tile's background; full mode uses the same gradient on just the art
+   panel, and sets the plate's accent border to the type's solid color.
+   roster uses dark text/ink accents for contrast against the light
+   banana-yellow gradient; every other type is light-on-dark. ---- */
+
+.card-face-compact.card-face-team,
+.card-face-full.card-face-team .card-face-art-panel {
   background: linear-gradient(135deg, #17140f, #3a3324);
 }
+.card-face-full.card-face-team .card-face-plate {
+  border-top-color: #3a3324;
+}
 
-.card-face-roster {
+.card-face-compact.card-face-roster,
+.card-face-full.card-face-roster .card-face-art-panel {
   background: linear-gradient(135deg, var(--banana), var(--orange));
+}
+.card-face-compact.card-face-roster {
   color: var(--ink);
 }
-.card-face-roster .card-face-type {
+.card-face-compact.card-face-roster .card-face-type {
   background: rgba(23, 20, 15, 0.14);
 }
-.card-face-roster .card-face-stats {
+.card-face-compact.card-face-roster .card-face-stats {
   border-top-color: rgba(23, 20, 15, 0.2);
 }
+.card-face-full.card-face-roster .card-face-plate {
+  border-top-color: var(--banana);
+}
 
-.card-face-moment {
+.card-face-compact.card-face-moment,
+.card-face-full.card-face-moment .card-face-art-panel {
   background: linear-gradient(135deg, var(--teal), #0d6b64);
 }
+.card-face-full.card-face-moment .card-face-plate {
+  border-top-color: var(--teal);
+}
 
-.card-face-character {
+.card-face-compact.card-face-character,
+.card-face-full.card-face-character .card-face-art-panel {
   background: linear-gradient(135deg, var(--pink), #c23368);
 }
+.card-face-full.card-face-character .card-face-plate {
+  border-top-color: var(--pink);
+}
 
-.card-face-venue {
+.card-face-compact.card-face-venue,
+.card-face-full.card-face-venue .card-face-art-panel {
   background: linear-gradient(135deg, var(--navy), #0f2036);
 }
-
-.card-face-special_item {
-  background: linear-gradient(135deg, var(--orange), var(--pink));
+.card-face-full.card-face-venue .card-face-plate {
+  border-top-color: var(--navy);
 }
 
-.card-face-trade_only {
+.card-face-compact.card-face-special_item,
+.card-face-full.card-face-special_item .card-face-art-panel {
+  background: linear-gradient(135deg, var(--orange), var(--pink));
+}
+.card-face-full.card-face-special_item .card-face-plate {
+  border-top-color: var(--orange);
+}
+
+.card-face-compact.card-face-trade_only,
+.card-face-full.card-face-trade_only .card-face-art-panel {
   background: repeating-linear-gradient(
     135deg,
     #6b7280,
@@ -440,9 +583,16 @@ body {
     #7d8590 20px
   );
 }
+.card-face-full.card-face-trade_only .card-face-plate {
+  border-top-color: #7d8590;
+}
 
-.card-face-milestone {
+.card-face-compact.card-face-milestone,
+.card-face-full.card-face-milestone .card-face-art-panel {
   background: linear-gradient(135deg, #d4a017, #8a5a00);
+}
+.card-face-full.card-face-milestone .card-face-plate {
+  border-top-color: #d4a017;
 }
 
 /* Wraps a CardFace to make it clickable (trade pick grids) without a
