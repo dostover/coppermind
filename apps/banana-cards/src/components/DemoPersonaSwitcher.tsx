@@ -3,20 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { extractErrorMessage } from "@/lib/fetchError";
+import { DEMO_PERSONAS } from "@/lib/demoPersonas";
 
 // Dev-only convenience for live demos: one click signs in as one of
 // scripts/seed.ts's four demo personas, reusing the exact same devCode
 // mechanism the regular /sign-in flow already relies on (see
 // src/app/api/auth/request-code/route.ts) - this isn't a new auth path, it
-// just automates typing the email and copying the code back by hand. Kept
-// in sync with scripts/seed.ts by convention, not by import (the seed
-// script runs standalone via tsx, outside the Next.js app).
-const PERSONAS = [
-  { email: "peelmaster@example.com", displayName: "Peel Master Flex", blurb: "Broad collector, 9 cards" },
-  { email: "rookienanas@example.com", displayName: "Rookie Nanas", blurb: "Brand-new fan, 2 cards" },
-  { email: "sluggo@example.com", displayName: "Sluggo", blurb: "1 confirmed trade, 1 to confirm" },
-  { email: "zesty@example.com", displayName: "Zesty", blurb: "Pending trade awaiting Sluggo" },
-] as const;
+// just automates typing the email and copying the code back by hand.
 
 export function DemoPersonaSwitcher() {
   const router = useRouter();
@@ -66,7 +59,7 @@ export function DemoPersonaSwitcher() {
         this works). Dev only.
       </p>
       <div className="demo-switcher-list">
-        {PERSONAS.map((p) => (
+        {DEMO_PERSONAS.map((p) => (
           <button
             key={p.email}
             type="button"
