@@ -3,16 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { extractErrorMessage } from "@/lib/fetchError";
+import { CardFace } from "./CardFace";
+import type { OwnedCardView } from "@/lib/db";
 
 // Same shape as SignInFlow: a "use client" component owning its own state,
 // POSTing to the API route, rendered from a plain server page. Success
 // stays on this page (rather than redirecting) so the fan sees exactly
-// which card they just got before deciding what to do next.
+// which card they just got before deciding what to do next - now as a
+// pack-opening-style reveal (see .card-reveal in globals.css) rather than a
+// static confirmation block.
 type RedeemedCard = {
   instanceId: string;
   title: string;
   description: string;
-  type: string | null;
+  type: OwnedCardView["type"] | null;
   stats: Record<string, string | number> | null;
 };
 
@@ -54,15 +58,25 @@ export function RedeemForm() {
     return (
       <div className="redeemed-card">
         <h2>You got a card!</h2>
-        <p className="redeemed-card-title">{redeemed.title}</p>
-        {redeemed.description && <p>{redeemed.description}</p>}
-        {redeemed.stats && (
-          <p className="card-tile-stats">
-            {Object.entries(redeemed.stats)
-              .map(([label, value]) => `${label} ${value}`)
-              .join(" · ")}
-          </p>
-        )}
+        <div className="card-reveal">
+          {redeemed.type ? (
+            <CardFace
+              type={redeemed.type}
+              title={redeemed.title}
+              description={redeemed.description}
+              stats={redeemed.stats}
+            />
+          ) : (
+            // Should never happen against a healthy database (every
+            // redemption code points at a real template), but the API
+            // contract allows it, so fall back to plain text rather than
+            // crash on a missing type.
+            <div className="redeemed-card-fallback">
+              <p className="redeemed-card-title">{redeemed.title}</p>
+              {redeemed.description && <p>{redeemed.description}</p>}
+            </div>
+          )}
+        </div>
         <div className="redeem-actions">
           <button type="button" onClick={() => setRedeemed(null)}>
             Redeem another code

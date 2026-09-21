@@ -8,24 +8,26 @@ export default async function Home() {
 
   return (
     <main className="page">
+      <div className="brand-mark">
+        <span className="brand-mark-dot" aria-hidden />
+        Banana Ball
+      </div>
       <h1>Banana Cards</h1>
-      <p>Digital trading card system and portal for Banana Ball.</p>
+      <p>Your digital trading card collection - redeemed at the game, traded in person.</p>
 
       {fan ? (
         <div className="welcome-card">
           <p>
-            Signed in as <strong>{fan.display_name}</strong>.
+            Signed in as <strong>{fan.display_name}</strong>. Use the tabs below to redeem,
+            browse, or trade.
           </p>
-          <nav className="nav-links">
-            <Link href="/redeem">Redeem a code</Link>
-            <Link href="/collection">My collection</Link>
-            <Link href="/trade">Trade with a fan</Link>
-          </nav>
           <SignOutButton />
         </div>
       ) : (
-        <p>
-          <Link href="/sign-in">Sign in</Link> to get started.
+        <p className="cta-row">
+          <Link href="/sign-in" className="cta-button">
+            Sign in to get started
+          </Link>
         </p>
       )}
 

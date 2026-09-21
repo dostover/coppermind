@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { OwnedCardView, TradeView } from "@/lib/db";
 import { extractErrorMessage } from "@/lib/fetchError";
+import { CardFace } from "./CardFace";
 
 // The web reference client's take on "mutual QR scan" (see
 // card-value-model.md): both fans have to be together for this to work at
@@ -164,20 +165,18 @@ export function TradeBoard({
                     type="button"
                     key={card.instance_id}
                     className={
-                      "card-tile trade-pick-tile" +
-                      (offerId === card.instance_id ? " trade-pick-tile-selected" : "")
+                      "card-face-button" +
+                      (offerId === card.instance_id ? " card-face-button-selected" : "")
                     }
                     onClick={() => setOfferId(card.instance_id)}
                   >
-                    <span className="card-tile-type">{card.type}</span>
-                    <h2>{card.title}</h2>
-                    {card.stats && (
-                      <p className="card-tile-stats">
-                        {Object.entries(card.stats)
-                          .map(([label, value]) => `${label} ${value}`)
-                          .join(" · ")}
-                      </p>
-                    )}
+                    <CardFace
+                      type={card.type}
+                      title={card.title}
+                      playerName={card.player_name}
+                      stats={card.stats}
+                      compact
+                    />
                   </button>
                 ))}
               </div>
@@ -193,20 +192,18 @@ export function TradeBoard({
                     type="button"
                     key={card.instance_id}
                     className={
-                      "card-tile trade-pick-tile" +
-                      (requestId === card.instance_id ? " trade-pick-tile-selected" : "")
+                      "card-face-button" +
+                      (requestId === card.instance_id ? " card-face-button-selected" : "")
                     }
                     onClick={() => setRequestId(card.instance_id)}
                   >
-                    <span className="card-tile-type">{card.type}</span>
-                    <h2>{card.title}</h2>
-                    {card.stats && (
-                      <p className="card-tile-stats">
-                        {Object.entries(card.stats)
-                          .map(([label, value]) => `${label} ${value}`)
-                          .join(" · ")}
-                      </p>
-                    )}
+                    <CardFace
+                      type={card.type}
+                      title={card.title}
+                      playerName={card.player_name}
+                      stats={card.stats}
+                      compact
+                    />
                   </button>
                 ))}
               </div>

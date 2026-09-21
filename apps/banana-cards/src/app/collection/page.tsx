@@ -39,11 +39,6 @@ export default async function CollectionPage() {
       ) : (
         <CollectionBoard cards={cards} />
       )}
-
-      <p>
-        <Link href="/redeem">Redeem another code</Link> · <Link href="/trade">Trade with a fan</Link> ·{" "}
-        <Link href="/">Back home</Link>
-      </p>
     </main>
   );
 }

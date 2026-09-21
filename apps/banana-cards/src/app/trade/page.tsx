@@ -42,9 +42,6 @@ export default async function TradePage() {
         myEligibleCards={myEligibleCards}
         trades={trades}
       />
-      <p>
-        <Link href="/">Back home</Link>
-      </p>
     </main>
   );
 }
