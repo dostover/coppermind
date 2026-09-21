@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
       title: template?.title ?? "Unknown card",
       description: template?.description ?? "",
       type: template?.type ?? null,
+      playerName: template?.player_name ?? null,
+      position: template?.position ?? null,
+      imagePath: template?.image_path ?? null,
       stats: parseCardStats(template?.stats ?? null),
     },
   });

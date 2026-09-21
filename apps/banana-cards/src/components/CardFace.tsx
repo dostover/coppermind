@@ -6,17 +6,20 @@ import { CardArt } from "./cardArt";
 // collection grid, the redeem reveal, and both sides of the trade picker.
 // Two layouts share this component:
 //  - full (default): a real trading-card shape - an illustrated art panel
-//    on top (see cardArt.tsx for what's actually drawn per type), a dark
-//    text plate below with the title/bio/stats. This is the "complete
-//    card" treatment used anywhere a fan is meant to sit with one card.
-//  - compact (collection grid, trade pick tiles): the same illustration as
-//    a low-opacity watermark behind a denser text block, so a grid of
-//    these still reads at a glance without losing the art entirely.
-// No per-card photography exists (and per the standing "no real player
-// names or likeness" content rule, never will be real photos) - the
-// artwork is original flat-vector illustration, not a gradient standing
-// in for art. image_path stays reserved on card_templates for a future
-// real-photo pipeline; nothing here reads it yet.
+//    on top, a dark text plate below with the title/bio/stats. This is the
+//    "complete card" treatment used anywhere a fan is meant to sit with
+//    one card.
+//  - compact (collection grid, trade pick tiles): the same art as a
+//    low-opacity watermark behind a denser text block, so a grid of these
+//    still reads at a glance without losing the art entirely.
+//
+// The art itself: every card_templates row now carries a real image_path
+// (see public/card-art/ and scripts/render-card-art.mjs) - original
+// cartoon/stick-figure illustrations rendered once to PNG, not photos and
+// not per-card AI generation (no image-generation tool is wired into this
+// app), per the standing "no real player names or likeness" content rule.
+// <CardArt> (cardArt.tsx) is kept as a live-SVG fallback for the rare case
+// a template has no image_path yet, so a card never renders with nothing.
 const TYPE_LABELS: Record<OwnedCardView["type"], string> = {
   team: "Team",
   roster: "Roster",
@@ -28,10 +31,31 @@ const TYPE_LABELS: Record<OwnedCardView["type"], string> = {
   milestone: "Milestone",
 };
 
+function CardArtwork({
+  type,
+  title,
+  imagePath,
+}: {
+  type: OwnedCardView["type"];
+  title: string;
+  imagePath?: string | null;
+}) {
+  if (imagePath) {
+    // Static pre-rendered illustration served straight from /public at a
+    // fixed small display size - next/image's optimization pipeline isn't
+    // needed here.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="card-art-img" src={imagePath} alt="" />;
+  }
+  return <CardArt type={type} title={title} />;
+}
+
 export function CardFace({
   type,
   title,
   playerName,
+  position,
+  imagePath,
   stats,
   description,
   compact,
@@ -39,6 +63,8 @@ export function CardFace({
   type: OwnedCardView["type"];
   title: string;
   playerName?: string | null;
+  position?: string | null;
+  imagePath?: string | null;
   stats?: Record<string, string | number> | null;
   description?: string | null;
   compact?: boolean;
@@ -49,7 +75,7 @@ export function CardFace({
     return (
       <div className={`card-face card-face-compact card-face-${type}`}>
         <div className="card-face-art-watermark">
-          <CardArt type={type} title={title} />
+          <CardArtwork type={type} title={title} imagePath={imagePath} />
         </div>
         <div className="card-face-top">
           <Icon className="card-face-icon" strokeWidth={2.25} aria-hidden />
@@ -57,7 +83,12 @@ export function CardFace({
         </div>
         <div className="card-face-body">
           <h3 className="card-face-title">{title}</h3>
-          {playerName && playerName !== title && <p className="card-face-player">{playerName}</p>}
+          {playerName && playerName !== title && (
+            <p className="card-face-player">
+              {playerName}
+              {position && <span className="card-face-position">{position}</span>}
+            </p>
+          )}
         </div>
         {stats && (
           <div className="card-face-stats">
@@ -76,13 +107,18 @@ export function CardFace({
   return (
     <div className={`card-face card-face-full card-face-${type}`}>
       <div className="card-face-art-panel">
-        <CardArt type={type} title={title} />
+        <CardArtwork type={type} title={title} imagePath={imagePath} />
         <span className="card-face-type card-face-type-onart">{TYPE_LABELS[type]}</span>
       </div>
       <div className="card-face-plate">
         <div className="card-face-body">
           <h3 className="card-face-title">{title}</h3>
-          {playerName && playerName !== title && <p className="card-face-player">{playerName}</p>}
+          {playerName && playerName !== title && (
+            <p className="card-face-player">
+              {playerName}
+              {position && <span className="card-face-position">{position}</span>}
+            </p>
+          )}
           {description && <p className="card-face-description">{description}</p>}
         </div>
         {stats && (

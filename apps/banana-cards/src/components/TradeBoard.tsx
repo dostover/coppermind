@@ -174,6 +174,8 @@ export function TradeBoard({
                       type={card.type}
                       title={card.title}
                       playerName={card.player_name}
+                      position={card.position}
+                      imagePath={card.image_path}
                       stats={card.stats}
                       compact
                     />
@@ -201,6 +203,8 @@ export function TradeBoard({
                       type={card.type}
                       title={card.title}
                       playerName={card.player_name}
+                      position={card.position}
+                      imagePath={card.image_path}
                       stats={card.stats}
                       compact
                     />

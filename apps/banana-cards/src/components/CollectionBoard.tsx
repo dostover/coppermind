@@ -142,6 +142,8 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
               type={card.type}
               title={card.title}
               playerName={card.player_name}
+              position={card.position}
+              imagePath={card.image_path}
               description={card.description}
               stats={card.stats}
               compact

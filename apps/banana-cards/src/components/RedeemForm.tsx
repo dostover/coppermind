@@ -17,6 +17,9 @@ type RedeemedCard = {
   title: string;
   description: string;
   type: OwnedCardView["type"] | null;
+  playerName: string | null;
+  position: string | null;
+  imagePath: string | null;
   stats: Record<string, string | number> | null;
 };
 
@@ -64,6 +67,9 @@ export function RedeemForm() {
               type={redeemed.type}
               title={redeemed.title}
               description={redeemed.description}
+              playerName={redeemed.playerName}
+              position={redeemed.position}
+              imagePath={redeemed.imagePath}
               stats={redeemed.stats}
             />
           ) : (

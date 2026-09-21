@@ -94,6 +94,7 @@ db.exec(`
     image_path TEXT,
     event_id TEXT REFERENCES events(id),
     player_name TEXT,
+    position TEXT,
     created_at TEXT NOT NULL
   );
 
@@ -443,6 +444,7 @@ export interface CardTemplateRow {
   image_path: string | null;
   event_id: string | null;
   player_name: string | null;
+  position: string | null;
   stats: string | null;
   created_at: string;
 }
@@ -456,13 +458,14 @@ export const cardTemplatesRepo = {
     imagePath?: string;
     eventId?: string;
     playerName?: string;
+    position?: string;
     stats?: Record<string, string | number>;
     createdAt: string;
   }): void {
     db.prepare(
       `INSERT INTO card_templates
-         (id, type, title, description, image_path, event_id, player_name, stats, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, type, title, description, image_path, event_id, player_name, position, stats, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       input.id,
       input.type,
@@ -471,6 +474,7 @@ export const cardTemplatesRepo = {
       input.imagePath ?? null,
       input.eventId ?? null,
       input.playerName ?? null,
+      input.position ?? null,
       input.stats ? JSON.stringify(input.stats) : null,
       input.createdAt
     );
@@ -619,6 +623,7 @@ export const cardInstancesRepo = {
            ct.description AS description,
            ct.image_path AS image_path,
            ct.player_name AS player_name,
+           ct.position AS position,
            ct.stats AS stats,
            ci.acquired_via AS acquired_via,
            ci.updated_at AS acquired_at
@@ -640,6 +645,7 @@ export interface OwnedCardView {
   description: string;
   image_path: string | null;
   player_name: string | null;
+  position: string | null;
   stats: Record<string, string | number> | null;
   acquired_via: "redemption" | "trade";
   acquired_at: string;
