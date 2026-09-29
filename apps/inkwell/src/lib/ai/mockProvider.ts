@@ -67,10 +67,10 @@ function word(wrong: string, right: string): DemoSegment {
 // Each page below deliberately exercises a heading, a multi-sentence
 // paragraph (proving sentences don't each need their own paragraph break),
 // an actual paragraph break, and a list (bulleted or numbered) - the full
-// "core four" structure types the review screen now renders distinctly and
-// lets the user reclassify - rather than the single flattened paragraph
-// every demo page was before startsNewBlock existed, which meant this
-// structure-editing feature had nothing real to render against.
+// "core four" structure types the review screen renders distinctly -
+// rather than the single flattened paragraph every demo page was before
+// startsNewBlock existed, which meant structure-aware rendering had nothing
+// real to render against.
 const DEMO_PAGES: DemoSegment[][] = [
   [
     text("Notes on the Rilldale expedition", "heading"),

@@ -45,22 +45,14 @@ function verticalCrop(region: SourceRegion | undefined): { lineFraction: number;
   return { lineFraction, offsetY };
 }
 
-// The "core four" structure types the review screen offers a reclassify
-// control for (2026-09-16 decision - dialogue and table_cell exist in the
-// data model and are still rendered without crashing, just as a plain
-// paragraph, but aren't offered here: table layout in particular needs
-// meaningfully more UI than a dropdown, and both are rare in practice).
-const CORE_STRUCTURE_TYPES: { value: StructureType; label: string }[] = [
-  { value: "paragraph", label: "Paragraph" },
-  { value: "heading", label: "Heading" },
-  { value: "list_item", label: "Bulleted list item" },
-  { value: "numbered_item", label: "Numbered list item" },
-];
-
-// What a line renders as. Only heading/list_item/numbered_item get their own
+// What a line renders as, based on the structureType the AI assigned at
+// transcription time. Only heading/list_item/numbered_item get their own
 // treatment; every other structureType (paragraph, line, dialogue,
-// table_cell) falls back to a plain flowing paragraph - see
-// CORE_STRUCTURE_TYPES above.
+// table_cell) falls back to a plain flowing paragraph. There's deliberately
+// no UI for changing a line's type (a per-line "Paragraph ▾" dropdown
+// existed from PR #41 and was removed 2026-09-29 as unneeded clutter) -
+// restructuring is done word-processor style instead, with Enter to split a
+// line and Backspace at its start to join it to the one above.
 type LineKind = "heading" | "list_item" | "numbered_item" | "paragraph";
 
 function lineKindFor(structureType: StructureType): LineKind {
@@ -68,14 +60,6 @@ function lineKindFor(structureType: StructureType): LineKind {
     return structureType;
   }
   return "paragraph";
-}
-
-// The value the reclassify dropdown shows for a line whose structureType
-// isn't one of the four it offers (dialogue/table_cell/line) - "Paragraph"
-// matches how it's actually rendered (see lineKindFor), so the dropdown
-// never shows a value that isn't one of its own options.
-function reclassifyValue(structureType: StructureType): StructureType {
-  return CORE_STRUCTURE_TYPES.some((t) => t.value === structureType) ? structureType : "paragraph";
 }
 
 // New segment ids only ever need to be unique within this page's array -
@@ -573,33 +557,40 @@ export function ReviewEditor({
   //    explicitly here or the merge would visibly run two words together
   //    ("watchtowfr" + "today." silently becoming "watchtowfrtoday.").
   function handleMergeSegmentBackward(pageId: string, segmentId: string) {
-    // A plain mutable box, not a `let` reassigned directly inside the
-    // updater below - TS's narrowing for a `let` read after a callback that
-    // reassigns it doesn't see through the closure, and treats it as still
-    // `null` at the read site. A boxed property (the same shape a ref's
-    // `.current` has) sidesteps that entirely.
-    const focusTargetBox: { value: { segmentId: string; cursorPos: number } | null } = { value: null };
+    // Where the cursor should land is decided up front from the current
+    // render's state, never from inside the setPageStates updater below.
+    // React runs updaters lazily (during the next render, not when
+    // setPageStates is called), so a value captured inside one isn't set
+    // yet by the time the line after setPageStates reads it. That was the
+    // original version of this function (fixed 2026-09-29): the join itself
+    // worked, but the cursor target was always still null, so focus fell to
+    // <body> and whatever the user typed next went nowhere. Same class of
+    // bug as PR #23's impure-updater fix - keep updaters pure.
+    const page = pageStates.find((p) => p.id === pageId);
+    const idx = page ? page.segments.findIndex((s) => s.id === segmentId) : -1;
+    if (!page || idx <= 0) return; // nothing before it on this page to merge into
+    const previousAtKeypress = page.segments[idx - 1];
+
     setPageStates((prev) =>
       prev.map((p) => {
         if (p.id !== pageId) return p;
-        const idx = p.segments.findIndex((s) => s.id === segmentId);
-        if (idx <= 0) return p; // nothing before it on this page to merge into
-        const current = p.segments[idx];
-        const previous = p.segments[idx - 1];
+        const i = p.segments.findIndex((s) => s.id === segmentId);
+        if (i <= 0) return p;
+        const current = p.segments[i];
+        const previous = p.segments[i - 1];
         const needsSpace =
           !current.startsNewBlock &&
           previous.text.length > 0 &&
           current.text.length > 0 &&
           !/\s$/.test(previous.text) &&
           !/^\s/.test(current.text);
-        focusTargetBox.value = { segmentId: previous.id, cursorPos: previous.text.length };
         const mergedText = previous.text + (needsSpace ? " " : "") + current.text;
         const segments = [...p.segments];
-        segments.splice(idx - 1, 2, { ...previous, text: mergedText });
+        segments.splice(i - 1, 2, { ...previous, text: mergedText });
         return { ...p, segments };
       })
     );
-    if (focusTargetBox.value) requestFocus(focusTargetBox.value.segmentId, focusTargetBox.value.cursorPos);
+    requestFocus(previousAtKeypress.id, previousAtKeypress.text.length);
     setSavedMessage(null);
   }
 
@@ -794,26 +785,6 @@ export function ReviewEditor({
     }
   }
 
-  // Reclassify (2026-09-16): changing what a line renders as. Applies the
-  // new structureType to every segment in the line, not just its first, so
-  // the stored data stays consistent with what's displayed - a line's
-  // segments should all agree on what kind of line they're part of.
-  function updateLineStructureType(pageId: string, segmentIds: string[], structureType: StructureType) {
-    setPageStates((prev) =>
-      prev.map((p) =>
-        p.id === pageId
-          ? {
-              ...p,
-              segments: p.segments.map((s) =>
-                segmentIds.includes(s.id) ? { ...s, structureType } : s
-              ),
-            }
-          : p
-      )
-    );
-    setSavedMessage(null);
-  }
-
   // Renders one line's segments as the same individually-editable, auto-
   // growing textareas regardless of what kind of line they're in (heading,
   // paragraph, or a single list item) - only the wrapper element differs.
@@ -871,32 +842,6 @@ export function ReviewEditor({
         />
       );
     });
-  }
-
-  // The small "what kind of line is this" dropdown shown next to every
-  // heading/paragraph/list item - reclassifies the whole line at once (see
-  // updateLineStructureType above).
-  function renderTypeSelect(pageId: string, line: Line) {
-    return (
-      <select
-        className="line-type-select"
-        aria-label="Change this line's formatting"
-        value={reclassifyValue(line.segments[0].structureType)}
-        onChange={(e) =>
-          updateLineStructureType(
-            pageId,
-            line.segments.map((s) => s.id),
-            e.target.value as StructureType
-          )
-        }
-      >
-        {CORE_STRUCTURE_TYPES.map((t) => (
-          <option key={t.value} value={t.value}>
-            {t.label}
-          </option>
-        ))}
-      </select>
-    );
   }
 
   return (
@@ -1082,12 +1027,9 @@ export function ReviewEditor({
                     {blocks.map((block) => {
                       if (block.kind === "heading") {
                         return (
-                          <div key={block.line.segments[0].id} className="structure-line">
-                            {renderTypeSelect(page.id, block.line)}
-                            <h2 className="segment-heading">
-                              {renderLineSegments(page.id, block.line.segments)}
-                            </h2>
-                          </div>
+                          <h2 key={block.line.segments[0].id} className="segment-heading">
+                            {renderLineSegments(page.id, block.line.segments)}
+                          </h2>
                         );
                       }
                       if (block.kind === "list") {
@@ -1096,27 +1038,16 @@ export function ReviewEditor({
                           <ListTag key={block.items[0].segments[0].id} className="segment-list">
                             {block.items.map((line) => (
                               <li key={line.segments[0].id}>
-                                {/* The flex row lives on this inner div, not
-                                    the <li> itself - display: flex on an
-                                    <li> suppresses its own bullet/number
-                                    marker (display: list-item stops
-                                    applying), which silently produced a
-                                    marker-less list the first time this
-                                    shipped. */}
-                                <div className="list-item-line">
-                                  {renderTypeSelect(page.id, line)}
-                                  <div className="flow">{renderLineSegments(page.id, line.segments)}</div>
-                                </div>
+                                <div className="flow">{renderLineSegments(page.id, line.segments)}</div>
                               </li>
                             ))}
                           </ListTag>
                         );
                       }
                       return (
-                        <div key={block.line.segments[0].id} className="structure-line">
-                          {renderTypeSelect(page.id, block.line)}
-                          <p className="flow">{renderLineSegments(page.id, block.line.segments)}</p>
-                        </div>
+                        <p key={block.line.segments[0].id} className="flow">
+                          {renderLineSegments(page.id, block.line.segments)}
+                        </p>
                       );
                     })}
                   </div>
