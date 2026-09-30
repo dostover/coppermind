@@ -108,13 +108,6 @@ export default async function HomePage() {
             </span>
           </li>
           <li>
-            <span className="home-tip-sample line-type-select-sample">Paragraph ▾</span>
-            <span>
-              Use the dropdown beside any line to turn it into a heading, a paragraph, or a list
-              item.
-            </span>
-          </li>
-          <li>
             <span className="home-tip-sample">
               <kbd>Enter</kbd> / <kbd>Backspace</kbd>
             </span>

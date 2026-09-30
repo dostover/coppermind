@@ -114,9 +114,9 @@ function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
       const lineEnd = text.length;
       text += "\n";
 
-      // These apply to the whole line (every segment in it shares one
-      // structureType by construction - see toLines/reclassify in
-      // ReviewEditor.tsx), not per-segment, so it's keyed off the first.
+      // These apply to the whole line, not per-segment, so it's keyed off
+      // the line's first segment - the same rule ReviewEditor.tsx's toLines
+      // uses to decide how a line renders on screen.
       const lineType = line[0].structureType;
       if (lineType === "heading") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "heading" });
       if (lineType === "list_item") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "bullet" });
