@@ -6,6 +6,7 @@ import {
   updateHandwritingProfile,
 } from "@/lib/handwritingProfile";
 import { isStructureType, type StructureType, type TranscriptSegment } from "@/lib/ai/types";
+import { enqueueIndexNote } from "@/lib/jobs";
 
 export async function GET(
   _req: NextRequest,
@@ -300,6 +301,10 @@ export async function PATCH(
       now
     );
   }
+
+  // Saved text/title changed what search should find - re-index in the
+  // background (a no-op if nothing indexable actually changed).
+  enqueueIndexNote(id);
 
   return NextResponse.json(notesRepo.getById(id));
 }

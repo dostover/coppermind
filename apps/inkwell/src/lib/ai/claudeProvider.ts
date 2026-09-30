@@ -5,6 +5,8 @@ import { prepareImageForVision } from "@/lib/imagePrep";
 import { GRID_COLS, GRID_ROWS, overlayGrid, regionFromCells } from "./gridOverlay";
 import type {
   AIProvider,
+  AnswerQuestionInput,
+  AnswerQuestionOutput,
   GenerateTagsInput,
   GenerateTagsOutput,
   HandwritingContext,
@@ -266,6 +268,37 @@ async function loadImageForVision(
   return { buffer: withGrid, mediaType: mediaType as "image/jpeg" | "image/png" | "image/webp" };
 }
 
+
+// Structured answer for Library questions (answerQuestion below).
+const ANSWER_TOOL: Anthropic.Tool = {
+  name: "record_answer",
+  description: "Record the answer to the user's question, grounded only in the numbered note excerpts provided.",
+  input_schema: {
+    type: "object",
+    properties: {
+      answer: {
+        type: "string",
+        description:
+          "The answer in plain prose, citing the excerpts it relies on inline as [1], [2], etc. If the " +
+          "excerpts don't contain the answer, say so plainly in one or two sentences instead.",
+      },
+      citedSources: {
+        type: "array",
+        items: { type: "integer" },
+        description: "Every excerpt number cited in the answer.",
+      },
+      confidence: {
+        type: "string",
+        enum: ["high", "low", "not_found"],
+        description:
+          "high: the excerpts clearly answer the question. low: they only partly or indirectly do. " +
+          "not_found: they don't answer it.",
+      },
+    },
+    required: ["answer", "citedSources", "confidence"],
+  },
+};
+
 export class ClaudeAIProvider implements AIProvider {
   private client: Anthropic;
 
@@ -462,5 +495,47 @@ export class ClaudeAIProvider implements AIProvider {
     }
 
     return toolUse.input as GenerateTagsOutput;
+  }
+
+  // Answers a question from the user's own notes only (05-ai-contracts.md
+  // §8). The excerpts come from search.ts's retrieval; this call never sees
+  // the rest of the library, and is told not to use outside knowledge - a
+  // "your notes don't say" answer is the correct result when they don't.
+  async answerQuestion(input: AnswerQuestionInput): Promise<AnswerQuestionOutput> {
+    const excerpts = input.sources
+      .map(
+        (s) =>
+          `[${s.sourceNumber}] From the note "${s.noteTitle}" (${s.noteDate}, page ${s.pageNumber}):\n${s.text}`
+      )
+      .join("\n\n");
+
+    const message = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system:
+        "You answer questions about the user's own handwritten notes, using ONLY the numbered excerpts " +
+        "provided - they were retrieved from the user's note library for this question. Do not use outside " +
+        "or general knowledge, even when you know the answer: if the excerpts don't answer the question, say " +
+        "that the notes don't seem to cover it (and mention anything closely related they do say, citing it), " +
+        "with confidence not_found. Cite every claim inline with the excerpt number in square brackets, e.g. " +
+        "[2]; never cite a number that wasn't provided. Quote the notes' own wording where it helps. Excerpts " +
+        "are transcriptions of handwriting and may contain misread words - don't correct or comment on them " +
+        "unless it matters to the answer. Keep the answer concise: a few sentences, or a short list when the " +
+        "question asks for several things.",
+      tools: [ANSWER_TOOL],
+      tool_choice: { type: "tool", name: "record_answer" },
+      messages: [
+        {
+          role: "user",
+          content: `Note excerpts:\n\n${excerpts}\n\nQuestion: ${input.question}`,
+        },
+      ],
+    });
+
+    const toolUse = message.content.find((block) => block.type === "tool_use");
+    if (!toolUse || toolUse.type !== "tool_use") {
+      throw new Error("Claude did not return a structured answer (no tool_use block).");
+    }
+    return toolUse.input as AnswerQuestionOutput;
   }
 }

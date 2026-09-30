@@ -163,9 +163,35 @@ export interface GenerateTagsOutput {
   }[];
 }
 
+// Narrowed from 05-ai-contracts.md §8 (answerSearchQuery). Sources are
+// numbered passages (not whole notes) retrieved by search.ts; the answer
+// cites them inline as [1], [2], ... and lists which ones it used, so every
+// claim traces back to a note (FR-10.7, §22). Notes-only by design: the
+// model is told to say the notes don't cover something rather than fill in
+// from general knowledge.
+export interface AnswerQuestionInput {
+  question: string;
+  sources: {
+    sourceNumber: number;
+    noteTitle: string;
+    noteDate: string;
+    pageNumber: number;
+    text: string;
+  }[];
+}
+
+export interface AnswerQuestionOutput {
+  /** Plain prose with inline [n] markers referring to sourceNumber. */
+  answer: string;
+  citedSources: number[];
+  /** "not_found": the sources don't answer it - `answer` says so plainly. */
+  confidence: "high" | "low" | "not_found";
+}
+
 export interface AIProvider {
   transcribe(input: TranscribeInput): Promise<TranscribeOutput>;
   transcribeBatch(input: TranscribeBatchInput): Promise<TranscribeBatchOutput>;
   evaluateHandwritingCorrection(input: LearningEvalInput): Promise<LearningEvalOutput>;
   generateTags(input: GenerateTagsInput): Promise<GenerateTagsOutput>;
+  answerQuestion(input: AnswerQuestionInput): Promise<AnswerQuestionOutput>;
 }

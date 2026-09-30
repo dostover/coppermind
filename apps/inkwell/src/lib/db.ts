@@ -157,6 +157,52 @@ db.exec(`
   );
 `);
 
+// Search index (RAG): each note's current transcription, split into
+// passage-sized chunks (see searchIndex.ts's chunkNote), each with an
+// embedding vector for "search by meaning" plus an FTS5 keyword index for
+// "search by words". Rebuilt wholesale per note whenever its content
+// changes - content_hash on note_index_state is how a no-op rebuild (same
+// text, same embedding model) is skipped.
+//
+// Vectors are stored as raw Float32 BLOBs and compared by brute force in JS
+// (search.ts) rather than through a vector extension: a personal notes
+// library is thousands of chunks at most, which scans in milliseconds, and
+// it keeps this app free of another platform-specific native module (see
+// the node_modules/native-deps gotcha in 09-walking-skeleton-architecture).
+// Growing into pgvector later means swapping searchIndexRepo, not callers.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS note_chunks (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    page_number INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    embedding BLOB NOT NULL,
+    embedding_model TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_note_chunks_note ON note_chunks (note_id, chunk_index);
+
+  CREATE TABLE IF NOT EXISTS note_index_state (
+    note_id TEXT PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
+    content_hash TEXT NOT NULL,
+    embedding_model TEXT NOT NULL,
+    indexed_at TEXT NOT NULL
+  );
+
+  -- Keyword side of hybrid search. Standalone (not external-content) FTS5
+  -- table, kept in step with note_chunks by searchIndexRepo itself - FTS
+  -- virtual tables don't take part in ON DELETE CASCADE, so notesRepo.delete
+  -- clears a purged note's rows explicitly. porter = English stemming, so
+  -- "blessing" also finds "blessings".
+  CREATE VIRTUAL TABLE IF NOT EXISTS note_chunks_fts USING fts5(
+    chunk_id UNINDEXED,
+    note_id UNINDEXED,
+    text,
+    tokenize = 'porter unicode61 remove_diacritics 2'
+  );
+`);
+
 // notes.folder_id was added after the original table shape shipped - ALTER
 // TABLE ADD COLUMN, guarded so it's a no-op (not an error) on a database
 // that already has it. `ON DELETE SET NULL` isn't expressible on an added
@@ -544,6 +590,9 @@ export const notesRepo = {
   // action (see the /purge route) - the review screen's own "Delete note"
   // button calls softDelete below instead.
   delete(id: string): void {
+    // FTS rows aren't covered by ON DELETE CASCADE (virtual table) - see the
+    // note_chunks_fts comment above.
+    db.prepare(`DELETE FROM note_chunks_fts WHERE note_id = ?`).run(id);
     db.prepare(`DELETE FROM notes WHERE id = ?`).run(id);
   },
 
@@ -1049,6 +1098,17 @@ export const processingJobsRepo = {
     return db.prepare(`SELECT * FROM processing_jobs WHERE id = ?`).get(next.id) as ProcessingJobRow;
   },
 
+  // True if this note already has a job of this stage waiting to run -
+  // lets callers that fire on every save (index_note) avoid piling up
+  // duplicate work; the one queued job will see the latest content anyway.
+  hasQueued(noteId: string, stage: string): boolean {
+    return Boolean(
+      db
+        .prepare(`SELECT 1 FROM processing_jobs WHERE note_id = ? AND stage = ? AND status = 'queued' LIMIT 1`)
+        .get(noteId, stage)
+    );
+  },
+
   markSucceeded(id: string, finishedAt: string): void {
     db.prepare(`UPDATE processing_jobs SET status = 'succeeded', finished_at = ? WHERE id = ?`).run(
       finishedAt,
@@ -1072,6 +1132,108 @@ export const processingJobsRepo = {
       .prepare(`UPDATE processing_jobs SET status = 'queued' WHERE status = 'running' AND started_at < ?`)
       .run(cutoff);
     return result.changes;
+  },
+};
+
+
+export interface ChunkForIndex {
+  chunkIndex: number;
+  pageNumber: number;
+  text: string;
+  embedding: Float32Array;
+}
+
+export interface IndexedChunkRow {
+  id: string;
+  note_id: string;
+  chunk_index: number;
+  page_number: number;
+  text: string;
+}
+
+function toBlob(v: Float32Array): Buffer {
+  return Buffer.from(v.buffer, v.byteOffset, v.byteLength);
+}
+
+function fromBlob(b: Buffer): Float32Array {
+  // Copy into a fresh, aligned buffer - a Buffer slice from SQLite isn't
+  // guaranteed 4-byte aligned, which Float32Array requires.
+  const copy = new Uint8Array(b.byteLength);
+  copy.set(b);
+  return new Float32Array(copy.buffer);
+}
+
+export const searchIndexRepo = {
+  getState(noteId: string): { content_hash: string; embedding_model: string } | undefined {
+    return db
+      .prepare(`SELECT content_hash, embedding_model FROM note_index_state WHERE note_id = ?`)
+      .get(noteId) as { content_hash: string; embedding_model: string } | undefined;
+  },
+
+  // Replaces a note's whole index (chunks, vectors, keyword rows, state) in
+  // one transaction, so a search never sees a half-rebuilt note.
+  replaceForNote(noteId: string, chunks: ChunkForIndex[], contentHash: string, model: string, now: string): void {
+    const insertChunk = db.prepare(
+      `INSERT INTO note_chunks (id, note_id, chunk_index, page_number, text, embedding, embedding_model, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const insertFts = db.prepare(`INSERT INTO note_chunks_fts (chunk_id, note_id, text) VALUES (?, ?, ?)`);
+    db.transaction(() => {
+      db.prepare(`DELETE FROM note_chunks WHERE note_id = ?`).run(noteId);
+      db.prepare(`DELETE FROM note_chunks_fts WHERE note_id = ?`).run(noteId);
+      for (const c of chunks) {
+        const id = randomUUID();
+        insertChunk.run(id, noteId, c.chunkIndex, c.pageNumber, c.text, toBlob(c.embedding), model, now);
+        insertFts.run(id, noteId, c.text);
+      }
+      db.prepare(
+        `INSERT INTO note_index_state (note_id, content_hash, embedding_model, indexed_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(note_id) DO UPDATE SET content_hash = excluded.content_hash,
+           embedding_model = excluded.embedding_model, indexed_at = excluded.indexed_at`
+      ).run(noteId, contentHash, model, now);
+    })();
+  },
+
+  // Every chunk of every non-trashed note, with its vector - the input to
+  // search.ts's brute-force similarity scan. Only chunks embedded by the
+  // current model are returned (a model switch is mid-re-embed otherwise,
+  // and cross-model vectors aren't comparable).
+  listActiveVectors(model: string, folderId?: string | null): (IndexedChunkRow & { embedding: Float32Array })[] {
+    const folderCond = folderId === undefined ? "" : "AND n.folder_id IS ?";
+    const args: unknown[] = [model];
+    if (folderId !== undefined) args.push(folderId);
+    const rows = db
+      .prepare(
+        `SELECT c.id, c.note_id, c.chunk_index, c.page_number, c.text, c.embedding
+         FROM note_chunks c JOIN notes n ON n.id = c.note_id
+         WHERE n.deleted_at IS NULL AND c.embedding_model = ? ${folderCond}`
+      )
+      .all(...args) as (IndexedChunkRow & { embedding: Buffer })[];
+    return rows.map((r) => ({ ...r, embedding: fromBlob(r.embedding) }));
+  },
+
+  // Keyword search over non-trashed notes' chunks, best first. `match` must
+  // already be a safe FTS5 query string (see search.ts's toFtsQuery) - raw
+  // user input can contain FTS syntax characters that throw.
+  keywordSearch(
+    match: string,
+    limit: number,
+    folderId?: string | null
+  ): (IndexedChunkRow & { score: number })[] {
+    const folderCond = folderId === undefined ? "" : "AND n.folder_id IS ?";
+    const args: unknown[] = [match];
+    if (folderId !== undefined) args.push(folderId);
+    args.push(limit);
+    return db
+      .prepare(
+        `SELECT c.id, c.note_id, c.chunk_index, c.page_number, c.text, bm25(note_chunks_fts) AS score
+         FROM note_chunks_fts f
+         JOIN note_chunks c ON c.id = f.chunk_id
+         JOIN notes n ON n.id = c.note_id
+         WHERE note_chunks_fts MATCH ? AND n.deleted_at IS NULL ${folderCond}
+         ORDER BY score LIMIT ?`
+      )
+      .all(...args) as (IndexedChunkRow & { score: number })[];
   },
 };
 

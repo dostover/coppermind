@@ -20,8 +20,9 @@ handwriting learning → basic library & search. See
 ## What's deliberately not here yet
 
 Multi-page notes, folders, tags, adaptive per-type summaries, relationships,
-retention policies, accounts/auth, duplicate detection, and real hybrid/
-semantic search. All in the full spec; all out of scope for this phase.
+retention policies, accounts/auth, and duplicate detection. All in the full
+spec; all out of scope for this phase. (Hybrid search and question answering
+have since shipped - see "Search and asking questions" below.)
 
 ## Getting started
 
@@ -49,6 +50,40 @@ ANTHROPIC_API_KEY=sk-ant-...
 in `.env.local`, then restart `npm run dev`. No code changes needed - the
 `AIProvider` factory in `src/lib/ai/index.ts` picks `ClaudeAIProvider`
 automatically once a key is present.
+
+### Search and asking questions
+
+The Library's search box finds notes three ways at once and ranks the
+combined results (`src/lib/search.ts`):
+
+- **Exact text** - substring match over titles and transcriptions, so
+  partial words ("wizz") still hit.
+- **Keywords** - SQLite FTS5 full-text search with stemming ("blessing"
+  finds "blessings").
+- **Ideas** - vector similarity over embeddings of each note, so
+  "forgiveness" can find a passage about grace covering sin.
+
+Type a question (or press **Ask**) and it also answers from your notes,
+citing the passages it used. Answers never draw on outside knowledge; if
+your notes don't cover it, it says so.
+
+Searching by idea needs an embeddings key from [Voyage AI](https://www.voyageai.com/)
+(Anthropic's recommended embeddings provider - Claude has no embeddings API):
+
+```bash
+VOYAGE_API_KEY=pa-...
+```
+
+Restart `npm run dev` after adding it: every note is re-embedded in the
+background on startup. Without a key, search still works on words (a
+built-in word-matching stand-in fills the vector slot), and answers still
+work if `ANTHROPIC_API_KEY` is set.
+
+Each note's index is rebuilt automatically whenever its text changes
+(transcription finishing, Save, restore from Trash). Indexing runs through
+the same background job runner as transcription (`index_note` jobs), and
+a failure there never affects the note itself - search is just briefly out
+of date until the next save or restart.
 
 ### Google Docs export (optional)
 
@@ -127,7 +162,9 @@ src/
       notes/[id]/route.ts         GET a note / PATCH corrections (triggers handwriting learning)
       notes/[id]/retry/route.ts   POST -> retries a failed transcription without re-uploading
       notes/[id]/export-to-docs/route.ts   POST -> exports/re-exports the note to Google Docs
-      notes/route.ts              GET ?q= search
+      notes/route.ts              GET ?q= plain substring filter (used for Trash)
+      search/route.ts             GET ?q= hybrid search (exact + keyword + meaning)
+      ask/route.ts                POST {question} -> cited answer from your notes
       integrations/google/        OAuth connect/callback/disconnect routes
   components/                Nav, UploadForm, ReviewEditor, GoogleConnectionControl
   lib/
@@ -135,6 +172,9 @@ src/
     config.ts                CONFIDENCE_THRESHOLD, GOOGLE_* and other tunables
     featureFlags.ts          flag() helper + feature flag definitions (env-based, off by default)
     handwritingProfile.ts    getHandwritingContext / recordHandwritingCorrection / updateHandwritingProfile
+    embeddings.ts            EmbeddingProvider: Voyage AI, or a word-hashing mock when no key is set
+    searchIndex.ts           Splits notes into passages, embeds them, stores vectors + FTS rows
+    search.ts                Hybrid search (rank fusion) and passage retrieval for questions
     ai/
       types.ts               AIProvider interface (narrowed to transcribe + evaluateHandwritingCorrection)
       mockProvider.ts         Deterministic no-key fallback
@@ -151,7 +191,9 @@ src/
 - Processing is async (a lightweight in-process job runner, not a real queue
   broker) - fine for one local user, but jobs don't survive across separate
   machines/processes and there's no horizontal scaling.
-- Search is naive substring matching over SQLite.
+- Vector search is a brute-force scan over embeddings stored in SQLite -
+  fast for a personal library (thousands of passages), but a real vector
+  index (pgvector) would be the move at much larger scale.
 - Single page per note; multi-page grouping isn't implemented.
 
 All of these map to abstractions (`AIProvider`, the `notes`/`handwriting_*`

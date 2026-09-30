@@ -7,6 +7,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { TrashNoteActions } from "@/components/TrashNoteActions";
 import { GOOGLE_OAUTH_CONFIGURED } from "@/lib/config";
 import { isGoogleConnected } from "@/lib/google/oauth";
+import { AskAnswer } from "@/components/AskAnswer";
+import { looksLikeQuestion, queryTerms, searchNotes, type MatchKind } from "@/lib/search";
+import { SEMANTIC_SEARCH_CONFIGURED } from "@/lib/embeddings";
 
 // Search-result highlighting: centers the snippet window on the first match
 // (rather than always cutting from character 0) so a hit is actually visible
@@ -20,7 +23,14 @@ function snippetWindow(fullText: string, query: string | undefined, max = 160): 
   if (!trimmedQuery) {
     return fullText.length > max ? fullText.slice(0, max).trimEnd() + "…" : fullText;
   }
-  const idx = fullText.toLowerCase().indexOf(trimmedQuery.toLowerCase());
+  const lower = fullText.toLowerCase();
+  let idx = lower.indexOf(trimmedQuery.toLowerCase());
+  if (idx === -1) {
+    // Fall back to the first query word that appears (hybrid matches are
+    // often on one word of the query, not the whole phrase).
+    const words = queryTerms(trimmedQuery).filter((w) => w.length >= 3);
+    idx = words.map((w) => lower.indexOf(w)).filter((i) => i !== -1).sort((a, b) => a - b)[0] ?? -1;
+  }
   if (idx === -1) {
     return fullText.length > max ? fullText.slice(0, max).trimEnd() + "…" : fullText;
   }
@@ -30,31 +40,52 @@ function snippetWindow(fullText: string, query: string | undefined, max = 160): 
   return (start > 0 ? "…" : "") + fullText.slice(start, end).trim() + (end < fullText.length ? "…" : "");
 }
 
+// Highlights every occurrence of each query word (3+ letters), not just the
+// whole query string - hybrid search matches on individual words and
+// stems, so a result's snippet rarely contains the full query verbatim.
 function highlightMatches(text: string, query: string | undefined): ReactNode {
-  const trimmedQuery = query?.trim();
-  if (!trimmedQuery) return text;
-  const idx = text.toLowerCase().indexOf(trimmedQuery.toLowerCase());
-  if (idx === -1) return text;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark className="search-hit">{text.slice(idx, idx + trimmedQuery.length)}</mark>
-      {text.slice(idx + trimmedQuery.length)}
-    </>
+  const words = queryTerms(query ?? "").filter((w) => w.length >= 3);
+  if (!words.length) return text;
+  const pattern = new RegExp(`(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
+  return text.split(pattern).map((part, i) =>
+    i % 2 === 1 ? (
+      <mark key={i} className="search-hit">
+        {part}
+      </mark>
+    ) : (
+      part
+    )
   );
 }
+
+const MATCH_LABELS: Record<MatchKind, string> = {
+  exact: "Exact text",
+  keyword: "Keyword",
+  meaning: "Related idea",
+};
 
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; folder?: string; googleConnected?: string; googleError?: string }>;
+  searchParams: Promise<{ q?: string; folder?: string; ask?: string; googleConnected?: string; googleError?: string }>;
 }) {
-  const { q, folder, googleError } = await searchParams;
+  const { q, folder, ask, googleError } = await searchParams;
   const isTrash = folder === "trash";
   // folder: absent = All notes, "none" = unfiled only, "trash" = Trash view,
   // else a folder id - mirrors GET /api/notes' folder param.
   const folderId = folder === undefined || isTrash ? undefined : folder === "none" ? null : folder;
-  const notes = isTrash ? notesRepo.listAll(q, undefined, "trash") : notesRepo.listAll(q, folderId);
+  const query = q?.trim() ?? "";
+  // Active-library search is hybrid (words + meaning, ranked - see
+  // src/lib/search.ts); Trash keeps the plain substring filter. A question
+  // (or the Ask button) additionally shows an answer drawn from the notes.
+  const hits = !isTrash && query ? await searchNotes(query, folderId) : null;
+  const notes = hits
+    ? hits.map((h) => h.note)
+    : isTrash
+      ? notesRepo.listAll(q, undefined, "trash")
+      : notesRepo.listAll(undefined, folderId);
+  const hitByNote = new Map((hits ?? []).map((h) => [h.note.id, h]));
+  const showAnswer = !isTrash && query !== "" && (ask === "1" || looksLikeQuestion(query));
   const folders = foldersRepo.listAll();
   const activeFolderName =
     folderId === undefined ? "All notes" : folderId === null ? "Unfiled" : folders.find((f) => f.id === folderId)?.name ?? "Folder";
@@ -62,16 +93,37 @@ export default async function LibraryPage({
   return (
     <div>
       <h1>{isTrash ? "Trash" : "Library"}</h1>
-      <form className="card" style={{ marginBottom: "1.5rem" }}>
+      <form className="card search-form" style={{ marginBottom: "1.5rem" }}>
         {folder && <input type="hidden" name="folder" value={folder} />}
-        <input
-          className="field"
-          type="search"
-          name="q"
-          placeholder="Search your notes…"
-          defaultValue={q ?? ""}
-        />
+        <div className="search-row">
+          <input
+            className="field"
+            type="search"
+            name="q"
+            aria-label={isTrash ? "Search Trash" : "Search or ask a question"}
+            placeholder={isTrash ? "Search Trash…" : "Search your notes, or ask a question…"}
+            defaultValue={q ?? ""}
+          />
+          <button type="submit" className="button secondary">
+            Search
+          </button>
+          {!isTrash && (
+            <button type="submit" name="ask" value="1" className="button">
+              Ask
+            </button>
+          )}
+        </div>
+        {!isTrash && (
+          <p className="muted search-hint">
+            Finds notes by idea as well as exact words. Ask a question (or press Ask) to get an answer
+            drawn from your notes, with links to where it came from.
+            {!SEMANTIC_SEARCH_CONFIGURED &&
+              " Searching by idea needs a VOYAGE_API_KEY in .env.local - until then, results match on words only."}
+          </p>
+        )}
       </form>
+
+      {showAnswer && <AskAnswer key={query} question={query} />}
 
       <div className="folder-bar">
         <Link href="/library" className={`folder-pill${folderId === undefined && !isTrash ? " active" : ""}`}>
@@ -164,7 +216,10 @@ export default async function LibraryPage({
               <Link key={note.id} href={`/notes/${note.id}`} className="note-card card">
                 <strong>{highlightMatches(note.title ?? "Untitled note", q)}</strong>
                 <p className="muted">
-                  {highlightMatches(snippetWindow(bodyText, q) || "No transcription yet.", q)}
+                  {highlightMatches(
+                    snippetWindow(hitByNote.get(note.id)?.snippet ?? bodyText, q) || "No transcription yet.",
+                    q
+                  )}
                 </p>
                 <p className="muted note-card-meta">
                   <StatusBadge status={note.status} />
@@ -173,6 +228,20 @@ export default async function LibraryPage({
                   {new Date(note.created_at).toLocaleString()}
                   {noteFolder ? ` · ${noteFolder.name}` : ""}
                 </p>
+                {hitByNote.get(note.id) && (
+                  <p className="match-kinds">
+                    {hitByNote
+                      .get(note.id)!
+                      // Without a Voyage key the "meaning" retriever is a
+                      // word-overlap stand-in - don't label it as ideas.
+                      .matchedBy.filter((k) => k !== "meaning" || SEMANTIC_SEARCH_CONFIGURED)
+                      .map((k) => (
+                      <span key={k} className={`match-kind match-${k}`}>
+                        {MATCH_LABELS[k]}
+                      </span>
+                    ))}
+                  </p>
+                )}
                 {note.tags.length > 0 && (
                   <p>
                     {note.tags.map((t) => (
