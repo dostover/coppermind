@@ -7,6 +7,7 @@ import { getAIProvider } from "./ai";
 import { getHandwritingContext } from "./handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "./config";
 import { derivePlaceholderTitle } from "./titleGen";
+import { findNotesNeedingIndex, indexNote } from "./searchIndex";
 // NOT a static top-level import of pdfPrep.ts (see runRasterizePdfJob below) -
 // this file is reached from src/instrumentation.ts (which starts the job
 // runner at server boot), and a static import here pulls pdf-to-img's whole
@@ -61,6 +62,15 @@ const STAGE_TRANSCRIBE_BATCH = "transcribe_batch";
 // *this PDF's* pages rendered, not that the whole note failed - other files
 // in the same upload (images, or other PDFs) proceed independently.
 const STAGE_RASTERIZE_PDF = "rasterize_pdf";
+
+// Rebuilds one note's search index (searchIndex.ts): chunk + embed its
+// current transcription. Enqueued whenever a note's content changes -
+// transcription finishing, a save from the review screen, restore from
+// Trash, a deleted transcription - and once at startup for any note whose
+// index is missing or stale. Note-level, no page_id; a failure here only
+// fails the job itself (see runOneJob), never the note's pages - search
+// being briefly out of date must not look like a transcription error.
+const STAGE_INDEX_NOTE = "index_note";
 
 interface RasterizePdfPayload {
   pdfPath: string;
@@ -142,6 +152,7 @@ async function runTranscribeJob(pageId: string): Promise<void> {
 
   notesRepo.recomputeStatus(page.note_id, now);
   await maybeSuggestTags(page.note_id, provider);
+  enqueueIndexNote(page.note_id);
 }
 
 // Runs the batch-transcribe stage for one note: one provider call covering
@@ -182,6 +193,7 @@ async function runBatchTranscribeJob(noteId: string): Promise<void> {
 
   notesRepo.recomputeStatus(noteId, now);
   await maybeSuggestTags(noteId, provider);
+  enqueueIndexNote(noteId);
 }
 
 // Once a note has no page left pending PDF rasterization (image_path still
@@ -253,7 +265,23 @@ const STAGE_RUNNERS: Record<string, (job: ProcessingJobRow) => Promise<void>> = 
   },
   [STAGE_TRANSCRIBE_BATCH]: (job) => runBatchTranscribeJob(job.note_id),
   [STAGE_RASTERIZE_PDF]: runRasterizePdfJob,
+  [STAGE_INDEX_NOTE]: async (job) => {
+    await indexNote(job.note_id);
+  },
 };
+
+// Safe to call on every save: skipped if an index job for this note is
+// already waiting, since that job reads the note's content when it runs.
+export function enqueueIndexNote(noteId: string): void {
+  if (processingJobsRepo.hasQueued(noteId, STAGE_INDEX_NOTE)) return;
+  processingJobsRepo.enqueue({
+    id: randomUUID(),
+    noteId,
+    pageId: null,
+    stage: STAGE_INDEX_NOTE,
+    createdAt: new Date().toISOString(),
+  });
+}
 
 // Kept for per-page retry (POST /api/notes/[id]/retry) - a single page,
 // single-image transcribe() call, unaffected by the batching change above.
@@ -335,6 +363,14 @@ async function runOneJob(): Promise<boolean> {
     const message = err instanceof Error ? err.message : "Processing failed.";
     const now = new Date().toISOString();
     processingJobsRepo.markFailed(job.id, message, now);
+    if (job.stage === STAGE_INDEX_NOTE) {
+      // Search-index failures (e.g. the embeddings API unreachable) never
+      // touch the note's pages - the note is fine, only search is stale.
+      // The next save re-triggers indexing, and startup re-checks every
+      // note (findNotesNeedingIndex).
+      console.error(`Search indexing failed for note ${job.note_id} (non-fatal):`, message);
+      return true;
+    }
     if (job.stage === STAGE_RASTERIZE_PDF) {
       // Failure belongs to just this PDF's own pages, not the whole note -
       // other files in the same upload (images, or other PDFs) may already
@@ -389,6 +425,18 @@ export function startJobRunner(): void {
   const requeued = processingJobsRepo.requeueOrphanedRunning(ORPHAN_AFTER_MS);
   if (requeued > 0) {
     console.log(`Requeued ${requeued} processing job(s) left 'running' by a previous process.`);
+  }
+
+  // Search-index safety net: anything never indexed, edited while indexing
+  // was failing, or embedded by a different model (e.g. VOYAGE_API_KEY just
+  // added) gets queued now. Best-effort - a failure here mustn't stop the
+  // runner from starting.
+  try {
+    const stale = findNotesNeedingIndex();
+    for (const noteId of stale) enqueueIndexNote(noteId);
+    if (stale.length > 0) console.log(`Queued search indexing for ${stale.length} note(s).`);
+  } catch (err) {
+    console.error("Search index startup check failed (non-fatal):", err);
   }
 
   const tick = () => {

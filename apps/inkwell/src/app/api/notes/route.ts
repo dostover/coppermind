@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { notesRepo } from "@/lib/db";
 
-// Naive substring search (FR-10.1) over saved notes - enough to confirm
-// notes are durably saved and retrievable. Hybrid/semantic search (FR-10.3,
-// FR-10.6) is deferred per claude/08-walking-skeleton-scope.md.
+// Note listing with an optional plain substring filter (FR-10.1). Ranked
+// hybrid search - keyword + meaning - lives at GET /api/search (see
+// src/lib/search.ts); this stays a simple filtered list, e.g. for Trash.
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") ?? undefined;
   // "folder" query param: absent = no filter, "" (or "none") = unfiled notes

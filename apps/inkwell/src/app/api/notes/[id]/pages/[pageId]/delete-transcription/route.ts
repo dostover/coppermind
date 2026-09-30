@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { notePagesRepo } from "@/lib/db";
+import { enqueueIndexNote } from "@/lib/jobs";
 
 // "Delete transcription only" (mirrors delete-image/route.ts) - independent
 // of deleting the whole note, and independent of deleting this page's
@@ -21,5 +22,6 @@ export async function POST(
   if (page.transcriptionRemoved) return NextResponse.json({ ok: true }); // already gone, idempotent
 
   notePagesRepo.setTranscriptionRemoved(pageId, new Date().toISOString());
+  enqueueIndexNote(id); // the deleted text must stop turning up in search
   return NextResponse.json({ ok: true });
 }

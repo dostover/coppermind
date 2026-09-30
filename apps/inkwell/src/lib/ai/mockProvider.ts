@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import { GRID_COLS, GRID_ROWS, cellId, regionFromCells } from "./gridOverlay";
 import type {
   AIProvider,
+  AnswerQuestionInput,
+  AnswerQuestionOutput,
   GenerateTagsInput,
   GenerateTagsOutput,
   HandwritingContext,
@@ -284,5 +286,23 @@ export class MockAIProvider implements AIProvider {
     });
 
     return { tags };
+  }
+
+  // No model to reason with - just returns the top retrieved passage,
+  // clearly labeled as a mock, so the whole ask flow (retrieval, citations,
+  // UI) can be exercised with no API key.
+  async answerQuestion(input: AnswerQuestionInput): Promise<AnswerQuestionOutput> {
+    const top = input.sources[0];
+    if (!top) {
+      return { answer: "Your notes don't seem to cover that.", citedSources: [], confidence: "not_found" };
+    }
+    const excerpt = top.text.length > 240 ? `${top.text.slice(0, 240).trimEnd()}…` : top.text;
+    return {
+      answer:
+        `(Mock answer - add ANTHROPIC_API_KEY for real answers.) The most relevant passage is from ` +
+        `"${top.noteTitle}": "${excerpt.replace(/\n/g, " ")}" [${top.sourceNumber}]`,
+      citedSources: [top.sourceNumber],
+      confidence: "low",
+    };
   }
 }
