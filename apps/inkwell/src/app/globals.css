@@ -592,62 +592,6 @@ main {
   text-decoration-thickness: 1.5px;
 }
 
-.segment-list {
-  margin: 0 0 1rem;
-  padding-left: 1.4rem;
-}
-
-.segment-list li {
-  margin-bottom: 0.4rem;
-}
-
-.segment-list li:last-child {
-  margin-bottom: 0;
-}
-
-/* A list item's own spacing comes from .segment-list li above, not the
-   usual paragraph-bottom margin .flow carries. */
-.segment-list li .flow {
-  margin: 0;
-}
-
-h2.segment-heading {
-  margin: 0 0 0.75rem;
-}
-
-/* Same borderless, inherit-the-page-font look as .flow's segment textareas
-   above - without this a heading line rendered in the browser's default
-   textarea font (monospace) with a default border box. */
-h2.segment-heading textarea.segment-input {
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  color: inherit;
-  padding: 0.05rem 0.3rem;
-  border-radius: 5px;
-  font-size: 1.3rem;
-  font-weight: 700;
-  width: 100%;
-  display: block;
-  resize: none;
-  overflow: hidden;
-  white-space: pre-wrap;
-}
-
-h2.segment-heading textarea.segment-input:hover {
-  background: var(--surface-alt);
-}
-
-h2.segment-heading textarea.segment-input:focus {
-  outline: 2px solid var(--dusk-blue);
-  background: var(--surface);
-}
-
-h2.segment-heading textarea.segment-input.flagged {
-  background: var(--flag-bg);
-  border: 1px solid var(--flag-border);
-}
-
 /* Multi-page notes: each page gets its own image-left/text-right row (see
    .note-page-columns below), stacked top to bottom, with a divider between
    pages once there's more than one so it reads as "several pages of one

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { GRID_ROWS } from "@/lib/ai/gridConstants";
-import type { SourceRegion, StructureType, TranscriptSegment } from "@/lib/ai/types";
+import type { SourceRegion, TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { extractErrorMessage } from "@/lib/fetchError";
@@ -45,23 +45,6 @@ function verticalCrop(region: SourceRegion | undefined): { lineFraction: number;
   return { lineFraction, offsetY };
 }
 
-// What a line renders as, based on the structureType the AI assigned at
-// transcription time. Only heading/list_item/numbered_item get their own
-// treatment; every other structureType (paragraph, line, dialogue,
-// table_cell) falls back to a plain flowing paragraph. There's deliberately
-// no UI for changing a line's type (a per-line "Paragraph ▾" dropdown
-// existed from PR #41 and was removed 2026-09-29 as unneeded clutter) -
-// restructuring is done word-processor style instead, with Enter to split a
-// line and Backspace at its start to join it to the one above.
-type LineKind = "heading" | "list_item" | "numbered_item" | "paragraph";
-
-function lineKindFor(structureType: StructureType): LineKind {
-  if (structureType === "heading" || structureType === "list_item" || structureType === "numbered_item") {
-    return structureType;
-  }
-  return "paragraph";
-}
-
 // New segment ids only ever need to be unique within this page's array -
 // nothing server-side issues or coordinates them, since segments are stored
 // as an opaque JSON array rather than SQL rows (see db.ts). crypto.randomUUID
@@ -75,8 +58,17 @@ function generateSegmentId(): string {
   return `seg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// Every line renders the same way: as plain text, exactly as transcribed.
+// The AI still labels lines with a structureType (heading, list item, ...),
+// but the review screen deliberately ignores it (2026-09-30). Handwritten
+// notes already carry their own markers in the text itself - "1.", "-",
+// "†", "#" - so rendering headings bigger or wrapping lines in
+// <ol>/<ul> added a second, conflicting layer on top ("1. 1. Cherish...",
+// a bullet before "- What...", and <ol> renumbering "2 Receive" as "1.").
+// Line breaks come only from startsNewBlock (see toLines below), and are
+// edited word-processor style: Enter splits a line, Backspace at its start
+// joins it to the one above.
 interface Line {
-  kind: LineKind;
   segments: TranscriptSegment[];
 }
 
@@ -92,40 +84,12 @@ function toLines(segments: TranscriptSegment[]): Line[] {
   segments.forEach((segment, i) => {
     const last = lines[lines.length - 1];
     if (i === 0 || segment.startsNewBlock || !last) {
-      lines.push({ kind: lineKindFor(segment.structureType), segments: [segment] });
+      lines.push({ segments: [segment] });
     } else {
       last.segments.push(segment);
     }
   });
   return lines;
-}
-
-type Block =
-  | { kind: "heading"; line: Line }
-  | { kind: "list"; ordered: boolean; items: Line[] }
-  | { kind: "paragraph"; line: Line };
-
-// Groups adjacent same-type list lines into one shared <ul>/<ol> - three
-// consecutive bulleted items should render as one list of three, not three
-// separate one-item lists.
-function toBlocks(lines: Line[]): Block[] {
-  const blocks: Block[] = [];
-  for (const line of lines) {
-    const last = blocks[blocks.length - 1];
-    if (line.kind === "heading") {
-      blocks.push({ kind: "heading", line });
-    } else if (line.kind === "list_item" || line.kind === "numbered_item") {
-      const ordered = line.kind === "numbered_item";
-      if (last && last.kind === "list" && last.ordered === ordered) {
-        last.items.push(line);
-      } else {
-        blocks.push({ kind: "list", ordered, items: [line] });
-      }
-    } else {
-      blocks.push({ kind: "paragraph", line });
-    }
-  }
-  return blocks;
 }
 
 interface Props {
@@ -501,9 +465,9 @@ export function ReviewEditor({
 
   // Enter within a segment: splits it into two segments at the cursor
   // (replacing any selection, same as typing over it would). The new second
-  // half always starts a new block - that's what "split" means here, a new
-  // paragraph/line/list item - and inherits everything else (structureType,
-  // crossedOut, emphasis, sourceRegion) from the segment it came from, since
+  // half always starts a new line - that's what "split" means here - and
+  // inherits everything else (structureType, crossedOut, emphasis,
+  // sourceRegion) from the segment it came from, since
   // it's literally the same handwritten span just divided in two. Cursor
   // lands at the very start of the new segment, matching where the text
   // that used to follow the cursor now begins.
@@ -785,9 +749,9 @@ export function ReviewEditor({
     }
   }
 
-  // Renders one line's segments as the same individually-editable, auto-
-  // growing textareas regardless of what kind of line they're in (heading,
-  // paragraph, or a single list item) - only the wrapper element differs.
+  // Renders one line's segments as individually-editable, auto-growing
+  // textareas (a line is split into several segments only where the AI
+  // wanted to score a word's confidence separately, or at crossed-out text).
   function renderLineSegments(pageId: string, segments: TranscriptSegment[]) {
     return segments.map((segment) => {
       const titleParts = [
@@ -873,7 +837,7 @@ export function ReviewEditor({
       )}
 
       {pageStates.map((page) => {
-        const blocks = toBlocks(toLines(page.segments));
+        const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
         const activeRegion = page.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
         return (
@@ -1024,32 +988,11 @@ export function ReviewEditor({
 
                 {page.status === "ready_for_review" && !page.transcriptionRemoved && (
                   <div className="transcription">
-                    {blocks.map((block) => {
-                      if (block.kind === "heading") {
-                        return (
-                          <h2 key={block.line.segments[0].id} className="segment-heading">
-                            {renderLineSegments(page.id, block.line.segments)}
-                          </h2>
-                        );
-                      }
-                      if (block.kind === "list") {
-                        const ListTag = block.ordered ? "ol" : "ul";
-                        return (
-                          <ListTag key={block.items[0].segments[0].id} className="segment-list">
-                            {block.items.map((line) => (
-                              <li key={line.segments[0].id}>
-                                <div className="flow">{renderLineSegments(page.id, line.segments)}</div>
-                              </li>
-                            ))}
-                          </ListTag>
-                        );
-                      }
-                      return (
-                        <p key={block.line.segments[0].id} className="flow">
-                          {renderLineSegments(page.id, block.line.segments)}
-                        </p>
-                      );
-                    })}
+                    {lines.map((line) => (
+                      <p key={line.segments[0].id} className="flow">
+                        {renderLineSegments(page.id, line.segments)}
+                      </p>
+                    ))}
                   </div>
                 )}
 
