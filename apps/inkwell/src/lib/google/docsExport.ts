@@ -38,7 +38,7 @@ async function docsFetch<T>(path: string, accessToken: string, init?: RequestIni
   return (await res.json()) as T;
 }
 
-type StyleKind = "heading" | "bold" | "underline" | "strikethrough" | "bullet" | "numbered";
+type StyleKind = "heading" | "bold" | "underline" | "strikethrough";
 
 interface StyleRange {
   startIndex: number;
@@ -52,14 +52,16 @@ interface StyleRange {
 // non-overlapping style requests - see the "why one insertText" note in
 // exportNoteToGoogleDoc.
 //
-// What's kept: heading (Docs "Heading 2" paragraph style), crossed-out
-// (strikethrough - matching the review screen's own choice to show crossed-
-// out text rather than deleting it), bold/underline emphasis, and list_item/
-// numbered_item (Docs bullet/numbered list formatting). What's simplified:
-// dialogue/table_cell/line all render as plain paragraphs - Docs' actual
-// table support needs a separate insertTable request sequence per cell that
-// wasn't worth the complexity for a best-effort export, and this is
-// mentioned here rather than silently dropped.
+// What's kept: the text and line breaks exactly as transcribed, crossed-out
+// text (strikethrough - matching the review screen's own choice to show
+// crossed-out text rather than deleting it), and bold/underline emphasis
+// from the handwriting. What's deliberately NOT applied (2026-09-30): the
+// AI's per-line structureType. Handwritten notes carry their own markers in
+// the text ("1.", "-", "†", "#"), so adding Docs heading styles or
+// bullet/numbered-list formatting on top duplicated them ("1. 1. ...") and
+// renumbered lines the writer had numbered themselves - the same reason the
+// review screen renders every line as plain text. The one heading this
+// export adds is its own "Page N" label on multi-page notes.
 
 // Groups a page's flat segment list into lines exactly the way the review
 // screen does (ReviewEditor.tsx's toLines): a new line starts wherever a
@@ -101,7 +103,6 @@ function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
     if (multiPage) pushStyled(`Page ${page.page_number}`, "heading");
 
     for (const line of groupIntoLines(page.segmentsCurrent)) {
-      const lineStart = text.length;
       line.forEach((segment, i) => {
         if (i > 0) text += " ";
         const segStart = text.length;
@@ -111,16 +112,7 @@ function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
         if (segment.emphasis === "bold_or_heavy") styles.push({ startIndex: segStart, endIndex: segEnd, kind: "bold" });
         if (segment.emphasis === "underline") styles.push({ startIndex: segStart, endIndex: segEnd, kind: "underline" });
       });
-      const lineEnd = text.length;
       text += "\n";
-
-      // These apply to the whole line, not per-segment, so it's keyed off
-      // the line's first segment - the same rule ReviewEditor.tsx's toLines
-      // uses to decide how a line renders on screen.
-      const lineType = line[0].structureType;
-      if (lineType === "heading") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "heading" });
-      if (lineType === "list_item") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "bullet" });
-      if (lineType === "numbered_item") styles.push({ startIndex: lineStart, endIndex: lineEnd, kind: "numbered" });
     }
   }
 
@@ -142,10 +134,6 @@ function stylesToRequests(styles: StyleRange[], baseIndex: number): Record<strin
         return { updateTextStyle: { range, textStyle: { underline: true }, fields: "underline" } };
       case "strikethrough":
         return { updateTextStyle: { range, textStyle: { strikethrough: true }, fields: "strikethrough" } };
-      case "bullet":
-        return { createParagraphBullets: { range, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } };
-      case "numbered":
-        return { createParagraphBullets: { range, bulletPreset: "NUMBERED_DECIMAL_ALPHA_ROMAN" } };
     }
   });
 }

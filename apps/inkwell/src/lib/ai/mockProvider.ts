@@ -67,10 +67,10 @@ function word(wrong: string, right: string): DemoSegment {
 // Each page below deliberately exercises a heading, a multi-sentence
 // paragraph (proving sentences don't each need their own paragraph break),
 // an actual paragraph break, and a list (bulleted or numbered) - the full
-// "core four" structure types the review screen renders distinctly -
-// rather than the single flattened paragraph every demo page was before
-// startsNewBlock existed, which meant structure-aware rendering had nothing
-// real to render against.
+// "core four" structure types the AI can report - rather than the single
+// flattened paragraph every demo page was before startsNewBlock existed.
+// (The review screen renders every line as plain text regardless of type;
+// structureType is still stored, just not used for display.)
 const DEMO_PAGES: DemoSegment[][] = [
   [
     text("Notes on the Rilldale expedition", "heading"),

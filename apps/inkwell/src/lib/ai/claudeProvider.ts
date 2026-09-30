@@ -165,6 +165,10 @@ const TRANSCRIPTION_QUALITY_INSTRUCTIONS =
   "do not correct grammar or spelling, do not summarize, do not add interpretation. Preserve structure " +
   "(paragraphs, headings, lists, dialogue) and mark crossed-out text and emphasis rather than omitting " +
   "or silently normalizing it. " +
+  "Keep any list numbers, bullets, dashes, and symbols the writer used (\"1.\", \"-\", \"*\", \"#\", " +
+  "\"†\") exactly as written, as part of the segment's text - the app displays your text as-is and " +
+  "does not add its own numbering, bullets, or heading styling, so a marker you leave out is lost, and " +
+  "never add a marker the writer didn't write. " +
   "IMPORTANT - crossed-out text: never mark crossedOut on a whole segment that also contains text that " +
   "was NOT crossed out, and never invent your own in-text notation (like strikethrough symbols, brackets, " +
   "or the words \"crossed out\") inside the transcribed text itself. Instead, split the crossed-out " +
