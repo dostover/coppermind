@@ -21,9 +21,6 @@ export default async function RedeemPage() {
       <h1>Redeem a code</h1>
       <p>Enter the code from your redemption token to add a card to your collection.</p>
       <RedeemForm />
-      <p>
-        <Link href="/">Back home</Link>
-      </p>
     </main>
   );
 }
