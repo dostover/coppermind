@@ -96,6 +96,10 @@ project configured near the top of the script in `index.html`. To use your own:
    [`database.rules.json`](database.rules.json).
 4. Replace `FB_CONFIG` in `index.html` with your project's config.
 
+Tests (Playwright, no real Firebase needed) live in [`tests/`](tests/): an
+end-to-end multiplayer test with three simulated players, and the physics
+tuning harness.
+
 To deploy, drop the `rondolette` folder onto Netlify (or any static host). The
 live version is at https://daniels-rondolette-app.netlify.app/.
 

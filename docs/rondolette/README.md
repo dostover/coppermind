@@ -94,8 +94,10 @@ as a static site:
 ### Testing
 
 Both multiplayer backends were tested with Playwright driving two or three
-browser pages at once against a local stand-in for the backend (an in-memory
-database shared between pages over `BroadcastChannel`). Scenarios covered:
+browser pages at once against a local stand-in for the backend. The Firebase
+version's test is in the repo: `apps/rondolette/tests/multiplayer.test.cjs`
+(15 checks), with the tuning harness beside it. The stand-in is an in-memory
+database shared between pages over `BroadcastChannel`. Scenarios covered:
 creating and joining tables, seating and settings, live aim and spin watching,
 results on every screen, turn passing, bonus spins, wins, play-again, skip,
 lobby return, bad codes and viewer-only access.

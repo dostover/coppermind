@@ -714,6 +714,7 @@ function renderPlayers(){
     const bar = race ? `<span class="bar"><i style="width:${Math.min(100,p.score/state.target*100)}%"></i></span>` : '';
     return `<li class="${cls}"><span class="mark"></span><input class="name" type="text" id="pname${i}" data-i="${i}" maxlength="18" value="${esc(p.name)}" aria-label="Player ${i+1} name"><span class="score">${val}</span>${bar}</li>`;
   }).join('');
+  if (state.mode==='online') return;  // the online table renders its own shared log
   $('log').innerHTML = state.log.length ? state.log.slice(0,6).map(l=>`<li><span>${esc(l.name)}${l.note?` · ${l.note}`:''}</span><b>${l.pts>0?'+':''}${fmt(l.pts)}</b></li>`).join('') : '<li class="empty">No spins yet. Make the first flick.</li>';
 }
 function renderPractice(){
