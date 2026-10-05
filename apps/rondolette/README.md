@@ -8,6 +8,9 @@ six players can share one screen or play together online from anywhere.
 It's a single, dependency-free HTML file: a hand-written 2D physics engine on
 Canvas, synthesized sound, and real-time multiplayer over Firebase.
 
+**▶ Play it: [daniels-rondolette-app.netlify.app](https://daniels-rondolette-app.netlify.app/)**. Open the
+Online tab, create a table and send the invite link to friends.
+
 ![A game in progress: the top has just been flicked and the balls are scattering](screenshots/game.png)
 
 ## Highlights
@@ -93,7 +96,8 @@ project configured near the top of the script in `index.html`. To use your own:
    [`database.rules.json`](database.rules.json).
 4. Replace `FB_CONFIG` in `index.html` with your project's config.
 
-To deploy, drop the `rondolette` folder onto Netlify (or any static host).
+To deploy, drop the `rondolette` folder onto Netlify (or any static host). The
+live version is at https://daniels-rondolette-app.netlify.app/.
 
 The Firebase web config, including its API key, is a public identifier rather
 than a secret: access is controlled by the database rules and anonymous auth.
