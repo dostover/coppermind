@@ -1,0 +1,1366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Rondolette: the Alpine spinning-top game. Play with friends online.">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<title>Rondolette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@500;700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: the wooden board is the hero on the left; a narrow scorecard rail sits to its right and stacks under it on phones.
+   Single deliberate look: a pine-green Stube table under a maple board, with Tyrolean red as the one accent. */
+:root{
+  --pine:#12201a;
+  --pine-2:#1a2d24;
+  --pine-3:#223a2f;
+  --line:#2f4a3d;
+  --snow:#f1e9d8;
+  --moss:#9fb5a6;
+  --red:#d6362b;
+  --red-ink:#fff4ee;
+  --gold:#e3b456;
+  --blue:#5b8cf0;
+  --display:'Grenze Gotisch', 'UnifrakturMaguntia', Georgia, serif;
+  --body:'Work Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme:dark;
+}
+html,body{background:var(--pine);color:var(--snow);margin:0}
+body{font-family:var(--body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0 32px}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+.band{height:6px;margin-inline:-16px;background:linear-gradient(var(--red) 0 33%, var(--snow) 33% 66%, var(--red) 66%)}
+.wrap{max-width:1080px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-block:18px 14px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(2.2rem,6vw,3.4rem);line-height:.9;margin:0;letter-spacing:.01em;text-wrap:balance}
+.sub{margin:6px 0 0;color:var(--moss);font-size:.92rem}
+.tabs{display:flex;gap:4px;background:var(--pine-2);border:1px solid var(--line);border-radius:999px;padding:4px}
+.tabs button{border:0;background:transparent;padding:6px 16px;border-radius:999px;cursor:pointer;color:var(--moss);font-weight:500}
+.tabs button[aria-pressed="true"]{background:var(--snow);color:var(--pine)}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+.table{display:flex;flex-direction:column;gap:12px;min-width:0}
+.board-wrap{position:relative;width:100%;max-width:min(640px, max(320px, calc(100vh - 190px)));margin:0 auto;aspect-ratio:1/1}
+canvas#board{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair;border-radius:22px;box-shadow:0 18px 40px rgba(0,0,0,.45),0 2px 0 rgba(255,255,255,.04) inset}
+.hint{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(18,32,26,.82);color:var(--snow);font-size:.82rem;padding:5px 12px;border-radius:999px;pointer-events:none;white-space:nowrap;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis}
+.turnflag{position:absolute;left:12px;bottom:12px;background:var(--red);color:var(--red-ink);font-weight:600;font-size:.82rem;padding:4px 10px;border-radius:6px;pointer-events:none}
+
+.result{width:100%;max-width:640px;margin:0 auto;background:var(--snow);color:var(--pine);border-radius:14px;padding:14px 16px;box-shadow:0 14px 34px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:8px}
+.result h2{margin:0;font-size:1.05rem;font-weight:600}
+.result h2 b{font-family:var(--mono);font-size:1.3rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:.8rem;background:#e6dcc6;border-radius:999px;padding:2px 9px 2px 4px}
+.dot{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fbecc9,#c49a5e);flex:none}
+.dot.red{background:radial-gradient(circle at 35% 35%,#ff8a7a,#a81d16)}
+.dot.blue{background:radial-gradient(circle at 35% 35%,#8db4ff,#1d3f9e)}
+.chip.miss{opacity:.55}
+.note{font-size:.82rem;margin:0;color:#3d5247}
+.result .btn{align-self:flex-start}
+.result-row{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:var(--pine-2);padding:7px 12px;cursor:pointer;color:var(--moss)}
+.seg button[aria-pressed="true"]{background:var(--pine-3);color:var(--snow);box-shadow:inset 0 -2px 0 var(--gold)}
+.btn{border:1px solid var(--line);background:var(--pine-2);padding:7px 14px;border-radius:10px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--pine-3)}
+.btn.primary{background:var(--red);border-color:var(--red);color:var(--red-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.result .btn{background:var(--pine);color:var(--snow);border-color:var(--pine)}
+
+aside{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--pine-2);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h3{margin:0 0 10px;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--moss);font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.card h3 span{letter-spacing:0;text-transform:none;font-weight:500;color:var(--moss)}
+.players{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.players li{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:4px 8px;align-items:center}
+.players .mark{width:8px;height:8px;border-radius:50%;background:transparent;justify-self:center}
+.players li.now .mark{background:var(--red);box-shadow:0 0 0 3px rgba(214,54,43,.25)}
+.players .name{min-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;background:transparent;border:1px solid transparent;border-radius:6px;padding:2px 6px;margin-left:-6px;color:var(--snow)}
+.players .name:hover{border-color:var(--line)}
+.players .name:focus{border-color:var(--gold);background:var(--pine);outline:none}
+.players li.out{opacity:.45}
+.players li.lead .score{color:var(--gold)}
+.tip{margin:10px 0 0;font-size:.78rem;color:var(--moss)}
+.mode-pick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mode-pick label{position:relative;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--snow)!important;background:var(--pine);gap:2px!important}
+.mode-pick label b{font-weight:600;font-size:.92rem}
+.mode-pick label span{font-size:.76rem;color:var(--moss)}
+.mode-pick input{position:absolute;opacity:0;pointer-events:none}
+.mode-pick label:has(input:checked){border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+.mode-pick label:has(input:focus-visible){outline:2px solid var(--gold);outline-offset:2px}
+.name-row{display:flex;gap:8px;align-items:center}
+.name-row input{flex:1;min-width:0}
+.name-row .x{border:1px solid var(--line);background:var(--pine);border-radius:8px;width:36px;height:36px;cursor:pointer;color:var(--moss);flex:none}
+.name-row .x:disabled{opacity:.35;cursor:default}
+.fieldset-title{font-size:.82rem;color:var(--moss)}
+.players li.now .name{color:#fff}
+.players .score{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.players .bar{grid-column:2 / 4;height:4px;background:var(--pine-3);border-radius:2px;overflow:hidden}
+.players .bar i{display:block;height:100%;background:var(--gold);border-radius:2px;transition:width .5s}
+.log{list-style:none;margin:0;padding:0;font-size:.85rem;display:flex;flex-direction:column;gap:4px;color:var(--moss)}
+.log li{display:flex;justify-content:space-between;gap:8px}
+.log b{font-family:var(--mono);font-weight:500;color:var(--snow);font-variant-numeric:tabular-nums}
+.empty{color:var(--moss);font-size:.85rem;margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;margin:0}
+.stats div{display:flex;flex-direction:column}
+.stats dt{font-size:.75rem;color:var(--moss)}
+.stats dd{margin:0;font-family:var(--mono);font-size:1.25rem;font-variant-numeric:tabular-nums}
+.hist{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:3px;align-items:end;height:90px;margin-top:14px}
+.hist div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:3px;min-width:0}
+.hist i{display:block;width:100%;background:var(--gold);border-radius:3px 3px 0 0;min-height:2px}
+.hist i.corner{background:var(--red)}
+.hist span{font-family:var(--mono);font-size:.62rem;color:var(--moss)}
+.legend{display:flex;gap:12px;font-size:.75rem;color:var(--moss);margin-top:8px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+
+details.card summary{cursor:pointer;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--moss);font-weight:600}
+details.card ul{padding-left:18px;margin:10px 0 0;font-size:.88rem;display:flex;flex-direction:column;gap:6px}
+
+.overlay{position:fixed;inset:0;background:rgba(6,12,9,.7);display:grid;place-items:center;padding:16px;z-index:10}
+.sheet{background:var(--pine-2);border:1px solid var(--line);border-radius:16px;padding:20px;width:min(100%,420px);display:flex;flex-direction:column;gap:14px;max-height:100%;overflow:auto}
+.sheet h2{font-family:var(--display);font-size:2rem;margin:0;line-height:1;font-weight:700}
+.sheet label{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:var(--moss)}
+.sheet input[type=text],.sheet select{background:var(--pine);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--snow)}
+.names{display:flex;flex-direction:column;gap:8px}
+.check{flex-direction:row!important;align-items:flex-start;gap:8px!important;color:var(--snow)!important;font-size:.88rem!important}
+.check input{margin-top:4px;accent-color:var(--red)}
+.win h2{color:var(--gold)}
+.win p{margin:0}
+
+.net-note{margin:0 0 8px;font-size:.86rem;color:var(--moss)}
+.net-note b{color:var(--snow)}
+.net-mode{margin:-4px 0 10px;font-size:.8rem;color:var(--moss)}
+.net-err{margin:10px 0 0;font-size:.84rem;color:#ffb4a8}
+.net-watch{margin:10px 0 0;font-size:.8rem;color:var(--moss)}
+.net-join{margin-top:12px}
+.net-code{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:-2px 0 10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.net-code b{font-family:var(--mono);letter-spacing:.04em}
+.net-join input{flex:1;min-width:0;background:var(--pine);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--snow)}
+.net-settings{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-end;margin:12px 0 10px}
+.net-settings label{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--moss)}
+.net-settings select{background:var(--pine);border:1px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--snow)}
+.net-settings .check{flex-direction:row;align-items:center;gap:6px;color:var(--snow);font-size:.85rem}
+.net-settings .check input{accent-color:var(--red)}
+.seats{margin-bottom:12px}
+.seat-name{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.seat-name em{font-style:normal;color:var(--moss);font-weight:400}
+.presence-dot{width:7px;height:7px;border-radius:50%;background:var(--line);flex:none}
+.presence-dot.on{background:#6fcf8e}
+#onlinePanel .row{gap:8px}
+.linkbtn{background:none;border:0;color:var(--moss);text-decoration:underline;cursor:pointer;font-size:.75rem;margin-left:8px;padding:0}
+@media (prefers-reduced-motion:reduce){.players .bar i{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="band" aria-hidden="true"></div>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Rondolette</h1>
+      <p class="sub">The Alpine spinning-top game. Flick the top, let it knock the six balls into the scoring hollows.</p>
+    </div>
+    <div class="row">
+      <div class="tabs" role="group" aria-label="Mode">
+        <button id="tabGame" aria-pressed="true">Game</button>
+        <button id="tabOnline" aria-pressed="false">Online</button>
+        <button id="tabPractice" aria-pressed="false">Practice</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <section class="table">
+      <div class="board-wrap" id="boardWrap">
+        <canvas id="board" aria-label="Rondolette board. Press inside the bowl, drag and release to spin the top."></canvas>
+        <div class="hint" id="hint">Press inside the bowl to set the top down, drag to aim, release to spin</div>
+        <div class="turnflag" id="turnFlag"></div>
+      </div>
+      <div class="result" id="result" hidden></div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Spin direction">
+          <button id="dirCw" aria-pressed="true" title="Spin clockwise">↻ Clockwise</button>
+          <button id="dirCcw" aria-pressed="false" title="Spin counter-clockwise">↺ Counter</button>
+        </div>
+        <button class="btn" id="soundBtn" aria-pressed="true">Sound on</button>
+        <button class="btn" id="resetBtn">Reset balls</button>
+      </div>
+    </section>
+
+    <aside>
+      <div id="gamePanel" class="card">
+        <h3>Scorecard <span id="targetLabel">First to 1,000</span></h3>
+        <ul class="players" id="players"></ul>
+        <p class="tip">Click a name to rename that player.</p>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="newGameBtn">New game</button>
+          <button class="btn" id="rematchSide">Restart</button>
+        </div>
+      </div>
+      <div id="onlinePanel" class="card" hidden>
+        <h3>Online table <span id="netStatus">Connecting…</span></h3>
+        <div id="netBody"></div>
+      </div>
+      <div id="logCard" class="card">
+        <h3>Recent turns</h3>
+        <ul class="log" id="log"></ul>
+      </div>
+
+      <div id="practicePanel" class="card" hidden>
+        <h3>Practice <span id="pSpins">0 spins</span></h3>
+        <dl class="stats">
+          <div><dt>Average</dt><dd id="pAvg">–</dd></div>
+          <div><dt>Best spin</dt><dd id="pBest">–</dd></div>
+          <div><dt>Balls scored</dt><dd id="pRate">–</dd></div>
+          <div><dt>Flew off</dt><dd id="pOff">0</dd></div>
+        </dl>
+        <div class="hist" id="hist" aria-label="Hits per hollow"></div>
+        <div class="legend"><span><i style="background:var(--gold)"></i>Rim hollow</span><span><i style="background:var(--red)"></i>Corner box</span></div>
+        <div class="row" style="margin-top:14px"><button class="btn" id="clearStats">Clear stats</button></div>
+      </div>
+
+      <details class="card" id="rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>All six balls start in the middle of the bowl.</li>
+          <li>Press where you want to set the top down, drag in the direction you want it to travel, and let go. A longer drag spins it faster.</li>
+          <li>The spinning top wanders, knocks the balls, and flings them round the bowl. Each ball that settles in a rim hollow or rolls into a corner box scores that number.</li>
+          <li>The <b style="color:#ff8a7a">red</b> ball scores double. The <b style="color:#8db4ff">blue</b> ball's points are taken away.</li>
+          <li>Score with all six balls in one spin and you get another turn.</li>
+          <li>Balls that jump the rim are out for that spin.</li>
+          <li><b>First to 1,000:</b> players take turns and add up their points. The first to reach the target wins.</li>
+          <li><b>Online:</b> create a table, send the invite link, and everyone takes a seat from their own device. On your turn you flick the top; everyone else watches the same spin live.</li>
+          <li><b>Single spin-off:</b> everyone gets one spin and the highest spin wins. Players who tie for the top spin go again until one is ahead.</li>
+        </ul>
+      </details>
+    </aside>
+  </div>
+</div>
+
+<div class="overlay" id="setup" hidden>
+  <form class="sheet" id="setupForm">
+    <h2>New game</h2>
+    <div class="fieldset-title">Game mode</div>
+    <div class="mode-pick" role="radiogroup" aria-label="Game mode">
+      <label for="fmtRace"><input type="radio" name="fmt" id="fmtRace" value="race" checked><b id="raceName">First to 1,000</b><span>Take turns and add up points</span></label>
+      <label for="fmtSpin"><input type="radio" name="fmt" id="fmtSpin" value="spinoff"><b>Single spin-off</b><span>One spin each, highest wins</span></label>
+    </div>
+    <div class="fieldset-title">Players</div>
+    <div class="names" id="names"></div>
+    <div class="row"><button class="btn" type="button" id="addPlayer">Add player</button><button class="btn" type="button" id="shuffleOrder" title="Put the players in a random turn order">Shuffle order</button></div>
+    <label for="targetSel" id="targetWrap">Play to
+      <select id="targetSel"><option value="500">500 points</option><option value="1000" selected>1,000 points</option><option value="2000">2,000 points</option></select>
+    </label>
+    <label class="check" for="redRule"><input type="checkbox" id="redRule"> Red rule: a spin only counts if the red ball scores</label>
+    <div class="row"><button class="btn primary" type="submit" id="startBtn">Start game</button><button class="btn" type="button" id="cancelSetup">Cancel</button></div>
+  </form>
+</div>
+
+<div class="overlay win" id="winSheet" hidden>
+  <div class="sheet">
+    <h2 id="winTitle">Congratulations!</h2>
+    <p id="winText"></p>
+    <div class="row"><button class="btn primary" id="rematchBtn">Play again</button><button class="btn" id="winClose">Close</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+// ---------- Geometry (logical units, board is 600×600) ----------
+const W = 600, C = 300, R = 190, BR = 11, TR = 18;
+const POCKET_R = 15, POCKET_D = R - 32;  // hollows are recessed into the bowl, in from the rim
+let POCKET_MOUTH = 14 / R, GAP_MOUTH = 15 / R;
+const BOX_D = 322, BOX_HALF = 38;
+const PHYS = { SLOPE: 160, WELL: 38, REACH: 22, CATCH: 7, ROLL: 5, DRAG: 0.1, CAPTURE: 150, OFF: 820,
+  TSLOPE: 70, WANDER: 130, TDRAG: 0.3 };
+
+const HOLES = [];
+[[22.5,20],[67.5,60],[112.5,40],[157.5,100],[202.5,10],[247.5,80],[292.5,30],[337.5,50]].forEach(([deg,v]) => {
+  const a = deg * Math.PI / 180;
+  HOLES.push({ type:'pocket', ang:a, value:v, x:C+Math.cos(a)*POCKET_D, y:C+Math.sin(a)*POCKET_D, balls:[] });
+});
+[[45,200],[135,150],[225,200],[315,150]].forEach(([deg,v]) => {
+  const a = deg * Math.PI / 180;
+  HOLES.push({ type:'corner', ang:a, value:v, x:C+Math.cos(a)*BOX_D, y:C+Math.sin(a)*BOX_D, balls:[] });
+});
+// histogram order: by angle around the board
+const HIST_ORDER = HOLES.map((h,i)=>i).sort((a,b)=>((HOLES[a].ang+Math.PI/2)%(2*Math.PI))-((HOLES[b].ang+Math.PI/2)%(2*Math.PI)));
+
+function angDiff(a,b){ let d = Math.abs(a-b) % (2*Math.PI); return d > Math.PI ? 2*Math.PI - d : d; }
+function holeAt(ang){
+  for (const h of HOLES){
+    if (h.type==='pocket') continue;
+    if (angDiff(ang,h.ang) < GAP_MOUTH) return h;
+  }
+  return null;
+}
+function slotPos(h, i){
+  const col = i % 3, row = Math.floor(i/3);
+  return { x: h.x + (col-1)*23, y: h.y + [-12,12,0][row%3] };
+}
+
+// ---------- Sound ----------
+const Sound = {
+  ctx:null, muted:false, noise:null, last:0, hum:null, humGain:null, humFilter:null,
+  init(){
+    if (this.ctx) { if (this.ctx.state==='suspended') this.ctx.resume(); return; }
+    try {
+      const ctx = this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const len = Math.floor(ctx.sampleRate*0.06), buf = ctx.createBuffer(1,len,ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 3);
+      this.noise = buf;
+      // soft wooden hum for the spinning top: looped filtered noise, kept very quiet
+      const hl = ctx.sampleRate*2, hb = ctx.createBuffer(1,hl,ctx.sampleRate), hd = hb.getChannelData(0);
+      for (let i=0;i<hl;i++) hd[i] = Math.random()*2-1;
+      const hs = ctx.createBufferSource(); hs.buffer=hb; hs.loop=true;
+      const hf = ctx.createBiquadFilter(); hf.type='bandpass'; hf.frequency.value=300; hf.Q.value=1.2;
+      const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+      const hg = ctx.createGain(); hg.gain.value=0;
+      hs.connect(hf); hf.connect(lp); lp.connect(hg); hg.connect(ctx.destination); hs.start();
+      this.hum=hs; this.humFilter=hf; this.humGain=hg;
+    } catch(e){ this.ctx=null; }
+  },
+  ok(){ return this.ctx && !this.muted && !headless; },
+  clack(v){
+    if (!this.ok() || v < 0.04) return;
+    const now = this.ctx.currentTime; if (now - this.last < 0.025) return; this.last = now;
+    const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+    s.buffer=this.noise; f.type='bandpass'; f.frequency.value=1800+Math.random()*1600; f.Q.value=5;
+    g.gain.value=Math.min(0.9,v)*0.7; s.connect(f); f.connect(g); g.connect(this.ctx.destination); s.start();
+  },
+  thunk(){
+    if (!this.ok()) return;
+    const c=this.ctx, o=c.createOscillator(), g=c.createGain(), t=c.currentTime;
+    o.type='sine'; o.frequency.setValueAtTime(240,t); o.frequency.exponentialRampToValueAtTime(85,t+0.14);
+    g.gain.setValueAtTime(0.35,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+0.22);
+    this.clack(0.35);
+  },
+  spin(w, wob){
+    if (!this.humGain) return;
+    const t=this.ctx.currentTime, on=this.ok() && Math.abs(w)>0;
+    this.humFilter.frequency.setTargetAtTime(160+Math.abs(w)*2.2, t, 0.1);
+    this.humGain.gain.setTargetAtTime(on ? Math.min(0.045, Math.abs(w)/3500)*(1+wob*0.5) : 0, t, 0.15);
+  },
+  rattle(){ [0,60,115,165].forEach((ms,i)=>setTimeout(()=>{ this.last=0; this.clack(0.45-i*0.09); }, ms)); },
+  fanfare(){
+    if (!this.ok()) return;
+    const c=this.ctx; [523,659,784,1047].forEach((fr,i)=>{
+      const o=c.createOscillator(), g=c.createGain(), t=c.currentTime+i*0.13;
+      o.type='triangle'; o.frequency.value=fr; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.2,t+0.02); g.gain.exponentialRampToValueAtTime(0.001,t+0.45);
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+0.5);
+    });
+  }
+};
+let headless = false;
+
+// ---------- Simulation state ----------
+let balls = [], top = null;
+function makeBalls(){
+  HOLES.forEach(h=>h.balls=[]);
+  const n = (typeof state!=='undefined' && state.balls) || 6;
+  const kinds = [...Array(n-2).fill('plain'),'red','blue'].sort(()=>Math.random()-0.5);
+  balls = kinds.map((k,i)=>{
+    const a = i*2*Math.PI/n + Math.random()*0.3, r = (n>6?33:24) + Math.random()*5;
+    return { kind:k, x:C+Math.cos(a)*r, y:C+Math.sin(a)*r, vx:0, vy:0, state:'active', hole:null, alpha:1 };
+  });
+  top = { state:'held', x:C, y:C, vx:0, vy:0, w:0, w0:1, rot:0, wx:0, wy:0, fallAng:0 };
+}
+
+function stepTop(T, dt){
+  const dx=T.x-C, dy=T.y-C;
+  if (T.state==='spinning'){
+    let ax=-PHYS.TSLOPE*dx/R, ay=-PHYS.TSLOPE*dy/R;
+    const sq=Math.sqrt(dt);
+    T.wx += -T.wx*2*dt + (Math.random()-0.5)*PHYS.WANDER*2*sq;
+    T.wy += -T.wy*2*dt + (Math.random()-0.5)*PHYS.WANDER*2*sq;
+    const frac=Math.min(1,Math.abs(T.w)/T.w0), wob=0.35+1.5*(1-frac);
+    ax += T.wx*wob; ay += T.wy*wob;
+    const curl = 0.22*Math.sign(T.w)*frac;
+    ax += -T.vy*curl; ay += T.vx*curl;
+    T.vx += ax*dt; T.vy += ay*dt;
+    const k = Math.max(0,1-PHYS.TDRAG*dt); T.vx*=k; T.vy*=k;
+    T.w -= Math.sign(T.w)*(3.2+0.05*Math.abs(T.w))*dt;
+    T.rot += T.w*dt;
+    if (Math.abs(T.w) < 9){
+      T.state='fallen'; T.fallAng = Math.atan2(T.vy,T.vx) + (Math.random()<0.5?1:-1)*Math.PI/2 + (Math.random()-0.5);
+      T.vx*=0.4; T.vy*=0.4; T.w=0; Sound.clack(0.6); setTimeout(()=>Sound.clack(0.4),90);
+    }
+  } else if (T.state==='fallen'){
+    const k=Math.max(0,1-5*dt); T.vx*=k; T.vy*=k;
+  } else return;
+  T.x += T.vx*dt; T.y += T.vy*dt;
+  const ex=T.x-C, ey=T.y-C, r=Math.hypot(ex,ey), lim=R-TR;
+  if (r>lim){
+    const nx=ex/r, ny=ey/r; T.x=C+nx*lim; T.y=C+ny*lim;
+    const vn=T.vx*nx+T.vy*ny;
+    if (vn>0){
+      T.vx-=1.5*vn*nx; T.vy-=1.5*vn*ny; Sound.clack(vn/900);
+      // the spinning rim of the top grips the bowl wall and rolls it along
+      if (T.state==='spinning'){ const k=T.w*TR*0.02*Math.min(1,vn/150); T.vx += ny*k; T.vy -= nx*k; T.w*=1-0.04*Math.min(1,vn/300); }
+    }
+  }
+}
+
+function stepBall(b, dt){
+  let dx=b.x-C, dy=b.y-C, r=Math.hypot(dx,dy)||1e-6;
+  let ax=-PHYS.SLOPE*dx/R, ay=-PHYS.SLOPE*dy/R;
+  let h;
+  // each empty hollow is a dimple in the bowl floor: a ball rolling over it dips toward its centre
+  let dip = null;
+  for (const p of HOLES){
+    if (p.type!=='pocket' || p.balls.length) continue;
+    const qx=p.x-b.x, qy=p.y-b.y, q=Math.hypot(qx,qy);
+    if (q < PHYS.REACH){ const f=PHYS.WELL*(PHYS.REACH-q)/(q||1); ax+=qx*f; ay+=qy*f; if (q < PHYS.CATCH) dip=p; }
+  }
+  b.vx += ax*dt; b.vy += ay*dt;
+  let s=Math.hypot(b.vx,b.vy);
+  if (s>0){ const ns=Math.max(0, s-(PHYS.ROLL+PHYS.DRAG*s)*dt); b.vx*=ns/s; b.vy*=ns/s; s=ns; }
+  if (s<2 && r<30){ b.vx=0; b.vy=0; s=0; }
+  if (dip && s < PHYS.CAPTURE){ b.state='sinking'; b.hole=dip; dip.balls.push(b); b.t=0; b.fx=b.x; b.fy=b.y; Sound.thunk(); return; }
+  b.x += b.vx*dt; b.y += b.vy*dt;
+  dx=b.x-C; dy=b.y-C; r=Math.hypot(dx,dy)||1e-6;
+  h = holeAt(Math.atan2(dy,dx));
+  const nx=dx/r, ny=dy/r;
+  if (h && h.type==='corner'){
+    if (r > R-BR+3){ b.state='channel'; b.hole=h; b.slot=h.balls.length; h.balls.push(b); b.cs=Math.max(170,s); b.leg=0; }
+    return;
+  }
+  if (r > R-BR){
+    const vn=b.vx*nx+b.vy*ny;
+    if (vn > PHYS.OFF){ b.state='off'; b.vx*=0.7; b.vy*=0.7; Sound.clack(0.8); return; }
+    b.x=C+nx*(R-BR); b.y=C+ny*(R-BR);
+    if (vn>0){ b.vx-=1.65*vn*nx; b.vy-=1.65*vn*ny; b.vx*=0.99; b.vy*=0.99; Sound.clack(vn/700); }
+  }
+}
+
+function stepChannel(b, dt){
+  const h=b.hole, e={ x:C+Math.cos(h.ang)*(BOX_D-50), y:C+Math.sin(h.ang)*(BOX_D-50) }, sp=slotPos(h,b.slot);
+  const tgt = b.leg===0 ? e : sp;
+  const dx=tgt.x-b.x, dy=tgt.y-b.y, d=Math.hypot(dx,dy), mv=b.cs*dt;
+  if (d<=mv){ b.x=tgt.x; b.y=tgt.y; if (b.leg===0){ b.leg=1; b.cs=Math.max(120,b.cs*0.6);} else { b.state='corner'; b.vx=b.vy=0; Sound.rattle(); } }
+  else { b.x+=dx/d*mv; b.y+=dy/d*mv; b.vx=dx/d*b.cs; b.vy=dy/d*b.cs; }
+}
+
+function collideBalls(a,b,e){
+  const dx=b.x-a.x, dy=b.y-a.y, d2=dx*dx+dy*dy, m=2*BR;
+  if (d2>=m*m || d2===0) return;
+  const d=Math.sqrt(d2), nx=dx/d, ny=dy/d, ov=(m-d)/2;
+  a.x-=nx*ov; a.y-=ny*ov; b.x+=nx*ov; b.y+=ny*ov;
+  const rv=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
+  if (rv<0){ const j=-(1+e)*rv/2; a.vx-=j*nx; a.vy-=j*ny; b.vx+=j*nx; b.vy+=j*ny; Sound.clack(-rv/600); }
+}
+function collideStatic(b, sx, sy){
+  const dx=b.x-sx, dy=b.y-sy, d2=dx*dx+dy*dy, m=2*BR;
+  if (d2>=m*m || d2===0) return;
+  const d=Math.sqrt(d2), nx=dx/d, ny=dy/d; b.x=sx+nx*m; b.y=sy+ny*m;
+  const vn=b.vx*nx+b.vy*ny; if (vn<0){ b.vx-=1.5*vn*nx; b.vy-=1.5*vn*ny; Sound.clack(-vn/700); }
+}
+function collideTop(T, b){
+  const dx=b.x-T.x, dy=b.y-T.y, d2=dx*dx+dy*dy, m=TR+BR;
+  if (d2>=m*m || d2===0) return;
+  const spinning=T.state==='spinning', mt=spinning?5:10;
+  const d=Math.sqrt(d2), nx=dx/d, ny=dy/d, ov=m-d;
+  T.x-=nx*ov/(mt+1); T.y-=ny*ov/(mt+1); b.x+=nx*ov*mt/(mt+1); b.y+=ny*ov*mt/(mt+1);
+  const rv=(b.vx-T.vx)*nx+(b.vy-T.vy)*ny;
+  if (rv<0){ const j=-(1.8)*rv/(1+1/mt); b.vx+=j*nx; b.vy+=j*ny; T.vx-=j/mt*nx; T.vy-=j/mt*ny; Sound.clack(-rv/500+ (spinning?0.15:0)); }
+  if (spinning){
+    const tx=-ny, ty=nx, rvt=(b.vx-T.vx)*tx+(b.vy-T.vy)*ty, slip=T.w*TR - rvt;
+    const dv=Math.max(-240,Math.min(240,slip*0.22));
+    b.vx+=tx*dv; b.vy+=ty*dv; T.w -= Math.sign(T.w)*Math.abs(dv)*0.0015;
+  }
+}
+
+function step(dt){
+  stepTop(top, dt);
+  for (const b of balls){
+    if (b.state==='active') stepBall(b, dt);
+    else if (b.state==='channel') stepChannel(b, dt);
+    else if (b.state==='sinking'){ b.t+=dt; const k=Math.min(1,b.t/0.14); b.x=b.fx+(b.hole.x-b.fx)*k; b.y=b.fy+(b.hole.y-b.fy)*k; b.vx=b.vy=0; if (k>=1) b.state='pocket'; }
+    else if (b.state==='off'){ b.x+=b.vx*dt; b.y+=b.vy*dt; b.alpha=Math.max(0,b.alpha-dt*1.6); }
+  }
+  const act = balls.filter(b=>b.state==='active');
+  for (let i=0;i<act.length;i++) for (let j=i+1;j<act.length;j++) collideBalls(act[i],act[j],0.95);
+  for (const b of act){
+    for (const o of balls) if (o.state==='pocket' || o.state==='sinking') collideStatic(b, o.hole.x, o.hole.y);
+    if (top.state==='spinning' || top.state==='fallen') collideTop(top, b);
+  }
+  // the top bumps off balls already sitting in hollows
+  if (top.state==='spinning' || top.state==='fallen'){
+    for (const o of balls){
+      if (o.state!=='pocket') continue;
+      const dx=top.x-o.hole.x, dy=top.y-o.hole.y, d=Math.hypot(dx,dy), m=TR+BR-4;
+      if (d<m && d>0){ const nx=dx/d, ny=dy/d; top.x=o.hole.x+nx*m; top.y=o.hole.y+ny*m; const vn=top.vx*nx+top.vy*ny; if (vn<0){ top.vx-=1.5*vn*nx; top.vy-=1.5*vn*ny; Sound.clack(-vn/800); } }
+    }
+  }
+}
+
+function isMoving(){
+  return balls.some(b => (b.state==='active' && Math.hypot(b.vx,b.vy)>5) || b.state==='channel' || b.state==='sinking' || (b.state==='off' && b.alpha>0));
+}
+
+function turnResult(){
+  let total=0, scored=0, redScored=false, off=0; const items=[], hits=[];
+  for (const b of balls){
+    const inHole = b.state==='pocket' || b.state==='corner' || b.state==='sinking' || b.state==='channel';
+    if (b.state==='off') off++;
+    if (!inHole){ items.push({kind:b.kind, pts:null}); continue; }
+    scored++; hits.push(HOLES.indexOf(b.hole));
+    let pts = b.hole.value; if (b.kind==='red'){ pts*=2; redScored=true; } if (b.kind==='blue') pts=-pts;
+    total+=pts; items.push({kind:b.kind, pts});
+  }
+  return { total, scored, redScored, off, items, hits, all: scored===balls.length, count: balls.length };
+}
+
+// ---------- Rendering ----------
+const canvas = document.getElementById('board'), ctx = canvas.getContext('2d');
+let scale = 1, boardImg = null;
+function resize(){
+  const rect = canvas.getBoundingClientRect(), dpr = Math.min(3, window.devicePixelRatio||1);
+  canvas.width = Math.round(rect.width*dpr); canvas.height = Math.round(rect.height*dpr);
+  scale = canvas.width / W;
+}
+function rng(seed){ return () => { seed = (seed*16807) % 2147483647; return (seed-1)/2147483646; }; }
+
+function buildBoard(){
+  const S = 2, c = document.createElement('canvas'); c.width=c.height=W*S;
+  const g = c.getContext('2d'); g.scale(S,S);
+  const rand = rng(1809);
+  // base slab
+  const rr = (x,y,w,h,r)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
+  rr(0,0,W,W,22); g.save(); g.clip();
+  let lg = g.createLinearGradient(0,0,W,W); lg.addColorStop(0,'#e2bd86'); lg.addColorStop(0.5,'#d3a76b'); lg.addColorStop(1,'#c3955a');
+  g.fillStyle=lg; g.fillRect(0,0,W,W);
+  for (let i=0;i<170;i++){
+    const y0=rand()*W*1.1-30, amp=4+rand()*14, f=0.004+rand()*0.01, ph=rand()*7;
+    g.beginPath(); for (let x=-10;x<=W+10;x+=8){ const y=y0+Math.sin(x*f+ph)*amp+Math.sin(x*0.031+ph*2)*1.5; x<0?g.moveTo(x,y):g.lineTo(x,y); }
+    g.strokeStyle=`rgba(${110+rand()*30|0},${62+rand()*20|0},${24},${0.05+rand()*0.11})`; g.lineWidth=0.4+rand()*1.8; g.stroke();
+  }
+  // bevel
+  g.restore();
+  rr(1.5,1.5,W-3,W-3,21); g.strokeStyle='rgba(255,240,210,.35)'; g.lineWidth=3; g.stroke();
+  rr(6,6,W-12,W-12,17); g.strokeStyle='rgba(90,50,18,.35)'; g.lineWidth=1.5; g.stroke();
+
+  // inlaid ring
+  g.beginPath(); g.arc(C,C,R+25,0,Math.PI*2); g.strokeStyle='rgba(84,44,14,.55)'; g.lineWidth=2; g.stroke();
+  g.beginPath(); g.arc(C,C,R+29,0,Math.PI*2); g.strokeStyle='rgba(84,44,14,.3)'; g.lineWidth=1; g.stroke();
+
+  // corner channels + boxes
+  for (const h of HOLES.filter(h=>h.type==='corner')){
+    g.save(); g.translate(C,C); g.rotate(h.ang);
+    const x0=R-14, x1=BOX_D-40;
+    const cg=g.createLinearGradient(0,-15,0,15); cg.addColorStop(0,'#6a4120'); cg.addColorStop(0.35,'#9a6a3a'); cg.addColorStop(1,'#a87543');
+    g.fillStyle=cg; g.fillRect(x0,-15,x1-x0,30);
+    g.fillStyle='rgba(50,25,8,.35)'; g.fillRect(x0,-15,x1-x0,3);
+    g.restore();
+    g.save(); g.translate(h.x,h.y);
+    rr(-BOX_HALF,-BOX_HALF,BOX_HALF*2,BOX_HALF*2,9);
+    const bg=g.createLinearGradient(-BOX_HALF,-BOX_HALF,BOX_HALF,BOX_HALF); bg.addColorStop(0,'#6b4220'); bg.addColorStop(0.3,'#946235'); bg.addColorStop(1,'#a77544');
+    g.fillStyle=bg; g.fill(); g.strokeStyle='rgba(60,30,8,.6)'; g.lineWidth=2; g.stroke();
+    g.restore();
+    // burned value beside the channel
+    const px=-Math.sin(h.ang), py=Math.cos(h.ang), d=BOX_D-82;
+    const lx=C+Math.cos(h.ang)*d+px*34, ly=C+Math.sin(h.ang)*d+py*34;
+    burn(g, String(h.value), lx, ly, 22);
+  }
+
+  // bowl
+  g.save(); g.beginPath(); g.arc(C,C,R,0,Math.PI*2); g.clip();
+  const bw=g.createRadialGradient(C-30,C-40,10,C,C,R); bw.addColorStop(0,'#ecd09f'); bw.addColorStop(0.6,'#d9b07a'); bw.addColorStop(1,'#b98a52');
+  g.fillStyle=bw; g.fillRect(C-R,C-R,R*2,R*2);
+  for (let k=14;k<R;k+=7){ g.beginPath(); g.arc(C,C,k,0,Math.PI*2); g.strokeStyle=`rgba(120,72,30,${0.04+0.05*rand()})`; g.lineWidth=0.8+rand(); g.stroke(); }
+  g.shadowColor='rgba(60,28,6,.55)'; g.shadowBlur=26; g.shadowOffsetX=7; g.shadowOffsetY=9;
+  g.beginPath(); g.arc(C,C,R+22,0,Math.PI*2); g.lineWidth=40; g.strokeStyle='#000'; g.stroke();
+  g.restore();
+  g.beginPath(); g.arc(C,C,R+1,0,Math.PI*2); g.strokeStyle='rgba(95,55,20,.7)'; g.lineWidth=2.5; g.stroke();
+  g.beginPath(); g.arc(C,C,R+4,Math.PI*0.15,Math.PI*1.1); g.strokeStyle='rgba(255,236,200,.35)'; g.lineWidth=1.5; g.stroke();
+
+  // gap notches over the rim
+  for (const h of HOLES.filter(h=>h.type==='corner')){
+    g.save(); g.translate(C,C); g.rotate(h.ang);
+    const cg=g.createLinearGradient(R-14,0,R+16,0); cg.addColorStop(0,'rgba(154,106,58,0)'); cg.addColorStop(0.5,'#8f6033'); cg.addColorStop(1,'#9a6a3a');
+    g.fillStyle=cg; g.fillRect(R-12,-15,30,30);
+    g.restore();
+  }
+  // hollows drilled into the bowl floor, a little in from the rim
+  for (const h of HOLES.filter(h=>h.type==='pocket')){
+    g.beginPath(); g.arc(h.x+1,h.y+1.5,POCKET_R+2.5,0,Math.PI*2); g.fillStyle='rgba(255,236,200,.28)'; g.fill();
+    const pg=g.createRadialGradient(h.x+3,h.y+4,1,h.x,h.y,POCKET_R);
+    pg.addColorStop(0,'#8a5a2c'); pg.addColorStop(0.55,'#6a3f1c'); pg.addColorStop(1,'#42230c');
+    g.beginPath(); g.arc(h.x,h.y,POCKET_R,0,Math.PI*2); g.fillStyle=pg; g.fill();
+    g.strokeStyle='rgba(60,30,8,.55)'; g.lineWidth=1.2; g.stroke();
+    const ld=POCKET_D-POCKET_R-17, lx=C+Math.cos(h.ang)*ld, ly=C+Math.sin(h.ang)*ld;
+    burn(g, String(h.value), lx, ly, 17);
+  }
+  boardImg = c;
+}
+function burn(g, text, x, y, size){
+  g.save(); g.font=`700 ${size}px 'Grenze Gotisch', Georgia, serif`; g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle='rgba(255,235,200,.35)'; g.fillText(text,x+0.8,y+1);
+  g.fillStyle='#5b2f10'; g.fillText(text,x,y); g.restore();
+}
+
+const BALL_COL = { plain:['#fbecc9','#e2c38f','#b48a52'], red:['#ff8f80','#d6362b','#86140f'], blue:['#9fc0ff','#3f6fd8','#17327f'] };
+function drawBall(b){
+  const sunk = b.state==='pocket' || b.state==='sinking' || b.state==='corner';
+  const r = sunk ? BR-0.5 : BR;
+  ctx.save(); ctx.globalAlpha=b.alpha;
+  ctx.beginPath(); ctx.ellipse(b.x+(sunk?1:2.5),b.y+(sunk?1.5:3.5),r,r*0.9,0,0,Math.PI*2); ctx.fillStyle='rgba(40,18,4,.35)'; ctx.fill();
+  const col=BALL_COL[b.kind], gr=ctx.createRadialGradient(b.x-r*0.4,b.y-r*0.45,1,b.x,b.y,r);
+  gr.addColorStop(0,col[0]); gr.addColorStop(0.55,col[1]); gr.addColorStop(1,col[2]);
+  ctx.beginPath(); ctx.arc(b.x,b.y,r,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+  if (sunk){ ctx.fillStyle='rgba(50,25,8,.18)'; ctx.fill(); }
+  ctx.restore();
+}
+function drawTop(T, ghost){
+  ctx.save();
+  if (ghost) ctx.globalAlpha = ghost;
+  if (T.state==='fallen'){
+    ctx.translate(T.x,T.y); ctx.rotate(T.fallAng);
+    ctx.fillStyle='rgba(40,18,4,.35)'; ctx.beginPath(); ctx.ellipse(4,5,10,TR+2,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#3a2010'; ctx.fillRect(0,-3,30,6); ctx.fillStyle='#5b351c'; ctx.fillRect(0,-3,30,2);
+    const gr=ctx.createLinearGradient(-8,0,8,0); gr.addColorStop(0,'#2d170a'); gr.addColorStop(0.5,'#7a4826'); gr.addColorStop(1,'#3d2010');
+    ctx.beginPath(); ctx.ellipse(0,0,7,TR,0,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+    ctx.fillStyle='#d6362b'; ctx.fillRect(-2,-TR*0.95,3,TR*1.9);
+    ctx.beginPath(); ctx.moveTo(-6,-5); ctx.lineTo(-14,0); ctx.lineTo(-6,5); ctx.fillStyle='#2a160a'; ctx.fill();
+    ctx.restore(); return;
+  }
+  const frac = T.state==='spinning' ? Math.min(1,Math.abs(T.w)/T.w0) : 1;
+  const wob = T.state==='spinning' ? (1-frac)*4 : 0;
+  const ox=Math.cos(T.rot*0.13)*wob, oy=Math.sin(T.rot*0.13)*wob;
+  ctx.beginPath(); ctx.ellipse(T.x+4+ox*0.5,T.y+6+oy*0.5,TR+1,TR*0.92,0,0,Math.PI*2); ctx.fillStyle='rgba(40,18,4,.35)'; ctx.fill();
+  const gr=ctx.createRadialGradient(T.x-6,T.y-7,2,T.x,T.y,TR);
+  gr.addColorStop(0,'#9a6136'); gr.addColorStop(0.6,'#5e351b'); gr.addColorStop(1,'#331a0b');
+  ctx.beginPath(); ctx.arc(T.x,T.y,TR,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+  ctx.lineWidth=3.2; ctx.strokeStyle='#d6362b'; ctx.beginPath(); ctx.arc(T.x,T.y,TR*0.7,0,Math.PI*2); ctx.stroke();
+  const sweep = T.state==='spinning' ? Math.min(Math.PI*0.55, Math.abs(T.w)*0.012) : 0.001;
+  ctx.strokeStyle='#f6eedc'; ctx.lineWidth=3.2; ctx.lineCap='round';
+  for (let i=0;i<3;i++){ const a=T.rot+i*Math.PI*2/3; ctx.beginPath(); ctx.arc(T.x,T.y,TR*0.7,a,a+sweep*Math.sign(T.w||1)+0.0001, T.w<0); ctx.stroke(); }
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(20,8,2,.4)'; ctx.beginPath(); ctx.arc(T.x,T.y,TR*0.42,0,Math.PI*2); ctx.stroke();
+  const sg=ctx.createRadialGradient(T.x+ox-2,T.y+oy-2,0.5,T.x+ox,T.y+oy,5.5); sg.addColorStop(0,'#8a5630'); sg.addColorStop(1,'#24120a');
+  ctx.beginPath(); ctx.arc(T.x+ox,T.y+oy,5.5,0,Math.PI*2); ctx.fillStyle=sg; ctx.fill();
+  ctx.restore();
+}
+
+let aim = null; // {x,y,cx,cy,ok}
+function aimParams(){
+  const dx=aim.cx-aim.x, dy=aim.cy-aim.y, len=Math.hypot(dx,dy);
+  const v=Math.min(720, len*3.1), power=v/720;
+  return { len, power, vx: len? dx/len*v : 0, vy: len? dy/len*v : 0, w: state.dir*(55+100*power) };
+}
+function render(){
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(scale,0,0,scale,0,0);
+  if (boardImg) ctx.drawImage(boardImg,0,0,W,W);
+  for (const b of balls) if (b.state!=='active' && b.state!=='off') drawBall(b);
+  for (const b of balls) if (b.state==='active') drawBall(b);
+  if (top.state==='spinning' || top.state==='fallen') drawTop(top);
+  if (aim) drawAim();
+  if (typeof drawRemoteAim==='function') drawRemoteAim();
+  for (const b of balls) if (b.state==='off') drawBall(b);
+}
+function drawAim(){
+  {
+    const T={...top, x:aim.x, y:aim.y, state:'held', w:0, rot:0};
+    drawTop(T, aim.ok?0.85:0.35);
+    if (!aim.ok){ ctx.beginPath(); ctx.arc(aim.x,aim.y,TR+4,0,Math.PI*2); ctx.strokeStyle='#d6362b'; ctx.lineWidth=2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]); }
+    const p=aimParams();
+    if (aim.ok && p.len>4){
+      const ux=p.vx/(p.power*720||1), uy=p.vy/(p.power*720||1), L=30+p.power*130;
+      const ex=aim.x+ux*L, ey=aim.y+uy*L;
+      ctx.strokeStyle='rgba(255,246,230,.95)'; ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(aim.x+ux*(TR+4),aim.y+uy*(TR+4)); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex-ux*12-uy*7,ey-uy*12+ux*7); ctx.lineTo(ex-ux*12+uy*7,ey-uy*12-ux*7); ctx.closePath(); ctx.fillStyle='rgba(255,246,230,.95)'; ctx.fill();
+      ctx.lineWidth=4; ctx.strokeStyle='rgba(214,54,43,.9)'; ctx.beginPath();
+      const a0=-Math.PI/2; ctx.arc(aim.x,aim.y,TR+9,a0,a0+state.dir*Math.PI*2*p.power,state.dir<0); ctx.stroke();
+    }
+  }
+}
+
+// ---------- Game state & UI ----------
+const $ = id => document.getElementById(id);
+const state = {
+  mode:'game', phase:'aim', dir:1, players:[{name:'Anna',score:0,spin:null},{name:'Bernd',score:0,spin:null}], current:0, target:1000, redRule:false,
+  format:'race', round:1, inPlay:[0,1], balls:6,
+  log:[], practice:{ spins:0, total:0, best:null, scored:0, off:0, hits:Array(HOLES.length).fill(0) },
+  pending:null, simTime:0, settle:0
+};
+const fmt = n => n.toLocaleString('en-US');
+
+function renderPlayers(){
+  const race = state.format==='race';
+  $('targetLabel').textContent = (race ? `First to ${fmt(state.target)}` : (state.round>1 ? `Spin-off · tie-break ${state.round-1}` : 'Single spin-off')) + (state.redRule?' · red rule':'');
+  let best=null;
+  if (!race){ const done=state.inPlay.map(i=>state.players[i].spin).filter(v=>v!==null); if (done.length) best=Math.max(...done); }
+  $('players').innerHTML = state.players.map((p,i)=>{
+    const out = !race && !state.inPlay.includes(i);
+    const cls = [i===state.current && state.phase!=='won' ? 'now':'', out?'out':'', (!race && !out && p.spin!==null && p.spin===best)?'lead':''].join(' ');
+    const val = race ? fmt(p.score) : (p.spin===null ? '–' : fmt(p.spin));
+    const bar = race ? `<span class="bar"><i style="width:${Math.min(100,p.score/state.target*100)}%"></i></span>` : '';
+    return `<li class="${cls}"><span class="mark"></span><input class="name" type="text" id="pname${i}" data-i="${i}" maxlength="18" value="${esc(p.name)}" aria-label="Player ${i+1} name"><span class="score">${val}</span>${bar}</li>`;
+  }).join('');
+  $('log').innerHTML = state.log.length ? state.log.slice(0,6).map(l=>`<li><span>${esc(l.name)}${l.note?` · ${l.note}`:''}</span><b>${l.pts>0?'+':''}${fmt(l.pts)}</b></li>`).join('') : '<li class="empty">No spins yet. Make the first flick.</li>';
+}
+function renderPractice(){
+  const P=state.practice;
+  $('pSpins').textContent = `${P.spins} spin${P.spins===1?'':'s'}`;
+  $('pAvg').textContent = P.spins ? Math.round(P.total/P.spins) : '–';
+  $('pBest').textContent = P.best===null ? '–' : fmt(P.best);
+  $('pRate').textContent = P.spins ? `${Math.round(P.scored/(P.ballsSeen||P.spins*6)*100)}%` : '–';
+  $('pOff').textContent = P.off;
+  const max=Math.max(1,...P.hits);
+  $('hist').innerHTML = HIST_ORDER.map(i=>`<div title="${HOLES[i].value} pts: ${P.hits[i]} hits"><i class="${HOLES[i].type==='corner'?'corner':''}" style="height:${P.hits[i]/max*70}%"></i><span>${HOLES[i].value}</span></div>`).join('');
+}
+function numWord(n){ return ['zero','one','two','three','four','five','six','seven','eight'][n] || String(n); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function setHint(t){ const h=$('hint'); h.hidden=!t; if (t) h.textContent=t; }
+function updateFlag(){
+  const f=$('turnFlag');
+  if (state.mode==='online'){ const s=activeSeat(); f.hidden=!s; if (s) f.textContent = isMyTurn() ? 'Your turn' : `${s.name}'s turn`; return; }
+  if (state.phase!=='aim' && state.phase!=='running'){ f.hidden=true; return; }
+  if (state.mode==='game'){ f.hidden=false; f.textContent=`${state.players[state.current].name}'s turn`; }
+  else { f.hidden=false; f.textContent='Practice'; }
+}
+
+function advance(){ if (state.phase==='won'){ $('winSheet').hidden=true; return; } if (state.phase==='result') newTurn(); }
+function newTurn(){
+  makeBalls(); state.phase='aim'; state.pending=null; aim=null; $('result').hidden=true;
+  setHint('Press inside the bowl to set the top down, drag to aim, release to spin');
+  updateFlag(); renderPlayers();
+  if (state.mode==='online'){ net.watchKey=''; shareBoard(true); }
+}
+
+function launch(x,y,vx,vy,w){
+  top = { state:'spinning', x, y, vx, vy, w, w0:Math.abs(w), rot:0, wx:0, wy:0, fallAng:0 };
+  state.phase='running'; state.simTime=0; state.settle=0; state.fallenFor=0; setHint('');
+}
+
+// Applies one spin to a game record (local state or the shared online table).
+// g: {format,target,redRule,players:[{name,score,spin}],current,round,inPlay,log}
+function scoreTurn(g, res, opts={}){
+  const add=(a,b)=>a?a+' '+b:b;
+  let note='', pts=res.total;
+  if (g.redRule && !res.redScored && res.scored>0){ pts=0; note='The red ball missed, so under the red rule this spin scores nothing.'; }
+  if (opts.skipped) note='Turn skipped.';
+  const p=g.players[g.current], allMsg=`All ${numWord(res.count)} scored`;
+  let verb, next=null, won=null, nextIdx=null;
+  if (g.format==='spinoff'){
+    if (res.all) note=add(note, allMsg+'!');
+    p.spin=pts; verb='spins';
+    g.log.unshift({ name:p.name, pts, note: opts.skipped?'skipped':(g.round>1?'tie-break':'') });
+    const nx=g.inPlay.find(i=>g.players[i].spin===null);
+    if (nx!==undefined){ g.current=nx; nextIdx=nx; next=`Next spin: ${g.players[nx].name}`; }
+    else {
+      const max=Math.max(...g.inPlay.map(i=>g.players[i].spin));
+      const leaders=g.inPlay.filter(i=>g.players[i].spin===max);
+      if (leaders.length===1){ const w=g.players[leaders[0]]; won={ idx:leaders[0], name:w.name, text:`${w.name} wins the spin-off with ${fmt(max)} point${max===1?'':'s'}.` }; }
+      else {
+        const names=leaders.map(i=>g.players[i].name);
+        note=add(note, `${names.slice(0,-1).join(', ')} and ${names.at(-1)} tied on ${fmt(max)}, so they spin again.`);
+        g.round++; g.inPlay=leaders; leaders.forEach(i=>g.players[i].spin=null); g.current=leaders[0]; nextIdx=leaders[0];
+        next=`Tie-break: ${g.players[leaders[0]].name}`;
+      }
+    }
+  } else {
+    if (res.all) note=add(note, allMsg+': take another turn!');
+    p.score=Math.max(0, p.score+pts); verb='scores';
+    g.log.unshift({ name:p.name, pts, note: opts.skipped?'skipped':(res.all?`all ${numWord(res.count)}`:'') });
+    if (p.score>=g.target){ won={ idx:g.current, name:p.name, text:`${p.name} reached ${fmt(p.score)} points and wins the game.` }; }
+    else {
+      if (!res.all) g.current=(g.current+1)%g.players.length;
+      nextIdx=g.current; next=`${res.all?'Spin again':'Next turn'}: ${g.players[g.current].name}`;
+    }
+  }
+  if (res.off) note=add(note, `${res.off} ball${res.off>1?'s':''} jumped the rim.`);
+  if (g.log.length>20) g.log.length=20;
+  return { pts, note, name:p.name, verb, next, nextIdx, won };
+}
+const KINDS = ['plain','red','blue'];
+function chipsHtml(items){
+  return items.map(it=>{
+    const kind = KINDS.includes(it.kind) ? it.kind : 'plain';
+    const pts = (it.pts===null || it.pts===undefined) ? null : Number(it.pts)||0;
+    return `<span class="chip ${pts===null?'miss':''}"><span class="dot ${kind==='plain'?'':kind}"></span>${pts===null?'—':(pts>0?'+':'')+pts}</span>`;
+  }).join('');
+}
+function showResultCard({ name, verb, pts, items, note, button }){
+  const r=$('result');
+  r.innerHTML = `<h2>${esc(name)} ${esc(verb)} <b>${pts>0&&verb==='scores'?'+':''}${fmt(Number(pts)||0)}</b></h2><div class="chips">${chipsHtml(items)}</div><p class="note" hidden></p>${button?`<button class="btn" id="nextBtn"></button>`:''}`;
+  const n=r.querySelector('.note'); if (note){ n.textContent=note; n.hidden=false; }
+  if (button){ $('nextBtn').textContent=button; $('nextBtn').addEventListener('click', advance); }
+  r.hidden=false;
+  return r;
+}
+function showWin(won){
+  $('winTitle').textContent = `Congratulations, ${won.name}!`;
+  $('winText').textContent = won.text;
+  $('winSheet').hidden=false;
+}
+
+function endTurn(){
+  state.phase='result'; Sound.spin(0,0);
+  const res = turnResult(); state.pending = res;
+  if (state.mode==='online'){ onlineEndTurn(res); return; }
+  let o, button;
+  if (state.mode==='game'){
+    o = scoreTurn(state, res);
+    if (o.won){ state.phase='won'; Sound.fanfare(); showWin(o.won); button='Close'; }
+    else button = o.next;
+    renderPlayers();
+  } else {
+    const pts=res.total;
+    const P=state.practice; P.spins++; P.total+=pts; P.best = P.best===null?pts:Math.max(P.best,pts); P.scored+=res.scored; P.off+=res.off; P.ballsSeen=(P.ballsSeen||(P.spins-1)*6)+res.count;
+    res.hits.forEach(i=>P.hits[i]++); renderPractice();
+    let note=''; if (res.off) note=`${res.off} ball${res.off>1?'s':''} jumped the rim.`;
+    o = { name:'This spin', verb:'', pts, note }; button='Spin again';
+  }
+  updateFlag();
+  const r = state.mode==='game'
+    ? showResultCard({ name:o.name, verb:o.verb, pts:o.pts, items:res.items, note:o.note, button })
+    : (()=>{ const c=showResultCard({ name:'', verb:'', pts:o.pts, items:res.items, note:o.note, button }); c.querySelector('h2').innerHTML=`This spin: <b>${pts2(o.pts)}</b>`; return c; })();
+  if (state.phase==='won') setHint('Game over. Use Restart or New game to play again.');
+  else setHint(`${button}. Click the board to continue.`);
+  try { r.scrollIntoView({ block:'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); } catch(e){}
+  if (res.all) Sound.fanfare();
+}
+function pts2(p){ return `${p>0?'+':''}${fmt(p)}`; }
+
+// ---------- Online table ----------
+// One shared table per page, kept in the page's database (tables/main).
+// Whoever's turn it is runs the physics and shares the live board through
+// room presence; everyone else watches it. Each finished spin is written to
+// the table, so late joiners and reloads pick up the game where it stands.
+const TABLE_PATH = 'tables/main';
+const ST = { active:0, sinking:1, pocket:2, channel:3, corner:4, off:5 };
+const ST_NAMES = Object.keys(ST);
+const TOP_ST = ['held','spinning','fallen'];
+const net = {
+  tried:false, db:null, room:null, user:null, uid:null, canWrite:null, ready:false,
+  table:null, tableRef:null, peers:[], myNick:'', tabId:Math.random().toString(36).slice(2,10),
+  myTurnId:null, lastSent:0, watchKey:'', winShown:null, busy:false, err:'', peerSig:'',
+  remote:null, lastG:null, prevStates:null
+};
+const RANDOM_NICKS=['Alpine Ace','Edelweiss','Gipfel','Kreisel','Bergfex','Almrausch'];
+
+function blankTable(){ return { status:'lobby', seats:[], format:'race', target:1000, redRule:false, turnId:0, current:0, round:1, inPlay:[], log:[], lastResult:null, winner:null }; }
+function cleanTable(d){
+  const t = Object.assign(blankTable(), d||{});
+  t.seats = Array.isArray(t.seats) ? t.seats.filter(s=>s && typeof s.uid==='string').slice(0,6).map(s=>({ uid:s.uid, name:String(s.name||'Player').slice(0,18), score:Number(s.score)||0, spin:(s.spin===null||s.spin===undefined)?null:Number(s.spin)||0 })) : [];
+  t.format = t.format==='spinoff' ? 'spinoff' : 'race';
+  t.target = [500,1000,2000].includes(Number(t.target)) ? Number(t.target) : 1000;
+  t.redRule = !!t.redRule; t.turnId = Number(t.turnId)||0; t.current = Math.min(Math.max(0,Number(t.current)||0), Math.max(0,t.seats.length-1));
+  t.round = Number(t.round)||1; t.inPlay = Array.isArray(t.inPlay) ? t.inPlay.filter(i=>Number.isInteger(i) && i>=0 && i<t.seats.length) : [];
+  t.log = Array.isArray(t.log) ? t.log.slice(0,20) : [];
+  if (!['lobby','playing','won'].includes(t.status)) t.status='lobby';
+  return t;
+}
+const mySeatIdx = () => net.table ? net.table.seats.findIndex(s=>s.uid===net.uid) : -1;
+const activeSeat = () => (net.table && net.table.status==='playing') ? net.table.seats[net.table.current] : null;
+const isMyTurn = () => { const s=activeSeat(); return !!(s && net.uid && s.uid===net.uid); };
+
+// ---- Firebase backend: anonymous sign-in, one table per code at rooms/<CODE> ----
+const FB_CONFIG = {
+  apiKey: "AIzaSyCxLTx_QsUVqDn4TLbZMA9ZfxsxgWpJPVk",
+  authDomain: "rondolette-41a7d.firebaseapp.com",
+  databaseURL: "https://rondolette-41a7d-default-rtdb.firebaseio.com",
+  projectId: "rondolette-41a7d",
+  storageBucket: "rondolette-41a7d.firebasestorage.app",
+  messagingSenderId: "606513866285",
+  appId: "1:606513866285:web:91f4a883ed6b4ca4e3baa4"
+};
+const CODE_RE = /^[A-Z0-9]{2,10}-[0-9]{3,6}$/;
+function codeFromUrl(){ const c=(new URLSearchParams(location.search).get('t')||'').toUpperCase(); return CODE_RE.test(c) ? c : null; }
+function newCode(){ const w=['ALPS','TIROL','BERG','ALM','GIPFEL','SEE','HUETTE','KREISEL','EDEL','STUBE']; return w[Math.floor(Math.random()*w.length)]+'-'+(1000+Math.floor(Math.random()*9000)); }
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+
+async function initOnline(){
+  if (net.tried) return; net.tried=true;
+  renderOnline();
+  try {
+    if (!window.firebase) throw new Error('sdk');
+    if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    const cred = await firebase.auth().signInAnonymously();
+    net.uid = cred.user.uid; net.fdb = firebase.database(); net.canWrite = true;
+    net.myNick = lsGet('rondolette-nick') || RANDOM_NICKS[Math.floor(Math.random()*RANDOM_NICKS.length)];
+    net.ready = true;
+    const code = codeFromUrl();
+    if (code) connectTable(code);
+  } catch(e){
+    net.ready = true;
+    net.fail = 'Couldn\'t reach the game server. Check your internet connection and reload the page.';
+  }
+  renderOnline();
+}
+function connectTable(code){
+  if (net.code===code) return;
+  net.code = code;
+  try { history.replaceState(null, '', location.pathname+'?t='+encodeURIComponent(code)); } catch(e){}
+  const base = net.fdb.ref('rooms/'+code);
+  net.tableRef = base.child('table');
+  net.db = true;
+  net.tableRef.on('value', s=>{ net.table = s.exists() ? cleanTable(s.val()) : null; onTable(); },
+    ()=>{ net.err='The table stopped updating. Reload the page to reconnect.'; renderOnline(); });
+  const peersRef = base.child('peers'), me = peersRef.child(net.tabId);
+  net.room = { presence: (patch)=>{ const up={}; for (const k in patch) up[k] = patch[k]===null ? null : JSON.parse(JSON.stringify(patch[k])); return me.update(up); } };
+  net.fdb.ref('.info/connected').on('value', s=>{
+    if (s.val()===true){ me.onDisconnect().remove(); me.update({ uid:net.uid, nick:net.myNick }); }
+  });
+  peersRef.on('value', s=>{
+    const v = s.val() || {}, now = Date.now();
+    net.peers = Object.entries(v).filter(([,p])=>p && typeof p==='object').map(([id,p])=>({ peer:id, by:typeof p.uid==='string'?p.uid:null, kind:'viewer', isMe:p.uid===net.uid, sameTab:id===net.tabId, guest:false, presence:p, updatedAt:now }));
+    onPeersChange();
+  });
+  renderOnline();
+}
+
+// Table writes run as a database transaction, so two players acting at once can't overwrite each other.
+async function mutate(fn){
+  if (!net.tableRef || net.busy) return false;
+  net.busy=true; net.err=''; renderOnline();
+  try {
+    const r = await net.tableRef.transaction(cur=>{
+      const t = cur ? cleanTable(cur) : blankTable();
+      const out = fn(t);
+      if (!out) return;  // abort
+      return JSON.parse(JSON.stringify(out));
+    }, undefined, false);
+    return !!(r && r.committed);
+  } catch(e){
+    net.err = 'That didn\'t save. Check your connection and try again.';
+    return false;
+  } finally { net.busy=false; renderOnline(); }
+}
+
+function gameView(t){ return { format:t.format, target:t.target, redRule:t.redRule, players:t.seats, current:t.current, round:t.round, inPlay:t.inPlay, log:t.log }; }
+function startGameOn(t){
+  t.status='playing'; t.seats.forEach(s=>{ s.score=0; s.spin=null; });
+  t.current=0; t.round=1; t.inPlay=t.seats.map((_,i)=>i); t.turnId=(t.turnId||0)+1; t.log=[]; t.lastResult=null; t.winner=null;
+  return t;
+}
+function packBalls(){ return balls.map(b=>[Math.round(b.x*10)/10, Math.round(b.y*10)/10, ST[b.state]??0, Math.round((b.alpha??1)*100)/100]); }
+function kindsStr(){ return balls.map(b=>b.kind[0]).join(''); }
+
+const actions = {
+  async join(){
+    const nick = (($('netNick')&&$('netNick').value)||net.myNick||'Player').trim().slice(0,18) || 'Player';
+    net.myNick = nick; lsSet('rondolette-nick', nick); net.room && net.room.presence({ nick }).catch(()=>{});
+    await mutate(t=>{
+      const i=t.seats.findIndex(s=>s.uid===net.uid);
+      if (i>=0){ t.seats[i].name=nick; return t; }
+      if (t.status!=='lobby'){ net.err='A game is in progress. You can take a seat when it ends.'; return null; }
+      if (t.seats.length>=6){ net.err='The table is full (six players).'; return null; }
+      t.seats.push({ uid:net.uid, name:nick, score:0, spin:null }); return t;
+    });
+  },
+  create(){ net.err=''; connectTable(newCode()); },
+  joinCode(){
+    const c = (($('joinCode')&&$('joinCode').value)||'').trim().toUpperCase().replace(/\s+/g,'');
+    if (!CODE_RE.test(c)){ net.err='That code doesn\'t look right. It should look like ALPS-4821.'; renderOnline(); return; }
+    net.err=''; connectTable(c);
+  },
+  copyLink(){
+    const url = location.origin+location.pathname+'?t='+encodeURIComponent(net.code);
+    const done = ()=>{ net.copied=true; renderOnline(); const b=document.querySelector('[data-act="copyLink"]'); if (b) b.textContent='Link copied'; setTimeout(()=>{ const b2=document.querySelector('[data-act="copyLink"]'); if (b2) b2.textContent='Copy invite link'; }, 2000); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, ()=>window.prompt('Copy this link:', url));
+    else window.prompt('Copy this link:', url);
+  },
+  async kick(uid){ await mutate(t=>{ if (t.status!=='lobby') return null; t.seats=t.seats.filter(s=>s.uid!==uid); return t; }); },
+  async leave(){ await mutate(t=>{ if (t.status!=='lobby') return null; t.seats=t.seats.filter(s=>s.uid!==net.uid); return t; }); },
+  async shuffle(){ await mutate(t=>{ if (t.status!=='lobby') return null; for (let i=t.seats.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [t.seats[i],t.seats[j]]=[t.seats[j],t.seats[i]]; } return t; }); },
+  async start(){ await mutate(t=>{ if (t.status==='playing' || !t.seats.length || !t.seats.some(s=>s.uid===net.uid)) return null; return startGameOn(t); }); },
+  async lobby(){ await mutate(t=>{ t.status='lobby'; t.lastResult=null; t.winner=null; t.turnId=(t.turnId||0)+1; return t; }); },
+  async skip(){
+    const tid = net.table && net.table.turnId;
+    await mutate(t=>{
+      if (t.status!=='playing' || t.turnId!==tid) return null;
+      const zero = { total:0, scored:0, redScored:false, off:0, items:[], hits:[], all:false, count:6 };
+      const g = gameView(t), o = scoreTurn(g, zero, { skipped:true });
+      t.current=g.current; t.round=g.round; t.inPlay=g.inPlay; t.log=g.log;
+      return finishOn(t, o, zero, null);
+    });
+  },
+  async settings(){
+    const f = $('netFormat') ? $('netFormat').value : 'race';
+    const target = $('netTarget') ? Number($('netTarget').value) : 1000;
+    const red = $('netRed') ? $('netRed').checked : false;
+    await mutate(t=>{ if (t.status!=='lobby') return null; t.format=f==='spinoff'?'spinoff':'race'; t.target=target; t.redRule=red; return t; });
+  }
+};
+// Copy a scored view back onto the table and record the result.
+function finishOn(t, o, res, finalBalls, view){
+  t.lastResult = { turnId:t.turnId, name:o.name, verb:o.verb, pts:o.pts, note:o.note, items:res.items.map(it=>({kind:it.kind, pts:it.pts})), balls:finalBalls, kinds:finalBalls?kindsStr():null, by:net.uid };
+  t.turnId++;
+  if (o.won){ t.status='won'; t.winner={ name:o.won.name, text:o.won.text, turnId:t.turnId }; }
+  return t;
+}
+
+function onlineEndTurn(res){
+  net.pendingRes = res;
+  const tid = net.myTurnId, fb = packBalls();
+  setHint('Saving your spin…');
+  mutate(t=>{
+    if (t.status!=='playing' || t.turnId!==tid || t.seats[t.current]?.uid!==net.uid) return null;
+    const g = gameView(t);
+    const o = scoreTurn(g, res);
+    t.current=g.current; t.round=g.round; t.inPlay=g.inPlay; t.log=g.log;
+    return finishOn(t, o, res, fb);
+  }).then(ok=>{
+    if (ok){ net.pendingRes=null; if (res.all) Sound.fanfare(); }
+    else if (net.err) setHint(net.err);
+  });
+}
+
+function onTable(){
+  const t = net.table;
+  renderOnline();
+  if (state.mode!=='online') return;
+  if (!t){ observerIdle('Take a seat to set up a game.'); return; }
+  // win banner, once per game
+  if (t.status==='won' && t.winner && net.winShown!==t.winner.turnId){
+    net.winShown=t.winner.turnId; Sound.fanfare(); showWin({ name:String(t.winner.name), text:String(t.winner.text) });
+  }
+  const lr = t.lastResult && t.lastResult.turnId===t.turnId-1 ? t.lastResult : null;
+  if (lr) showResultCard({ name:String(lr.name), verb:String(lr.verb), pts:lr.pts, items:Array.isArray(lr.items)?lr.items:[], note:String(lr.note||''), button:null });
+  else $('result').hidden=true;
+  if (t.status!=='playing'){ state.phase='watch'; aim=null; if (lr && lr.balls) showFinal(lr); updateFlag(); setHint(t.status==='won' ? 'Game over. Play again or head back to the lobby.' : (t.seats.length ? 'Waiting for someone to start the game.' : 'Take a seat to set up a game.')); return; }
+  if (isMyTurn()){
+    if (net.myTurnId!==t.turnId){
+      net.myTurnId=t.turnId;
+      if (state.phase!=='running'){
+        if (lr && lr.balls && lr.by===net.uid){ state.phase='result'; setHint('Another spin for you. Click the board to set up.'); }
+        else {
+          newTurn(); setHint('Your turn! Press inside the bowl, drag to aim, release to spin.');
+          if (lr) showResultCard({ name:String(lr.name), verb:String(lr.verb), pts:lr.pts, items:Array.isArray(lr.items)?lr.items:[], note:String(lr.note||''), button:null });
+        }
+      }
+    }
+  } else {
+    if (net.myTurnId!==null) clearShare();
+    net.myTurnId=null; Sound.spin(0,0);
+    if (state.phase!=='watch'){ state.phase='watch'; aim=null; }
+    if (lr && lr.balls) showFinal(lr);
+    setHint(`Waiting for ${activeSeat().name} to spin.`);
+  }
+  updateFlag();
+}
+function observerIdle(msg){ state.phase='watch'; aim=null; $('result').hidden=true; setHint(msg); updateFlag(); }
+function showFinal(lr){
+  if (!Array.isArray(lr.balls)) return;
+  if (net.watchKey==='final'+lr.turnId) return;
+  net.watchKey='final'+lr.turnId; applyBalls(lr.balls, String(lr.kinds||''), true);
+  top.state='held';
+}
+function applyBalls(arr, kinds, snap){
+  const map={p:'plain',r:'red',b:'blue'};
+  if (balls.length!==arr.length) balls = arr.map(()=>({ kind:'plain', x:C, y:C, vx:0, vy:0, state:'active', hole:null, alpha:1 }));
+  arr.forEach((a,i)=>{
+    const b=balls[i]; if (!Array.isArray(a)) return;
+    b.kind = map[kinds[i]] || 'plain';
+    const st = ST_NAMES[a[2]] || 'active';
+    const x=Number(a[0])||C, y=Number(a[1])||C;
+    if (snap || st!==b.state || Math.hypot(x-b.x,y-b.y)>80){ b.x=x; b.y=y; }
+    b.tx=x; b.ty=y; b.state=st; b.alpha = (a[3]===undefined)?1:Number(a[3]);
+  });
+}
+
+// The active player's page shares its board about 20 times a second.
+function shareBoard(force){
+  if (state.mode!=='online' || !net.room || !isMyTurn()) return;
+  const now=performance.now(); if (!force && now-net.lastSent<80) return; net.lastSent=now;
+  const T=top;
+  const g = { t:net.myTurnId, ph: state.phase==='running'?'run':(state.phase==='aim'?'aim':'res'), k:kindsStr(), b:packBalls(),
+    tp:[Math.round(T.x*10)/10, Math.round(T.y*10)/10, Math.round((T.rot||0)*100)/100, TOP_ST.indexOf(T.state), Math.round((T.fallAng||0)*100)/100, Math.round(T.w||0), Math.round(T.w0||1)],
+    a: aim ? [Math.round(aim.x), Math.round(aim.y), Math.round(aim.cx), Math.round(aim.cy), aim.ok?1:0, state.dir] : null };
+  net.room.presence({ g }).catch(()=>{});
+}
+function clearShare(){ if (net.room) net.room.presence({ g:null }).catch(()=>{}); }
+
+function onPeersChange(){
+  const sig = net.peers.map(p=>p.peer+':'+(p.presence&&p.presence.nick)).join('|');
+  if (sig!==net.peerSig){ net.peerSig=sig; renderOnline(); }
+  if (state.mode!=='online' || isMyTurn() || !net.table || net.table.status!=='playing') return;
+  const s=activeSeat(); if (!s) return;
+  const cands = net.peers.filter(p=>(p.by||(p.presence&&p.presence.uid))===s.uid && p.presence && p.presence.g && p.presence.g.t===net.table.turnId);
+  if (!cands.length) return;
+  const g = cands.sort((a,b)=>b.updatedAt-a.updatedAt)[0].presence.g;
+  if (g===net.lastG) return; net.lastG=g;
+  if (!Array.isArray(g.b)) return;
+  // sounds for the watchers: a ball dropping in, or rolling into a corner box
+  const prev = net.prevStates;
+  g.b.forEach((a,i)=>{ const p=prev&&prev[i]; if (p===0 && (a[2]===1||a[2]===2)) Sound.thunk(); if (p===3 && a[2]===4) Sound.rattle(); });
+  net.prevStates = g.b.map(a=>a[2]);
+  const fresh = net.watchKey!=='live'+g.t; net.watchKey='live'+g.t;
+  applyBalls(g.b, String(g.k||''), fresh);
+  if (Array.isArray(g.tp)){
+    const [x,y,rot,st,fa,w,w0]=g.tp.map(Number);
+    top.state = TOP_ST[st]||'held'; top.tx=x; top.ty=y; if (fresh || Math.hypot(x-top.x,y-top.y)>80){ top.x=x; top.y=y; }
+    top.rot=rot; top.fallAng=fa; top.w=w; top.w0=w0||1;
+    if (top.state==='spinning') Sound.spin(w, 1-Math.min(1,Math.abs(w)/(w0||1))); else Sound.spin(0,0);
+  }
+  net.remoteAim = Array.isArray(g.a) ? g.a.map(Number) : null;
+  if (g.ph==='run' || g.ph==='aim'){ $('result').hidden=true; setHint(g.ph==='run' ? `${s.name} is spinning…` : `${s.name} is lining up a flick.`); }
+}
+// smooth the watched board between updates
+function easeRemote(dt){
+  const k=Math.min(1, dt*18);
+  for (const b of balls){ if (b.tx===undefined) continue; b.x+=(b.tx-b.x)*k; b.y+=(b.ty-b.y)*k; }
+  if (top.tx!==undefined){ top.x+=(top.tx-top.x)*k; top.y+=(top.ty-top.y)*k; }
+}
+function drawRemoteAim(){
+  const a = net.remoteAim; if (!a || state.mode!=='online' || isMyTurn() || !net.table || net.table.status!=='playing') return;
+  const [x,y,cx,cy,ok,dir]=a; const savedDir=state.dir;
+  aim={x,y,cx,cy,ok:!!ok}; state.dir=dir||1; drawAim(); aim=null; state.dir=savedDir;
+}
+
+function peerName(p){ return String((p.presence && p.presence.nick) || 'Someone').slice(0,18); }
+function renderOnline(){
+  const body=$('netBody'), status=$('netStatus'); if (!body) return;
+  const t=net.table;
+  if (!net.ready){ status.textContent='Connecting…'; body.innerHTML='<p class="empty">Looking for the shared table…</p>'; return; }
+  if (net.fail){ status.textContent='Offline'; body.innerHTML='<p class="net-err"></p><p class="net-note">You can still play on one device from the Game tab.</p>'; body.querySelector('.net-err').textContent=net.fail; return; }
+  if (!net.code){
+    status.textContent='';
+    body.innerHTML=`<p class="net-note">Start a table and send the link to your friends, or join one with its code.</p>
+      <div class="row"><button class="btn primary" data-act="create">Create a table</button></div>
+      <div class="row net-join"><input type="text" id="joinCode" maxlength="16" placeholder="Table code, e.g. ALPS-4821" aria-label="Table code"><button class="btn" data-act="joinCode">Join</button></div>
+      ${net.err?'<p class="net-err" role="alert"></p>':''}`;
+    if (net.err) body.querySelector('.net-err').textContent=net.err;
+    return;
+  }
+  const here = net.peers.filter(p=>p.kind==='viewer');
+  status.textContent = net.room ? `${here.length||1} here` : 'Online';
+  const mine=mySeatIdx(), seated=mine>=0;
+  const presentUids = new Set(here.map(p=>p.by||(p.presence&&p.presence.uid)).filter(Boolean));
+  if (net.uid) presentUids.add(net.uid);
+  const st = t ? t.status : 'lobby', seats = t ? t.seats : [];
+  const race = !t || t.format==='race';
+  let best=null; if (t && !race && st!=='lobby'){ const done=t.inPlay.map(i=>seats[i]?.spin).filter(v=>v!==null&&v!==undefined); if (done.length) best=Math.max(...done); }
+  const writeBlocked = net.canWrite===false;
+  const seatRows = seats.length ? seats.map((s,i)=>{
+    const now = st==='playing' && i===t.current, out = st!=='lobby' && !race && !t.inPlay.includes(i);
+    const val = st==='lobby' ? '' : (race ? fmt(s.score) : (s.spin===null?'–':fmt(s.spin)));
+    const cls=[now?'now':'', out?'out':'', (best!==null && s.spin===best && !out)?'lead':''].join(' ');
+    const kick = (st==='lobby' && seated && s.uid!==net.uid && !presentUids.has(s.uid) && !writeBlocked) ? `<button class="linkbtn" data-act="kick" data-uid="${esc(s.uid)}" aria-label="Remove ${esc(s.name)} from the table">Remove</button>` : '';
+    return `<li class="${cls}"><span class="mark"></span><span class="seat-name"><span class="presence-dot ${presentUids.has(s.uid)?'on':''}" title="${presentUids.has(s.uid)?'Here now':'Not here'}"></span>${i+1}. ${esc(s.name)}${s.uid===net.uid?' <em>(you)</em>':''}</span><span class="score">${val}${kick}</span>${(st!=='lobby'&&race)?`<span class="bar"><i style="width:${Math.min(100,s.score/t.target*100)}%"></i></span>`:''}</li>`;
+  }).join('') : '<li class="empty">No one is seated yet.</li>';
+  const modeLabel = t ? (race ? `First to ${fmt(t.target)}` : (t.round>1 && st!=='lobby' ? `Spin-off · tie-break ${t.round-1}` : 'Single spin-off')) + (t.redRule?' · red rule':'') : 'First to 1,000';
+  let controls='';
+  const dis = net.busy ? 'disabled' : '';
+  if (writeBlocked){
+    controls = `<p class="net-note">You're watching. To take a seat, ask the owner to share the page with you as an <b>Editor</b>.</p>`;
+  } else if (st==='lobby'){
+    if (!seated){
+      controls += `<div class="row net-join"><input type="text" id="netNick" maxlength="18" aria-label="Your name at the table" value="${esc(net.myNick)}"><button class="btn primary" data-act="join" ${dis}>Take a seat</button></div>`;
+    } else {
+      controls += `<div class="net-settings">
+        <label for="netFormat">Mode<select id="netFormat" data-act="settings" ${dis}><option value="race" ${race?'selected':''}>First to a target</option><option value="spinoff" ${!race?'selected':''}>Single spin-off</option></select></label>
+        ${race?`<label for="netTarget">Play to<select id="netTarget" data-act="settings" ${dis}>${[500,1000,2000].map(v=>`<option value="${v}" ${t&&t.target===v?'selected':''}>${fmt(v)}</option>`).join('')}</select></label>`:''}
+        <label class="check" for="netRed"><input type="checkbox" id="netRed" data-act="settings" ${t&&t.redRule?'checked':''} ${dis}> Red rule</label>
+      </div>
+      <div class="row"><button class="btn primary" data-act="start" ${dis}>Start game</button><button class="btn" data-act="shuffle" ${dis} ${seats.length<2?'disabled':''}>Shuffle order</button><button class="btn" data-act="leave" ${dis}>Leave seat</button></div>`;
+    }
+  } else if (st==='playing'){
+    const a=activeSeat(); const away = a && !presentUids.has(a.uid);
+    controls = seated ? `<div class="row">${away?`<button class="btn" data-act="skip" ${dis}>Skip ${esc(a.name)}'s turn</button>`:''}<button class="btn" data-act="lobby" ${dis}>End game</button></div>` : `<p class="net-note">A game is in progress. You can take a seat when it ends.</p>`;
+  } else if (st==='won'){
+    controls = seated ? `<div class="row"><button class="btn primary" data-act="start" ${dis}>Play again</button><button class="btn" data-act="lobby" ${dis}>Back to lobby</button></div>` : '';
+  }
+  const watchers = here.filter(p=>!seats.some(s=>s.uid===(p.by||(p.presence&&p.presence.uid))));
+  body.innerHTML = `<div class="net-code"><span>Table <b>${esc(net.code)}</b></span><button class="btn" data-act="copyLink">Copy invite link</button></div><p class="net-mode">${esc(modeLabel)}</p><ul class="players seats">${seatRows}</ul>${controls}${net.err?`<p class="net-err" role="alert"></p>`:''}${watchers.length?`<p class="net-watch">Watching: <span></span></p>`:''}`;
+  if (net.err) body.querySelector('.net-err').textContent=net.err;
+  if (watchers.length) body.querySelector('.net-watch span').textContent = watchers.map(peerName).join(', ');
+  // shared log
+  if (state.mode==='online'){
+    const log = t ? t.log : [];
+    $('log').innerHTML = log.length ? log.slice(0,6).map(l=>`<li><span>${esc(l.name)}${l.note?` · ${esc(l.note)}`:''}</span><b>${Number(l.pts)>0?'+':''}${fmt(Number(l.pts)||0)}</b></li>`).join('') : '<li class="empty">No spins yet.</li>';
+  }
+}
+document.addEventListener('click', e=>{ const b=e.target.closest('#netBody [data-act]'); if (!b || b.tagName==='SELECT' || b.tagName==='INPUT') return; const f=actions[b.dataset.act]; if (f) f(b.dataset.uid); });
+document.addEventListener('change', e=>{ if (e.target.closest('#netBody [data-act="settings"]')) actions.settings(); });
+document.addEventListener('keydown', e=>{ if (e.key==='Enter' && e.target.id==='netNick') actions.join(); if (e.key==='Enter' && e.target.id==='joinCode') actions.joinCode(); });
+
+// ---------- Input ----------
+function toLogical(e){ const r=canvas.getBoundingClientRect(); return { x:(e.clientX-r.left)/r.width*W, y:(e.clientY-r.top)/r.height*W }; }
+function spotOk(x,y){
+  if (Math.hypot(x-C,y-C) > R-TR-2) return false;
+  return balls.every(b=>b.state!=='active' || Math.hypot(b.x-x,b.y-y) > TR+BR+1);
+}
+canvas.addEventListener('pointerdown', e=>{
+  Sound.init();
+  if (state.mode==='online'){
+    if (!isMyTurn()) return;
+    if (state.phase==='result'){
+      if (net.pendingRes){ onlineEndTurn(net.pendingRes); return; }
+      newTurn(); setHint('Your turn! Press inside the bowl, drag to aim, release to spin.'); return;
+    }
+  }
+  if (state.phase==='result'){ advance(); return; }
+  if (state.phase!=='aim') return;
+  const p=toLogical(e); if (Math.hypot(p.x-C,p.y-C) > R) return;
+  aim = { x:p.x, y:p.y, cx:p.x, cy:p.y, ok:spotOk(p.x,p.y) };
+  canvas.setPointerCapture(e.pointerId); e.preventDefault();
+});
+canvas.addEventListener('pointermove', e=>{ if (!aim) return; const p=toLogical(e); aim.cx=p.x; aim.cy=p.y; });
+canvas.addEventListener('pointerup', e=>{
+  if (!aim) return;
+  const p=aimParams(), ok=aim.ok, a=aim; aim=null;
+  if (!ok){ setHint('That spot touches a ball. Set the top down in open space.'); return; }
+  if (p.len < 12){ setHint('Drag a little further before you let go. Longer drags spin harder.'); return; }
+  launch(a.x,a.y,p.vx,p.vy,p.w);
+  if (state.mode==='online'){ $('result').hidden=true; shareBoard(true); }
+});
+canvas.addEventListener('pointercancel', ()=>{ aim=null; });
+
+$('dirCw').onclick=()=>{ state.dir=1; $('dirCw').setAttribute('aria-pressed','true'); $('dirCcw').setAttribute('aria-pressed','false'); };
+$('dirCcw').onclick=()=>{ state.dir=-1; $('dirCcw').setAttribute('aria-pressed','true'); $('dirCw').setAttribute('aria-pressed','false'); };
+function setMuted(m){ Sound.muted=m; const b=$('soundBtn'); b.textContent=m?'Sound off':'Sound on'; b.setAttribute('aria-pressed', String(!m)); if (m) Sound.spin(0,0); }
+$('soundBtn').onclick=()=>{ Sound.init(); setMuted(!Sound.muted); };
+$('resetBtn').onclick=()=>{ if (state.mode==='online'){ if (isMyTurn() && state.phase==='aim') newTurn(); return; } if (state.phase==='running' || state.phase==='aim') newTurn(); };
+
+function setMode(m){
+  const was=state.mode; state.mode=m;
+  $('tabGame').setAttribute('aria-pressed', String(m==='game')); $('tabPractice').setAttribute('aria-pressed', String(m==='practice')); $('tabOnline').setAttribute('aria-pressed', String(m==='online'));
+  $('gamePanel').hidden = m!=='game'; $('logCard').hidden = m==='practice'; $('practicePanel').hidden = m!=='practice'; $('onlinePanel').hidden = m!=='online';
+  $('winSheet').hidden = true; net.remoteAim=null;
+  if (was==='online' && m!=='online'){ clearShare(); Sound.spin(0,0); }
+  renderPractice();
+  if (m==='online'){
+    net.myTurnId=null; net.watchKey=''; makeBalls(); top.state='held'; $('result').hidden=true;
+    initOnline(); onTable();
+  } else { renderPlayers(); newTurn(); }
+}
+$('tabGame').onclick=()=>setMode('game');
+$('tabOnline').onclick=()=>setMode('online');
+$('tabPractice').onclick=()=>setMode('practice');
+$('clearStats').onclick=()=>{ state.practice={ spins:0,total:0,best:null,scored:0,off:0,hits:Array(HOLES.length).fill(0) }; renderPractice(); };
+
+// setup sheet
+let draftNames = [];
+function renderNameInputs(){
+  const n=draftNames.length;
+  $('names').innerHTML = draftNames.map((v,i)=>`<div class="name-row"><input type="text" id="pn${i}" data-i="${i}" maxlength="18" placeholder="Player ${i+1}" aria-label="Player ${i+1} name" value="${esc(v)}"><button type="button" class="x" data-i="${i}" aria-label="Remove player ${i+1}" ${n<=2?'disabled':''}>✕</button></div>`).join('');
+  $('addPlayer').disabled = n>=6;
+}
+$('names').addEventListener('input', e=>{ const i=e.target.dataset.i; if (i!==undefined) draftNames[+i]=e.target.value; });
+$('names').addEventListener('click', e=>{ const b=e.target.closest('.x'); if (!b || draftNames.length<=2) return; draftNames.splice(+b.dataset.i,1); renderNameInputs(); });
+$('shuffleOrder').onclick=()=>{
+  for (let i=draftNames.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [draftNames[i],draftNames[j]]=[draftNames[j],draftNames[i]]; }
+  renderNameInputs();
+};
+$('addPlayer').onclick=()=>{ if (draftNames.length>=6) return; draftNames.push(''); renderNameInputs(); $(`pn${draftNames.length-1}`).focus(); };
+function syncTargetVis(){ $('targetWrap').hidden = !$('fmtRace').checked; }
+$('targetSel').onchange=()=>{ $('raceName').textContent=`First to ${fmt(+$('targetSel').value)}`; };
+$('fmtRace').onchange=syncTargetVis; $('fmtSpin').onchange=syncTargetVis;
+function openSetup(){
+  draftNames = state.players.map(p=>p.name);
+  $('fmtRace').checked = state.format==='race'; $('fmtSpin').checked = state.format==='spinoff';
+  $('targetSel').value=String(state.target); $('redRule').checked=state.redRule;
+  $('raceName').textContent=`First to ${fmt(state.target)}`;
+  renderNameInputs(); syncTargetVis(); $('setup').hidden=false; $('pn0').focus();
+}
+$('newGameBtn').onclick=openSetup;
+$('cancelSetup').onclick=()=>{ $('setup').hidden=true; };
+$('setupForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const names=draftNames.map((v,k)=>v.trim()||`Player ${k+1}`);
+  state.players=names.map(n=>({name:n,score:0,spin:null}));
+  state.format = $('fmtSpin').checked ? 'spinoff' : 'race';
+  state.target=+$('targetSel').value; state.redRule=$('redRule').checked;
+  $('setup').hidden=true; rematch();
+});
+function rematch(){
+  state.players.forEach(p=>{ p.score=0; p.spin=null; });
+  state.current=0; state.log=[]; state.round=1; state.inPlay=state.players.map((_,i)=>i);
+  $('winSheet').hidden=true; setMode('game');
+}
+$('rematchBtn').onclick=()=>{ if (state.mode==='online'){ $('winSheet').hidden=true; actions.start(); } else rematch(); };
+$('rematchSide').onclick=rematch;
+// inline renaming from the scorecard
+$('players').addEventListener('input', e=>{
+  const i=e.target.dataset.i; if (i===undefined) return;
+  state.players[+i].name = e.target.value.trim() || `Player ${+i+1}`;
+  updateFlag();
+});
+$('players').addEventListener('keydown', e=>{ if (e.key==='Enter' && e.target.matches('.name')) e.target.blur(); });
+$('players').addEventListener('change', e=>{ if (e.target.matches('.name')) e.target.value = state.players[+e.target.dataset.i].name; });
+$('winClose').onclick=()=>{ $('winSheet').hidden=true; };
+
+// ---------- Loop ----------
+let lastT = performance.now();
+const SUB = 8;
+function frame(now){
+  const dt = Math.min(1/30, (now-lastT)/1000); lastT=now;
+  if (state.phase==='running'){
+    for (let i=0;i<SUB;i++) step(dt/SUB);
+    state.simTime += dt;
+    if (top.state==='spinning'){ Sound.spin(top.w, 1-Math.min(1,Math.abs(top.w)/top.w0)); } else Sound.spin(0,0);
+    if (top.state==='fallen'){ state.fallenFor=(state.fallenFor||0)+dt; } else state.fallenFor=0;
+    if (top.state==='fallen' && !isMoving()) state.settle+=dt; else state.settle=0;
+    if (state.settle>0.6 || state.fallenFor>10 || state.simTime>60) endTurn();
+  } else if (state.phase==='result' || state.phase==='won'){
+    for (let i=0;i<SUB;i++) step(dt/SUB);
+  }
+  if (state.mode==='online'){ if (isMyTurn()) shareBoard(false); else if (state.phase==='watch') easeRemote(dt); }
+  render();
+  requestAnimationFrame(frame);
+}
+
+// Headless tuning harness: simulates n random spins without touching the UI scores.
+// Run window.__tyrolTest(80) in the console; pass PHYS overrides to compare settings.
+window.__tyrolTest = function(n=40, over){
+  if (over){ Object.assign(PHYS, over); if (over.PM) POCKET_MOUTH=over.PM/R; if (over.GM) GAP_MOUTH=over.GM/R; }
+  headless=true; const out=[];
+  for (let k=0;k<n;k++){
+    makeBalls();
+    let x,y; do { const a=Math.random()*Math.PI*2, r=40+Math.random()*140; x=C+Math.cos(a)*r; y=C+Math.sin(a)*r; } while(!spotOk(x,y));
+    const ang=Math.random()*Math.PI*2, power=0.3+Math.random()*0.7, v=720*power;
+    top={ state:'spinning', x, y, vx:Math.cos(ang)*v, vy:Math.sin(ang)*v, w:(Math.random()<.5?1:-1)*(55+100*power), w0:55+100*power, rot:0, wx:0, wy:0 };
+    let t=0, settle=0, topLife=0; const dt=1/60;
+    while (t<60){ for (let i=0;i<SUB;i++) step(dt/SUB); t+=dt; if (top.state==='spinning') topLife=t; if (top.state==='fallen' && !isMoving()) settle+=dt; else settle=0; if (settle>0.6) break; }
+    const r=turnResult(); out.push({ total:r.total, scored:r.scored, off:r.off, topLife:+topLife.toFixed(1), dur:+t.toFixed(1) });
+  }
+  headless=false; newTurn();
+  const avg=k=>+(out.reduce((s,o)=>s+o[k],0)/out.length).toFixed(2);
+  return { avgTotal:avg('total'), avgScored:avg('scored'), avgOff:avg('off'), avgTopLife:avg('topLife'), avgDur:avg('dur'), allSix:out.filter(o=>o.scored===6).length, samples:out.slice(0,10) };
+};
+
+// ---------- Boot ----------
+function start(data){
+  if (data && data.players){
+    Object.assign(state, { players:data.players.map(p=>({spin:null,...p})), current:data.current||0, target:data.target||1000, redRule:!!data.redRule, log:data.log||[], dir:data.dir||1,
+      format:data.format||'race', round:data.round||1, inPlay:data.inPlay||data.players.map((_,i)=>i) });
+    if (data.practice) state.practice = data.practice;
+    if (data.muted) setMuted(true);
+    if (state.dir<0) $('dirCcw').onclick();
+  }
+  resize();
+  new ResizeObserver(resize).observe(canvas);
+  makeBalls();
+  const go = ()=>{ buildBoard(); };
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(go, go);
+  setMode(codeFromUrl() ? 'online' : 'game');
+  initOnline();
+  requestAnimationFrame(t=>{ lastT=t; requestAnimationFrame(frame); });
+}
+start({});
+})();
+</script>
+
+</body>
+</html>

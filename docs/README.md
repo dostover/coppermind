@@ -6,3 +6,4 @@ Notes and written content for this project live here.
 - [risks.md](risks.md) — risk & action item tracker.
 - [inkwell/](inkwell/) — Inkwell's Spec-DD documentation set.
 - [banana-cards/](banana-cards/) — Banana Cards project notes.
+- [rondolette/](rondolette/) — Rondolette design notes: physics model, tuning history, and multiplayer design.
