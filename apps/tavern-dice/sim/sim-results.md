@@ -2,6 +2,28 @@
 
 Simulator: `claude/tavern_sim.py` (all 24 abilities, all Gold abilities incl. Ward, Last Call, double-KO rules; rule switches in `RULES`). Both sides use the same greedy AI (best expected outcome for the current round; 1 Gold ≈ 0.5 Resolve; trailing players weight survival). Treat results as directional.
 
+## Run 14 — Expansion 3 "Tavern Regulars": 12 Common dice (2026-10-07) → v0.9.1
+Target: Common 45–50% (Open format). **First pass:** 3,000 random Open matches with all 52 dice (v0.9 rules, bench 6; ~575 appearances per die, margin ≈ ±4%; median 13 turns). **Tuning:** each miss got a one-face change, then a targeted retest (test die always in loadout A plus 4 random, random opponent, 600 matches, seats alternated).
+
+| Die | First pass | Final | Change |
+|---|---|---|---|
+| Bouncer | 52% | 47% | [🛡🛡] → [🛡] (unchanged it re-measured 53.5% targeted) |
+| Cook | 49% | 49% | — |
+| Minstrel | 58% | 52% | [💰♥] → [💰] |
+| Brewer | 58% | 47% | [💰♥] → [💰] |
+| Drunkard | 55% | 51% | [⚔🛡] → [⚔] |
+| Watchman | 49% | 49% | — |
+| Smith | 56% | 49% | [⚔⚔] → [⚔] |
+| Cardsharp | 48% | 48% | — |
+| Ratcatcher | 47% | 47% | — |
+| Fisher | 43% | 52% | [♥] → [🛡♥] |
+| Militia | 55% | 51% | [⚔🛡] → [⚔] |
+| Herbalist | 48% | 48% | — |
+
+- Simple +1 passives that trigger often (♥-triggered Rousing Tune and Strong Brew, Sunder vs any shield wall) were worth more than the template's "+1 symbol"; those dice needed a symbol removed.
+- **Existing dice in the 52-die pool (first pass):** tier averages Basic 42%, Common (old) 50%, Uncommon 49%, Rare 54%. Hot: Druid 63%, Bard 58%, Paladin 57%, Assassin 56%. Not changed — existing dice stay as they are.
+- Raw data: `results20.json` (field), `results21.json` and `results22.json` (targeted).
+
 ## Run 13 — two-step Influence: Fortune then Tactics (2026-10-07) → adopted as v0.9
 2,000 random Open matches (40 dice, v0.8 rules, swap 2, bench 6) + 150 per themed matchup, for each version.
 - **First pass (greedy AI, no Gold saving):** the AI spent all its Gold in Fortune and almost stopped using abilities (Wild Shape 0.91→0.15 uses per match, Envenom 0.18→0.03), so Gold-ability loadouts collapsed (e.g. Flex vs Venom 45%→28%). Not a fair test — real players save Gold for Tactics.

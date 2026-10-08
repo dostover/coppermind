@@ -63,6 +63,19 @@ FACES = {
     'Sawbones':  ['H', 'HH', 'DD', 'A', 'AH', 'S'],
     'Puppeteer': ['G', 'A', 'D', 'H', 'AD', 'AA'],
     'Hydra':     ['A', 'AA', 'AA', 'D', 'H', 'S'],
+    # Expansion 3 "Tavern Regulars" (all Common)
+    'Bouncer':   ['D', 'D', 'A', 'D', 'A', 'G'],
+    'Cook':      ['H', 'H', 'D', 'A', 'G', 'DH'],
+    'Minstrel':  ['H', 'G', 'A', 'D', 'G', 'A'],
+    'Brewer':    ['G', 'G', 'H', 'D', 'A', 'G'],
+    'Drunkard':  ['AA', 'A', 'A', 'S', 'D', 'A'],
+    'Watchman':  ['D', 'D', 'A', 'A', 'AD', 'G'],
+    'Smith':     ['A', 'A', 'D', 'A', 'G', 'D'],
+    'Cardsharp': ['G', 'G', 'A', 'D', 'AG', 'H'],
+    'Ratcatcher': ['A', 'A', 'P', 'D', 'G', 'A'],
+    'Fisher':    ['G', 'G', 'H', 'D', 'A', 'DH'],
+    'Militia':   ['A', 'D', 'A', 'D', 'A', 'H'],
+    'Herbalist': ['H', 'H', 'P', 'D', 'A', 'G'],
 }
 # Optional prototype dice (added to FACES by experiments)
 EXTRA_DICE = {'Viper': ['A', 'A', 'P', 'P', 'AP', 'S'],
@@ -76,7 +89,11 @@ ABIL = {
     'Elemental': 'volatile', 'Knight': 'counter', 'Warlock': 'bargain',
     'Alchemist': 'transmute', 'Monster': None, 'Oracle': 'omen', 'Mimic': 'imitate',
     'Viper': 'envenom', 'Viper2': 'envenom', 'Basic': None, 'Inquisitor': 'envenom', 'Brawler': None, 'Shieldbearer': None, 'Peddler': None, 'Stormcaller': 'arc', 'Apothecary': 'coat', 'Tempest': 'chain', 'Plaguebringer': 'epidemic', 'Pilgrim': None, 'Barkeep': 'lastorders', 'Moneylender': 'loan', 'Taxman': 'levy', 'Sawbones': 'triage', 'Puppeteer': 'strings', 'Hydra': 'regrow',
+    'Bouncer': 'doorman', 'Cook': 'hearty', 'Minstrel': 'rousing', 'Brewer': 'brew', 'Drunkard': 'courage',
+    'Watchman': 'nightwatch', 'Smith': 'sunder', 'Cardsharp': 'streak', 'Ratcatcher': 'pest', 'Fisher': 'patient',
+    'Militia': 'rally', 'Herbalist': 'antidote',
 }
+EXP3 = ['Bouncer', 'Cook', 'Minstrel', 'Brewer', 'Drunkard', 'Watchman', 'Smith', 'Cardsharp', 'Ratcatcher', 'Fisher', 'Militia', 'Herbalist']
 # Order in which Mimic prefers to copy abilities present in its loadout.
 MIMIC_PRIORITY = ['wildshape', 'counter', 'standfast', 'hoard', 'omen', 'transmute',
                   'trickster', 'surge', 'formation', 'backstab', 'precise', 'divine',
@@ -233,6 +250,24 @@ def totals(X, Y):
         if ab(X, i) == 'chain' and 'L' in f:
             k = min(2, sum(1 for j, g in enumerate(X.res) if j != i and 'A' in g))
             A -= k; U += k
+    # Expansion 3 passives
+    y_atk = sum(f.count('A') for f in Y.res) + sum(f.count('A') for _, f in Y.extra)
+    y_skull = any('S' in f for f in Y.res) or any('S' in f for _, f in Y.extra)
+    x_gold_dice = sum(1 for f in X.res if 'G' in f)
+    for i, f in enumerate(X.res):
+        a_ = ab(X, i)
+        if not a_:
+            continue
+        if a_ == 'doorman' and 'D' in f and y_atk >= 3: D += 1
+        elif a_ == 'hearty' and 'H' in f and X.R <= 5 and i not in X.venom: H += 1
+        elif a_ == 'rousing' and 'H' in f and any('A' in g for j, g in enumerate(X.res) if j != i): A += 1
+        elif a_ == 'brew' and 'H' in f: gold += 1
+        elif a_ == 'courage' and 'A' in f and X.R <= 5: A += 1
+        elif a_ == 'sunder' and 'A' in f and y_def >= 2: A += 1
+        elif a_ == 'streak' and x_gold_dice >= 3: gold += 1
+        elif a_ == 'pest' and 'A' in f and y_skull: A += 1
+        elif a_ == 'patient' and X.G < Y.G: gold += f.count('G')
+        elif a_ == 'rally' and 'A' in f and X.R < Y.R: A += 1
     counter = sum(1 for i, f in enumerate(X.res) if 'D' in f and ab(X, i) == 'counter')
     sf = sum(1 for i in range(len(X.res)) if ab(X, i) == 'standfast'
              and (not RULES['standfast_cond'] or 'D' in X.res[i]))
@@ -247,9 +282,10 @@ def strip_dice(X, Y):
     are cancelled). Returns (copy of Y with those shields removed, leftover ☣)."""
     epi = any(ab(X, i) == 'epidemic' and 'P' in f for i, f in enumerate(X.res))
     Px = sum(f.count('P') * (2 if epi and ab(X, i) != 'epidemic' else 1) for i, f in list(enumerate(X.res)) + X.extra)
+    Px = max(0, Px - sum(1 for i, f in enumerate(Y.res) if ab(Y, i) == 'antidote' and 'H' in f))   # Antidote
     if not Px:
         return Y, 0
-    cands = [i for i, f in enumerate(Y.res) if 'D' in f]
+    cands = [i for i, f in enumerate(Y.res) if 'D' in f and ab(Y, i) != 'nightwatch']   # Night Watch
     cands.sort(key=lambda i: (Y.res[i].count('D'), STRIP_PRIORITY.get(ab(Y, i), 0)), reverse=True)
     Y2 = Y.copy()
     hit = cands[:Px]

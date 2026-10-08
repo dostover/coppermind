@@ -1,8 +1,9 @@
-# Tavern Dice — Working Rules (Prototype v0.9)
+# Tavern Dice — Working Rules (Prototype v0.9.1)
 
 PvP collectible-dice game played inside a D&D campaign. Inspired by Dice Hunter: Dicemancer Quest, minus the monster battles. **The dice create the possibilities. Gold creates the decisions. The opponent creates the uncertainty. The tavern creates the atmosphere.**
 
 ## Changelog
+- **v0.9.1 (2026-10-07, designer-requested):** Expansion 3 "Tavern Regulars" — twelve Common dice, each with one simple automatic ability (Bouncer, Cook, Minstrel, Brewer, Drunkard, Watchman, Smith, Cardsharp, Ratcatcher, Fisher, Militia, Herbalist). Collection is now 52 dice (5 Basic, 23 Common, 14 Uncommon, 10 Rare). Seven were trimmed or boosted by one face after the first sim pass. (Sim Run 14.)
 - **v0.9 (2026-10-07, designer-approved):** Influence split into two steps. **Fortune:** Reroll, Focus, Mulligan, Distract (and Omen's free reroll). **Tactics:** activated abilities and Jam. Each step alternates one action at a time, active player first, and ends after two passes in a row. Ward still answers any targeting action in either step. (Sim Run 13: roughly balance-neutral.)
 - **v0.8.4 (2026-10-06, designer-approved):** Influence clarified: an action that targets the other player or one of their dice (Distract, Jam, Envenom, Sneaky) is **declared** first; its cost is paid, then the targeted player may **Ward** (1 Gold) to cancel it or allow it. Priority then passes. Ward's timing is now explicit.
 - **v0.8.3 (2026-10-06, designer-approved):** All ability text rewritten in one pattern — condition, then effect, then exception. Rules unchanged, with two clarifications that match how the roller and simulator already work: Divine Protection is once per turn; Relentless resets each round.
@@ -125,6 +126,22 @@ Note: Tempest's Chain Lightning can put more than one ⚡ in play — an intende
 (Sim: 2,400 random Open matches with all 40 dice, v0.7 rules; Pilgrim and Sawbones re-tested after tuning in 800 targeted matches. ±4% margin.)
 Watch: with 40 dice in the pool, the whole Basic tier now sits at ~39–42% (below the 42–46% target set when there were 26 dice). Consider re-centering the Basic target to 38–44%.
 
+## Expansion 3 "Tavern Regulars" (all Common — built from the rarity template)
+Tavern folk with one simple automatic ability each: no Gold costs, no choices. Sim = Open-format win rate (±4%).
+
+41. **Bouncer** *(Common)* — [🛡][🛡][⚔][🛡][⚔][💰] — *Doorman:* If this die shows 🛡 and your opponent shows 3 or more ⚔, it gets +1 🛡. Anti-swarm defense. Sim 47%.
+42. **Cook** *(Common)* — [♥][♥][🛡][⚔][💰][🛡♥] — *Hearty Stew:* If this die shows ♥ and you have 5 or less Resolve, it heals 1 more. Last Call still stops healing. Comeback healing. Sim 49%.
+43. **Minstrel** *(Common)* — [♥][💰][⚔][🛡][💰][⚔] — *Rousing Tune:* If this die shows ♥, one other die of yours showing ⚔ gets +1 ⚔. Support. Sim 52%.
+44. **Brewer** *(Common)* — [💰][💰][♥][🛡][⚔][💰] — *Strong Brew:* If this die shows ♥, you also gain 1 Gold. Gold and healing. Sim 47%.
+45. **Drunkard** *(Common)* — [⚔⚔][⚔][⚔][☠][🛡][⚔] — *Liquid Courage:* If this die shows ⚔ and you have 5 or less Resolve, it deals 1 extra damage. Desperate offense. Sim 51%.
+46. **Watchman** *(Common)* — [🛡][🛡][⚔][⚔][⚔🛡][💰] — *Night Watch:* ☣ can't poison this die. Anti-poison defense. Sim 49%.
+47. **Smith** *(Common)* — [⚔][⚔][🛡][⚔][💰][🛡] — *Sunder:* If this die shows ⚔ and your opponent shows 2 or more 🛡, it gets +1 ⚔. Shields can still block it. Shield breaker. Sim 49%.
+48. **Cardsharp** *(Common)* — [💰][💰][⚔][🛡][⚔💰][♥] — *Lucky Streak:* If 3 or more of your dice show 💰, gain 1 more Gold. Gold engine. Sim 48%.
+49. **Ratcatcher** *(Common)* — [⚔][⚔][☣][🛡][💰][⚔] — *Pest Control:* If this die shows ⚔ and your opponent shows ☠, it deals 1 extra damage. Punishes risky dice. Sim 47%.
+50. **Fisher** *(Common)* — [💰][💰][♥][🛡][⚔][🛡♥] — *Patient:* If you have less Gold than your opponent, each 💰 on this die gives 1 more Gold. Catch-up economy. Sim 52%.
+51. **Militia** *(Common)* — [⚔][🛡][⚔][🛡][⚔][♥] — *Rally:* If this die shows ⚔ and you have less Resolve than your opponent, it deals 1 extra damage. Comeback hybrid. Sim 51%.
+52. **Herbalist** *(Common)* — [♥][♥][☣][🛡][⚔][💰] — *Antidote:* If this die shows ♥, cancel one of your opponent's ☣. It poisons nothing and doesn't count as ⚔. Anti-poison healer. Sim 48%.
+
 ## Rarity
 Rarity adds **moderate power and more complexity**. A Rare should beat a Common a little more often, mostly through a stronger or more flexible ability, not just bigger numbers. Commons stay playable.
 
@@ -156,7 +173,7 @@ Note: the existing Basic Die has no blank face; new Basic dice follow the templa
 - **Commoner's Cup:** Basic and Common dice only — good for new players.
 
 ## Dice looks
-Each die has its own material in the roller (useful if you buy or paint physical dice): **Alchemist** — Amber bubbles; **Archer** — Forest splotch; **Assassin** — Black opal (red speckle); **Bard** — Rose-gold swirl; **Basic** — Old bone; **Berserker** — Bloodstone swirl; **Cleric** — Pearl & gilt; **Dragon** — Ember scale; **Druid** — Moss & bark; **Dwarven** — Granite; **Elemental** — Fire & tide; **Fey** — Iridescent swirl; **Gambler** — Card-table jade (gold flecks); **Goblin** — Swamp splotch; **Guardian** — Cobalt & silver; **Knight** — Silver marble; **Mage** — Midnight stars; **Mimic** — Chest oak; **Monster** — Scaled hide; **Oracle** — Twilight marble; **Paladin** — Ivory gold-vein; **Soldier** — Gunmetal fleck; **Thief** — Smoke & plum; **Undead** — Grave-mold bone; **Viper** — Emerald venom; **Warlock** — Hexed violet.
+Each die has its own material in the roller (useful if you buy or paint physical dice): **Alchemist** — Amber bubbles; **Archer** — Forest splotch; **Assassin** — Black opal (red speckle); **Bard** — Rose-gold swirl; **Basic** — Old bone; **Berserker** — Bloodstone swirl; **Cleric** — Pearl & gilt; **Dragon** — Ember scale; **Druid** — Moss & bark; **Dwarven** — Granite; **Elemental** — Fire & tide; **Fey** — Iridescent swirl; **Gambler** — Card-table jade (gold flecks); **Goblin** — Swamp splotch; **Guardian** — Cobalt & silver; **Knight** — Silver marble; **Mage** — Midnight stars; **Mimic** — Chest oak; **Monster** — Scaled hide; **Oracle** — Twilight marble; **Paladin** — Ivory gold-vein; **Soldier** — Gunmetal fleck; **Thief** — Smoke & plum; **Undead** — Grave-mold bone; **Viper** — Emerald venom; **Warlock** — Hexed violet. Expansion 3: **Bouncer** — Brass knuckles; **Brewer** — Hops & barley; **Cardsharp** — Felt & diamonds; **Cook** — Copper pot; **Drunkard** — Spilled wine; **Fisher** — River pebble; **Herbalist** — Sage & clay; **Militia** — Homespun wool; **Minstrel** — Lute spruce; **Ratcatcher** — Sewer slate; **Smith** — Forge iron; **Watchman** — Lantern night.
 
 ## Balance guidelines
 Evaluate face distribution (useful-result rate, downside, dominant face, value when Jammed), ability strength (meaningful but not match-deciding), synergy (alone and in combos), and Gold interaction (generators, spenders, savers, punishers — no runaway economies).
@@ -168,6 +185,7 @@ Track each player's 5 dice, Resolve, Gold, current results, temporary effects, u
 Rules are a prototype. Treat designer proposals as intentional; identify affected mechanics; flag balance/rules problems; update working rules on approval; never silently revert. Prefer small, testable changes.
 
 ## Open questions / watch list
+- **v0.9.1 sim (Run 14, 52 dice):** Expansion 3 tuned into the Common range (47–52%). With the bigger pool, Druid (63%), Paladin (57%), Assassin (56%) and Bard (58%) run hot, and Basic averages 42%. Minstrel and Fisher sit at the top of Common (52%) — watch. Two anti-poison Commons (Watchman, Herbalist) — watch whether ☣ still answers shield walls.
 - **v0.9 sim (Run 13):** two-step Influence ≈ balance-neutral (dice 41–60%, median 11 turns/match). Gold-hungry attack dice lost ground (Mage 48%→42%, Gambler −6 pts); defensive dice gained a little. Distract use fell from 4.8 to 1.7 per match. Watch Mage. Sim result depends on players saving Gold for Tactics.
 - **v0.7 sim (Run 10):** themed matchups all 41–67%, average 5.7 points from 50/50; dice 42–58%; median 13 turns per match. Bard (58%) and Elemental (57%) top, Oracle (42%) bottom. Swap results assume ~6 spare dice per player. See sim-results.md.
 - **v0.6 sim (Run 8):** dice 43–59% match win rate; median 12 turns per match, 44% go to round 3; no large active-player edge; 20% of rounds end in a double KO won by the active player. Best of 3 sharpens matchups (Defense loses to the healing/Flex loadout ~99%). See sim-results.md.
