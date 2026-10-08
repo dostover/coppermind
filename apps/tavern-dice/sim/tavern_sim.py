@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tavern Dice simulator — rules v0.9 (defaults); older rule options kept as RULES switches
+Tavern Dice simulator — rules v0.10 (defaults); older rule options kept as RULES switches
 
 Implements every die ability, all six universal Gold abilities, Last Call and
 sudden death. Both players are driven by the same greedy AI: on its turn in the
@@ -63,6 +63,19 @@ FACES = {
     'Sawbones':  ['H', 'HH', 'DD', 'A', 'AH', 'S'],
     'Puppeteer': ['G', 'A', 'D', 'H', 'AD', 'AA'],
     'Hydra':     ['A', 'AA', 'AA', 'D', 'H', 'S'],
+    # Expansion 3 "Tavern Regulars" (all Common)
+    'Bouncer':   ['D', 'D', 'A', 'D', 'A', 'G'],
+    'Cook':      ['H', 'H', 'D', 'A', 'G', 'DH'],
+    'Minstrel':  ['H', 'G', 'A', 'D', 'G', 'A'],
+    'Brewer':    ['G', 'G', 'H', 'D', 'A', 'G'],
+    'Drunkard':  ['AA', 'A', 'A', 'S', 'D', 'A'],
+    'Watchman':  ['D', 'D', 'A', 'A', 'AD', 'G'],
+    'Smith':     ['A', 'A', 'D', 'A', 'G', 'D'],
+    'Cardsharp': ['G', 'G', 'A', 'D', 'AG', 'H'],
+    'Ratcatcher': ['A', 'A', 'P', 'D', 'G', 'A'],
+    'Fisher':    ['G', 'G', 'H', 'D', 'A', 'DH'],
+    'Militia':   ['A', 'D', 'A', 'D', 'A', 'H'],
+    'Herbalist': ['H', 'H', 'P', 'D', 'A', 'G'],
 }
 # Optional prototype dice (added to FACES by experiments)
 EXTRA_DICE = {'Viper': ['A', 'A', 'P', 'P', 'AP', 'S'],
@@ -76,7 +89,11 @@ ABIL = {
     'Elemental': 'volatile', 'Knight': 'counter', 'Warlock': 'bargain',
     'Alchemist': 'transmute', 'Monster': None, 'Oracle': 'omen', 'Mimic': 'imitate',
     'Viper': 'envenom', 'Viper2': 'envenom', 'Basic': None, 'Inquisitor': 'envenom', 'Brawler': None, 'Shieldbearer': None, 'Peddler': None, 'Stormcaller': 'arc', 'Apothecary': 'coat', 'Tempest': 'chain', 'Plaguebringer': 'epidemic', 'Pilgrim': None, 'Barkeep': 'lastorders', 'Moneylender': 'loan', 'Taxman': 'levy', 'Sawbones': 'triage', 'Puppeteer': 'strings', 'Hydra': 'regrow',
+    'Bouncer': 'doorman', 'Cook': 'hearty', 'Minstrel': 'rousing', 'Brewer': 'brew', 'Drunkard': 'courage',
+    'Watchman': 'nightwatch', 'Smith': 'sunder', 'Cardsharp': 'streak', 'Ratcatcher': 'pest', 'Fisher': 'patient',
+    'Militia': 'rally', 'Herbalist': 'antidote',
 }
+EXP3 = ['Bouncer', 'Cook', 'Minstrel', 'Brewer', 'Drunkard', 'Watchman', 'Smith', 'Cardsharp', 'Ratcatcher', 'Fisher', 'Militia', 'Herbalist']
 # Order in which Mimic prefers to copy abilities present in its loadout.
 MIMIC_PRIORITY = ['wildshape', 'counter', 'standfast', 'hoard', 'omen', 'transmute',
                   'trickster', 'surge', 'formation', 'backstab', 'precise', 'divine',
@@ -85,7 +102,7 @@ MIMIC_PRIORITY = ['wildshape', 'counter', 'standfast', 'hoard', 'omen', 'transmu
 SYM = {'A': '⚔', 'D': '🛡', 'G': '💰', 'H': '♥', 'S': '☠', 'P': '☣', 'L': '⚡'}
 
 START_RESOLVE = 10
-LAST_CALL_ROUND = 6
+LAST_CALL_ROUND = 10         # v0.10.2: Closing Time starts on turn 10 (v0.10: 8; Last Call was turn 6)
 GOLD_VALUE = 0.5          # AI: how many Resolve one Gold is worth
 MIN_GAIN = 0.05           # AI: ignore actions that gain less than this
 MAX_ROUNDS = 40
@@ -109,7 +126,11 @@ RULES = {'counter': True, 'omen': True,
          'swap_n': 2,          # dice each player may swap before rounds 2 and 3
          'grudge': False,
          'lc_noheal': True,
-         'two_step': True}    # v0.9 candidate: Influence = Fortune (rerolls, Distract) then Tactics (abilities, Jam)   # during Last Call (turn 6+), ♥ restores nothing      # Dwarven: Grudge (+1 damage if opponent shows ♥) instead of Stubborn   # 'match' (v0.6: best of 3 rounds, active player alternates each turn, Tavern Swap between rounds) or 'single'        # Tavern Swap: once per match, from round 2, swap one loadout die for a bench die    # corrode mode: each ♥ may cancel one opposing ☣ instead of healing      # ☣ mode: 'dot' (tokens, 1 dmg/round, ♥ cleanses) or 'corrode' (each ☣ removes one opponent 🛡 this round)      # max Poison tokens on a player     # Counterattack needs at least this many opponent ⚔ blocked    # Goblin: 'old' (= Reroll, no effect) or 'dirty' (pay 1 Gold: ☠ hits opponent instead)
+         'two_step': True,
+         'clock': 'flat',  # 'escalate' = Last Call (turn−LC+1 per turn, no healing) · 'flat' = Closing Time (1 per turn from LAST_CALL_ROUND, healing allowed)
+         'mend': True,         # ♥ only restores Resolve lost this turn (can't go above where you started the turn)
+         'mend_clock': False,
+         'last_orders_turn': 5}      # Barkeep's Last Orders start turn (None = same as Closing Time)   # with mend: ♥ can also offset the clock's 1 damage    # v0.9 candidate: Influence = Fortune (rerolls, Distract) then Tactics (abilities, Jam)   # during Last Call (turn 6+), ♥ restores nothing      # Dwarven: Grudge (+1 damage if opponent shows ♥) instead of Stubborn   # 'match' (v0.6: best of 3 rounds, active player alternates each turn, Tavern Swap between rounds) or 'single'        # Tavern Swap: once per match, from round 2, swap one loadout die for a bench die    # corrode mode: each ♥ may cancel one opposing ☣ instead of healing      # ☣ mode: 'dot' (tokens, 1 dmg/round, ♥ cleanses) or 'corrode' (each ☣ removes one opponent 🛡 this round)      # max Poison tokens on a player     # Counterattack needs at least this many opponent ⚔ blocked    # Goblin: 'old' (= Reroll, no effect) or 'dirty' (pay 1 Gold: ☠ hits opponent instead)
 
 
 def fs(face):
@@ -223,7 +244,7 @@ def totals(X, Y):
     y_def = sum(f.count('D') for f in Y.res) + sum(f.count('D') for _, f in Y.extra)
     for i, f in enumerate(X.res):
         a_ = ab(X, i)
-        if a_ == 'lastorders' and _RND[0] >= LAST_CALL_ROUND:
+        if a_ == 'lastorders' and _RND[0] >= (RULES['last_orders_turn'] or LAST_CALL_ROUND):
             A += f.count('G')
         if a_ == 'regrow' and 'S' in f:
             A += 2
@@ -233,6 +254,24 @@ def totals(X, Y):
         if ab(X, i) == 'chain' and 'L' in f:
             k = min(2, sum(1 for j, g in enumerate(X.res) if j != i and 'A' in g))
             A -= k; U += k
+    # Expansion 3 passives
+    y_atk = sum(f.count('A') for f in Y.res) + sum(f.count('A') for _, f in Y.extra)
+    y_skull = any('S' in f for f in Y.res) or any('S' in f for _, f in Y.extra)
+    x_gold_dice = sum(1 for f in X.res if 'G' in f)
+    for i, f in enumerate(X.res):
+        a_ = ab(X, i)
+        if not a_:
+            continue
+        if a_ == 'doorman' and 'D' in f and y_atk >= 3: D += 1
+        elif a_ == 'hearty' and 'H' in f and X.R <= 5 and i not in X.venom: H += 1
+        elif a_ == 'rousing' and 'H' in f and any('A' in g for j, g in enumerate(X.res) if j != i): A += 1
+        elif a_ == 'brew' and 'H' in f: gold += 1
+        elif a_ == 'courage' and 'A' in f and X.R <= 5: A += 1
+        elif a_ == 'sunder' and 'A' in f and y_def >= 2: A += 1
+        elif a_ == 'streak' and x_gold_dice >= 3: gold += 1
+        elif a_ == 'pest' and 'A' in f and y_skull: A += 1
+        elif a_ == 'patient' and X.G < Y.G: gold += f.count('G')
+        elif a_ == 'rally' and 'A' in f and X.R < Y.R: A += 1
     counter = sum(1 for i, f in enumerate(X.res) if 'D' in f and ab(X, i) == 'counter')
     sf = sum(1 for i in range(len(X.res)) if ab(X, i) == 'standfast'
              and (not RULES['standfast_cond'] or 'D' in X.res[i]))
@@ -247,9 +286,10 @@ def strip_dice(X, Y):
     are cancelled). Returns (copy of Y with those shields removed, leftover ☣)."""
     epi = any(ab(X, i) == 'epidemic' and 'P' in f for i, f in enumerate(X.res))
     Px = sum(f.count('P') * (2 if epi and ab(X, i) != 'epidemic' else 1) for i, f in list(enumerate(X.res)) + X.extra)
+    Px = max(0, Px - sum(1 for i, f in enumerate(Y.res) if ab(Y, i) == 'antidote' and 'H' in f))   # Antidote
     if not Px:
         return Y, 0
-    cands = [i for i, f in enumerate(Y.res) if 'D' in f]
+    cands = [i for i, f in enumerate(Y.res) if 'D' in f and ab(Y, i) != 'nightwatch']   # Night Watch
     cands.sort(key=lambda i: (Y.res[i].count('D'), STRIP_PRIORITY.get(ab(Y, i), 0)), reverse=True)
     Y2 = Y.copy()
     hit = cands[:Px]
@@ -257,6 +297,11 @@ def strip_dice(X, Y):
         Y2.res[i] = Y2.res[i].replace('D', '') or '-'
     Y2.extra = [(i, f.replace('D', '') if i in hit else f) for i, f in Y2.extra]
     return Y2, Px - len(hit)
+
+
+def clock_dmg(rnd):
+    if rnd is None or rnd < LAST_CALL_ROUND: return 0
+    return 1 if RULES['clock'] == 'flat' else rnd - LAST_CALL_ROUND + 1
 
 
 _RND = [0]
@@ -306,9 +351,17 @@ def outcome(X, Y, detail=False, rnd=None):
     tx, ty = min(cap_p, X.poison + Py), min(cap_p, Y.poison + Px)
     cl_x, cl_y = min(Hx, tx), min(Hy, ty)
     tx -= cl_x; ty -= cl_y; Hx -= cl_x; Hy -= cl_y
-    if RULES['lc_noheal'] and rnd is not None and rnd >= LAST_CALL_ROUND:
+    if RULES['clock'] == 'escalate' and RULES['lc_noheal'] and rnd is not None and rnd >= LAST_CALL_ROUND:
         tri = lambda P: sum(f.count('H') for i, f in enumerate(P.res) if ab(P, i) == 'triage' and i not in P.venom)
         Hx, Hy = min(Hx, tri(X)), min(Hy, tri(Y))
+    if RULES['clock'] == 'flat':
+        c = clock_dmg(rnd)
+        if RULES['mend']:
+            tri = lambda P: sum(f.count('H') for i, f in enumerate(P.res) if ab(P, i) == 'triage' and i not in P.venom)
+            mx = lx + (c if RULES['mend_clock'] else min(c, tri(X)))   # Triage (Sawbones): its ♥ can mend Closing Time
+            my = ly + (c if RULES['mend_clock'] else min(c, tri(Y)))
+            Hx, Hy = min(Hx, mx), min(Hy, my)
+        lx += c; ly += c
     Rx, Ry = X.R - lx + Hx, Y.R - ly + Hy
     cap = RULES['cap']
     if cap is not None:
@@ -326,7 +379,7 @@ def outcome(X, Y, detail=False, rnd=None):
 def value(M, O, rnd):
     """Score of the current table from M's point of view (zero-sum)."""
     Rm, Ro, Gm, Go = outcome(M, O, rnd=rnd)
-    lc = max(0, rnd - LAST_CALL_ROUND + 1)
+    lc = max(0, rnd - LAST_CALL_ROUND + 1) if RULES['clock'] == 'escalate' else 0
     Rm -= lc; Ro -= lc
     if Ro <= 0 and Rm > 0:
         return 100 + Rm
@@ -766,10 +819,15 @@ class Game:
         A.R, B.R, A.G, B.G = d['Rx'], d['Ry'], d['Gx'], d['Gy']
         A.poison, B.poison = d['tx'], d['ty']
         self.stats['A_poison_dmg'] += d['tx']; self.stats['B_poison_dmg'] += d['ty']
-        lc = max(0, self.rnd - LAST_CALL_ROUND + 1)
+        lc = max(0, self.rnd - LAST_CALL_ROUND + 1) if RULES['clock'] == 'escalate' else 0
         if lc:
             A.R -= lc; B.R -= lc
+        ck = clock_dmg(self.rnd)
+        if ck:
             self.stats['lastcall'] += 1
+            if (A.R <= 0 or B.R <= 0):   # did the clock decide it? (would the loser have survived without it)
+                lo = A if A.R < B.R or (A.R <= 0 and B.R > 0) else B
+                if lo.R + ck > 0: self.stats['clock_ko'] += 1
         self.say(f"  Resolve: A dealt {d['x']['atk']}+{d['x']['counter']}ctr, took {d['x']['skull']}☠, healed {d['x']['heal']} | "
                  f"B dealt {d['y']['atk']}+{d['y']['counter']}ctr, took {d['y']['skull']}☠, healed {d['y']['heal']}"
                  + (f' | Last Call −{lc}' if lc else ''))

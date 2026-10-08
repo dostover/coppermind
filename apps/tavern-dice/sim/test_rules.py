@@ -58,3 +58,43 @@ RULES.clear(); RULES.update(V051)
 X=mk(['Viper','Monster'],['P','AA']); Y=mk(['Guardian','Knight'],['DD','D'])
 assert outcome(X,Y)[1]==9, outcome(X,Y)  # Guardian poisoned (no Stand Fast), 2⚔ vs Knight 1🛡 → 1; 1 blocked <2 → no Counterattack
 print('v0.5.1 checks pass')
+
+# --- Expansion 3 "Tavern Regulars"
+RULES.clear(); RULES.update(V051)
+o = lambda X, Y: outcome(X, Y, detail=True)
+# Doorman: +1 🛡 vs 3+ ⚔
+X=mk(['Bouncer'],['D']); Y=mk(['Monster','Basic'],['AA','A']); assert o(X,Y)['Rx']==9    # 3⚔ vs 2🛡
+Y=mk(['Monster'],['AA']); assert o(X,Y)['Rx']==9
+# Hearty Stew: +1 ♥ at ≤5 Resolve
+X=mk(['Cook'],['H'],R=5); Y=mk(['Monster'],['AA']); assert o(X,Y)['Rx']==5     # 2 dmg, 2 ♥ mend it all
+X=mk(['Cook'],['H'],R=6); assert o(X,Y)['Rx']==5                                    # no Stew above 5: 1 ♥ mends 1
+# Rousing Tune: ♥ gives another ⚔ die +1
+X=mk(['Minstrel','Basic'],['H','A']); Y=mk(['Oracle'],['G']); assert o(X,Y)['Ry']==8
+# Strong Brew: ♥ → +1 Gold
+X=mk(['Brewer'],['H']); assert o(X,Y)['Gx']==1
+# Liquid Courage / Rally / Pest Control / Sunder: +1 ⚔
+X=mk(['Drunkard'],['A'],R=4); assert o(X,Y)['Ry']==8
+X=mk(['Militia'],['A'],R=4); assert o(X,Y)['Ry']==8
+X=mk(['Ratcatcher'],['A']); Y=mk(['Monster'],['S']); assert o(X,Y)['Ry']==7   # 2⚔ + own ☠
+X=mk(['Smith'],['A']); Y=mk(['Dwarven'],['DD']); assert o(X,Y)['Ry']==10
+X=mk(['Smith','Monster'],['A','AA']); assert o(X,Y)['Ry']==8                    # 4⚔ vs 2🛡
+# Night Watch: ☣ can't poison it (leftover ☣ becomes ⚔, blocked by the shield)
+X=mk(['Viper'],['P']); Y=mk(['Watchman'],['D']); assert o(X,Y)['Ry']==10
+# Antidote: ♥ cancels a ☣
+Y=mk(['Herbalist','Dwarven'],['H','DD']); X=mk(['Viper','Monster'],['P','AA']); assert o(X,Y)['Ry']==10
+# Lucky Streak: 3 dice showing 💰 → +1 Gold;  Patient: behind on Gold → double 💰
+X=mk(['Cardsharp','Basic','Peddler'],['G','G','G']); Y=mk(['Oracle'],['D']); assert o(X,Y)['Gx']==4
+X=mk(['Fisher'],['G']); Y=mk(['Oracle'],['D']); Y.G=2; assert o(X,Y)['Gx']==2
+print('Expansion 3 checks pass')
+
+# --- v0.10: Closing Time + Mend
+import tavern_sim as _T
+assert RULES['clock']=='flat' and RULES['mend'] and not RULES['mend_clock'] and _T.LAST_CALL_ROUND==10
+X=mk(['Cleric'],['HH'],R=7); Y=mk(['Oracle'],['G']); assert o(X,Y)['Rx']==7                 # no damage → ♥ restores nothing
+Y=mk(['Monster'],['AA']); assert o(X,Y)['Rx']==7                                             # 2 dmg mended
+Y=mk(['Monster'],['AAA']); assert o(X,Y)['Rx']==6                                            # 3 dmg, 2 mended
+Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=10)['Rx']==6                       # Closing Time 1, can't be mended
+assert outcome(X,Y,detail=True,rnd=9)['Rx']==7                                               # before turn 10: no clock
+X=mk(['Sawbones'],['HH'],R=7); assert outcome(X,Y,detail=True,rnd=11)['Rx']==7               # Triage mends Closing Time
+X=mk(['Barkeep'],['GG']); Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=5)['Ry']==8 and outcome(X,Y,detail=True,rnd=4)['Ry']==10   # Last Orders from turn 5 (v0.10.1)
+print('v0.10 checks pass')

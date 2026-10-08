@@ -1,8 +1,12 @@
-# Tavern Dice — Working Rules (Prototype v0.9)
+# Tavern Dice — Working Rules (Prototype v0.10.2)
 
 PvP collectible-dice game played inside a D&D campaign. Inspired by Dice Hunter: Dicemancer Quest, minus the monster battles. **The dice create the possibilities. Gold creates the decisions. The opponent creates the uncertainty. The tavern creates the atmosphere.**
 
 ## Changelog
+- **v0.10.2 (2026-10-08, designer-approved):** Closing Time now starts on **turn 10** (was 8). With Mend in place this keeps balance unchanged: rounds average 6.6 turns, the clock reaches about 1 round in 5 and decides about 1 in 9. (Sim Run 18.)
+- **v0.10.1 (2026-10-08, designer-requested):** Barkeep's Last Orders now starts on turn 5 (no longer tied to Closing Time). Barkeep 46% → 50%. (Sim Run 18.)
+- **v0.10 (2026-10-07, designer-approved):** Healing and the round clock reworked so the dice, not the clock, decide rounds. **Last Call → Closing Time:** from turn 8, each player loses a flat 1 Resolve per turn (no escalation, no "no healing" rule). **♥ → Mend:** each ♥ restores 1 Resolve lost this turn, never above where you started the turn; Closing Time's damage can't be mended. Dice updated: Sawbones' Triage now mends Closing Time; Barkeep's Last Orders triggers from turn 8; Cook and Guardian text updated. (Sim Run 16: rounds 5.5 → 6.2 turns, the clock decides 14% of rounds instead of 23%, no stalls, tier balance unchanged.)
+- **v0.9.1 (2026-10-07, designer-requested):** Expansion 3 "Tavern Regulars" — twelve Common dice, each with one simple automatic ability (Bouncer, Cook, Minstrel, Brewer, Drunkard, Watchman, Smith, Cardsharp, Ratcatcher, Fisher, Militia, Herbalist). Collection is now 52 dice (5 Basic, 23 Common, 14 Uncommon, 10 Rare). Seven were trimmed or boosted by one face after the first sim pass. (Sim Run 14.)
 - **v0.9 (2026-10-07, designer-approved):** Influence split into two steps. **Fortune:** Reroll, Focus, Mulligan, Distract (and Omen's free reroll). **Tactics:** activated abilities and Jam. Each step alternates one action at a time, active player first, and ends after two passes in a row. Ward still answers any targeting action in either step. (Sim Run 13: roughly balance-neutral.)
 - **v0.8.4 (2026-10-06, designer-approved):** Influence clarified: an action that targets the other player or one of their dice (Distract, Jam, Envenom, Sneaky) is **declared** first; its cost is paid, then the targeted player may **Ward** (1 Gold) to cancel it or allow it. Priority then passes. Ward's timing is now explicit.
 - **v0.8.3 (2026-10-06, designer-approved):** All ability text rewritten in one pattern — condition, then effect, then exception. Rules unchanged, with two clarifications that match how the roller and simulator already work: Divine Protection is once per turn; Relentless resets each round.
@@ -47,8 +51,8 @@ PvP collectible-dice game played inside a D&D campaign. Inspired by Dice Hunter:
    - ⚡ — each deals 1 damage to the opponent that 🛡 can't block.
    - ☠ — each deals 1 damage to you.
    - 💰 — each gains you 1 Gold.
-   - ♥ — each restores 1 Resolve, up to the maximum of 10. **During Last Call (turn 6 on), ♥ restores nothing.**
-   - **Last Call:** from turn 6 of a round onward, at the end of Resolution both players lose Resolve equal to (turn − 5): 1 on turn 6, 2 on turn 7, 3 on turn 8, and so on. Unblockable; ignores all reductions (Stand Fast, Divine Protection, etc.); does not trigger Bloodlust. **Healing stops** for the rest of the round: ♥ restores nothing from turn 6 on (♥ faces can still be spent on Blessing).
+   - ♥ — **Mend:** each ♥ restores 1 Resolve you lost this turn (from ⚔, ⚡, ☠, counterattacks, poison leftovers — anything except Closing Time). It never takes you above the Resolve you started the turn with; a ♥ with nothing to mend does nothing.
+   - **Closing Time:** from turn 10 of a round onward, at the end of Resolution both players lose **1 Resolve** (every turn, it doesn't grow). Unblockable; ignores all reductions (Stand Fast, Divine Protection, etc.); can't be mended by ♥ (Sawbones' Triage is the exception); does not trigger Bloodlust.
    - **Round end:** a player at 0 or below loses the round. If **both** players are at 0 or below, **the active player wins the round**.
 
 ## Faces
@@ -67,7 +71,7 @@ Faces may carry multiple symbols, each worth 1 (e.g. [🛡🛡] = 2 Defense, [�
 Gold design principles: not just more damage; no universally optimal spend; balance offense/defense/probability; low bookkeeping; never invalidate a whole loadout; quick to understand; universal rather than die-specific. No new universal Gold abilities unless the designer asks.
 
 ## Symbols
-⚔ Attack · 🛡 Defense · 💰 Gold · ♥ Healing · ☠ Risk (1 self-damage, unblockable) · ☣ Poison (cancels a shield die, else ⚔) · ⚡ Lightning (unblockable damage)
+⚔ Attack · 🛡 Defense · 💰 Gold · ♥ Mend (undo damage taken this turn) · ☠ Risk (1 self-damage, unblockable) · ☣ Poison (cancels a shield die, else ⚔) · ⚡ Lightning (unblockable damage)
 **⚡ design limit:** at most one ⚡ face per die, with a single ⚡ on it.
 *(✦ Charge and ↻ Reroll removed in v0.2.)*
 
@@ -77,7 +81,7 @@ Rarity ≠ bigger numbers. Rare dice offer interactions, specialized strategies,
 ## Starter Collection (v0.5)
 1. **Soldier's** *(Common)* — [⚔][⚔][🛡][🛡][⚔🛡][💰] — *Formation:* If this die shows 🛡, one other die of yours showing 🛡 gets +1 🛡. Reliable hybrid.
 2. **Berserker's** *(Common)* — [⚔][⚔][⚔⚔][⚡][☠][🛡] — *Bloodlust:* If this die shows ⚔, it deals 1 extra damage for each ☠ that hits you this turn. A ☠ rerolled or cancelled before Resolution doesn't count. Comeback attacker.
-3. **Guardian's** *(Common)* — [🛡][🛡][🛡][🛡🛡][⚔][☠] — *Stand Fast:* If this die shows 🛡, you lose 1 less Resolve this turn (including from ☠). Doesn't reduce Last Call. Defensive anchor.
+3. **Guardian's** *(Common)* — [🛡][🛡][🛡][🛡🛡][⚔][☠] — *Stand Fast:* If this die shows 🛡, you lose 1 less Resolve this turn (including from ☠). Doesn't reduce Closing Time. Defensive anchor.
 4. **Gambler's** *(Uncommon)* — [💰][💰][💰💰][💰💰💰][☠][☠] — *High Roller:* Once per turn, roll this die again. Both results count. Push-your-luck economy.
 5. **Thief's** *(Common)* — [💰][💰][💰][💰⚔][⚔][☠] — *Pickpocket:* For each 💰 on this die, you may take 1 Gold from your opponent instead of gaining it. Resource disruption.
 6. **Archer's** *(Common)* — [⚔][⚔][⚡][⚔⚔][🛡][💰] — *Precise Shot:* If this is the only one of your dice showing ⚔, it deals 1 extra damage. Focused damage.
@@ -116,14 +120,30 @@ Note: Tempest's Chain Lightning can put more than one ⚡ in play — an intende
 
 ## Expansion 2 "Coin & Cure" (playtest — built from the rarity template)
 34. **Pilgrim's** *(Basic)* — [♥][♥][🛡][⚔][⚔][ ] — *No ability.* Starter healing. Sim 39%.
-35. **Barkeep's** *(Common)* — [💰][💰][♥][🛡][⚔][💰] — *Last Orders:* From turn 6 (Last Call), each 💰 on this die also counts as a ⚔. You still gain the Gold. Late-round closer. Sim 49%.
+35. **Barkeep's** *(Common)* — [💰][💰][♥][🛡][⚔][💰] — *Last Orders:* From turn 5, each 💰 on this die also counts as a ⚔. You still gain the Gold. Late-round closer. Sim 50% (v0.10.1; was turn 8 → 46%).
 36. **Moneylender's** *(Uncommon)* — [💰][💰💰][⚔][🛡][⚔💰][☠] — *Loan:* Once per turn, gain 2 Gold and lose 1 Resolve. Health for Gold now. Sim 50%.
 37. **Taxman's** *(Uncommon)* — [💰][⚔][🛡][💰][⚔💰][☠] — *Levy:* At Resolution, if your opponent has more Gold than you, take 1 Gold from them. Punishes hoarding. Sim 48%.
-38. **Sawbones'** *(Uncommon)* — [♥][♥♥][🛡🛡][⚔][⚔♥][☠] — *Triage:* This die's ♥ still heal during Last Call (turn 6 on). The one healer that works late. Sim 51%.
+38. **Sawbones'** *(Uncommon)* — [♥][♥♥][🛡🛡][⚔][⚔♥][☠] — *Triage:* This die's ♥ can also mend Closing Time's 1 damage. The one healer that beats the clock. (v0.10; was "still heals during Last Call".)
 39. **Puppeteer** *(Rare)* — [💰][⚔][🛡][♥][⚔🛡][⚔⚔] — *Strings:* Once per turn, spend 2 Gold to turn one of your other dice to any of its faces. Flexible control. Sim 56%.
 40. **Hydra** *(Rare)* — [⚔][⚔⚔][⚔⚔][🛡][♥][☠] — *Regrow:* If this die shows ☠, it also counts as ⚔⚔. You still take the ☠ damage. Risk becomes reward. Sim 56%.
 (Sim: 2,400 random Open matches with all 40 dice, v0.7 rules; Pilgrim and Sawbones re-tested after tuning in 800 targeted matches. ±4% margin.)
 Watch: with 40 dice in the pool, the whole Basic tier now sits at ~39–42% (below the 42–46% target set when there were 26 dice). Consider re-centering the Basic target to 38–44%.
+
+## Expansion 3 "Tavern Regulars" (all Common — built from the rarity template)
+Tavern folk with one simple automatic ability each: no Gold costs, no choices. Sim = Open-format win rate (±4%).
+
+41. **Bouncer** *(Common)* — [🛡][🛡][⚔][🛡][⚔][💰] — *Doorman:* If this die shows 🛡 and your opponent shows 3 or more ⚔, it gets +1 🛡. Anti-swarm defense. Sim 47%.
+42. **Cook** *(Common)* — [♥][♥][🛡][⚔][💰][🛡♥] — *Hearty Stew:* If this die shows ♥ and you have 5 or less Resolve, it heals 1 more. Comeback healing. Sim 49%.
+43. **Minstrel** *(Common)* — [♥][💰][⚔][🛡][💰][⚔] — *Rousing Tune:* If this die shows ♥, one other die of yours showing ⚔ gets +1 ⚔. Support. Sim 52%.
+44. **Brewer** *(Common)* — [💰][💰][♥][🛡][⚔][💰] — *Strong Brew:* If this die shows ♥, you also gain 1 Gold. Gold and healing. Sim 47%.
+45. **Drunkard** *(Common)* — [⚔⚔][⚔][⚔][☠][🛡][⚔] — *Liquid Courage:* If this die shows ⚔ and you have 5 or less Resolve, it deals 1 extra damage. Desperate offense. Sim 51%.
+46. **Watchman** *(Common)* — [🛡][🛡][⚔][⚔][⚔🛡][💰] — *Night Watch:* ☣ can't poison this die. Anti-poison defense. Sim 49%.
+47. **Smith** *(Common)* — [⚔][⚔][🛡][⚔][💰][🛡] — *Sunder:* If this die shows ⚔ and your opponent shows 2 or more 🛡, it gets +1 ⚔. Shields can still block it. Shield breaker. Sim 49%.
+48. **Cardsharp** *(Common)* — [💰][💰][⚔][🛡][⚔💰][♥] — *Lucky Streak:* If 3 or more of your dice show 💰, gain 1 more Gold. Gold engine. Sim 48%.
+49. **Ratcatcher** *(Common)* — [⚔][⚔][☣][🛡][💰][⚔] — *Pest Control:* If this die shows ⚔ and your opponent shows ☠, it deals 1 extra damage. Punishes risky dice. Sim 47%.
+50. **Fisher** *(Common)* — [💰][💰][♥][🛡][⚔][🛡♥] — *Patient:* If you have less Gold than your opponent, each 💰 on this die gives 1 more Gold. Catch-up economy. Sim 52%.
+51. **Militia** *(Common)* — [⚔][🛡][⚔][🛡][⚔][♥] — *Rally:* If this die shows ⚔ and you have less Resolve than your opponent, it deals 1 extra damage. Comeback hybrid. Sim 51%.
+52. **Herbalist** *(Common)* — [♥][♥][☣][🛡][⚔][💰] — *Antidote:* If this die shows ♥, cancel one of your opponent's ☣. It poisons nothing and doesn't count as ⚔. Anti-poison healer. Sim 48%.
 
 ## Rarity
 Rarity adds **moderate power and more complexity**. A Rare should beat a Common a little more often, mostly through a stronger or more flexible ability, not just bigger numbers. Commons stay playable.
@@ -156,18 +176,21 @@ Note: the existing Basic Die has no blank face; new Basic dice follow the templa
 - **Commoner's Cup:** Basic and Common dice only — good for new players.
 
 ## Dice looks
-Each die has its own material in the roller (useful if you buy or paint physical dice): **Alchemist** — Amber bubbles; **Archer** — Forest splotch; **Assassin** — Black opal (red speckle); **Bard** — Rose-gold swirl; **Basic** — Old bone; **Berserker** — Bloodstone swirl; **Cleric** — Pearl & gilt; **Dragon** — Ember scale; **Druid** — Moss & bark; **Dwarven** — Granite; **Elemental** — Fire & tide; **Fey** — Iridescent swirl; **Gambler** — Card-table jade (gold flecks); **Goblin** — Swamp splotch; **Guardian** — Cobalt & silver; **Knight** — Silver marble; **Mage** — Midnight stars; **Mimic** — Chest oak; **Monster** — Scaled hide; **Oracle** — Twilight marble; **Paladin** — Ivory gold-vein; **Soldier** — Gunmetal fleck; **Thief** — Smoke & plum; **Undead** — Grave-mold bone; **Viper** — Emerald venom; **Warlock** — Hexed violet.
+Each die has its own material in the roller (useful if you buy or paint physical dice): **Alchemist** — Amber bubbles; **Archer** — Forest splotch; **Assassin** — Black opal (red speckle); **Bard** — Rose-gold swirl; **Basic** — Old bone; **Berserker** — Bloodstone swirl; **Cleric** — Pearl & gilt; **Dragon** — Ember scale; **Druid** — Moss & bark; **Dwarven** — Granite; **Elemental** — Fire & tide; **Fey** — Iridescent swirl; **Gambler** — Card-table jade (gold flecks); **Goblin** — Swamp splotch; **Guardian** — Cobalt & silver; **Knight** — Silver marble; **Mage** — Midnight stars; **Mimic** — Chest oak; **Monster** — Scaled hide; **Oracle** — Twilight marble; **Paladin** — Ivory gold-vein; **Soldier** — Gunmetal fleck; **Thief** — Smoke & plum; **Undead** — Grave-mold bone; **Viper** — Emerald venom; **Warlock** — Hexed violet. Expansion 3: **Bouncer** — Brass knuckles; **Brewer** — Hops & barley; **Cardsharp** — Felt & diamonds; **Cook** — Copper pot; **Drunkard** — Spilled wine; **Fisher** — River pebble; **Herbalist** — Sage & clay; **Militia** — Homespun wool; **Minstrel** — Lute spruce; **Ratcatcher** — Sewer slate; **Smith** — Forge iron; **Watchman** — Lantern night.
 
 ## Balance guidelines
 Evaluate face distribution (useful-result rate, downside, dominant face, value when Jammed), ability strength (meaningful but not match-deciding), synergy (alone and in combos), and Gold interaction (generators, spenders, savers, punishers — no runaway economies).
 
 ## Match tracking
-Track each player's 5 dice, Resolve, Gold, current results, temporary effects, used abilities, turn, round and match score, active player. Announce rolls, choices, Gold spent, ability activations, damage/healing, end-of-turn effects (incl. Last Call), updated Resolve/Gold. Use genuine randomness; never fudge rolls.
+Track each player's 5 dice, Resolve, Gold, current results, temporary effects, used abilities, turn, round and match score, active player. Announce rolls, choices, Gold spent, ability activations, damage/healing, end-of-turn effects (incl. Closing Time), updated Resolve/Gold. Use genuine randomness; never fudge rolls.
 
 ## Design iteration
 Rules are a prototype. Treat designer proposals as intentional; identify affected mechanics; flag balance/rules problems; update working rules on approval; never silently revert. Prefer small, testable changes.
 
 ## Open questions / watch list
+- **v0.10.2 (Run 18):** Closing Time moved to turn 10 — rounds avg 6.6 turns, 10% run 12+ turns (longest 19); clock decides 11% of rounds. Playtest whether rounds feel too long.
+- **v0.10 (Runs 16–17):** Closing Time 8 + Mend. Rounds avg 6.2 turns, clock decides 15% of rounds; tiers 43/50/50/54%. Watch: healing vs Gold-aggro loadouts 63–71% (was 57%); Barkeep fixed in v0.10.1 (Last Orders from turn 5, 50%); Druid 64%, Paladin 61%, Bard 61%, Assassin 60%, Elemental 60% run hot; the shield-wall loadout (Soldier/Guardian/Knight/Cleric/Paladin) loses almost every defensive mirror because it barely deals damage; new Triage tested fine (Sawbones 50%). Playtest whether a ♥ that "does nothing" on a quiet turn feels bad.
+- **v0.9.1 sim (Run 14, 52 dice):** Expansion 3 tuned into the Common range (47–52%). With the bigger pool, Druid (63%), Paladin (57%), Assassin (56%) and Bard (58%) run hot, and Basic averages 42%. Minstrel and Fisher sit at the top of Common (52%) — watch. Two anti-poison Commons (Watchman, Herbalist) — watch whether ☣ still answers shield walls.
 - **v0.9 sim (Run 13):** two-step Influence ≈ balance-neutral (dice 41–60%, median 11 turns/match). Gold-hungry attack dice lost ground (Mage 48%→42%, Gambler −6 pts); defensive dice gained a little. Distract use fell from 4.8 to 1.7 per match. Watch Mage. Sim result depends on players saving Gold for Tactics.
 - **v0.7 sim (Run 10):** themed matchups all 41–67%, average 5.7 points from 50/50; dice 42–58%; median 13 turns per match. Bard (58%) and Elemental (57%) top, Oracle (42%) bottom. Swap results assume ~6 spare dice per player. See sim-results.md.
 - **v0.6 sim (Run 8):** dice 43–59% match win rate; median 12 turns per match, 44% go to round 3; no large active-player edge; 20% of rounds end in a double KO won by the active player. Best of 3 sharpens matchups (Defense loses to the healing/Flex loadout ~99%). See sim-results.md.
