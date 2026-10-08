@@ -1296,6 +1296,8 @@ function show(name){ Object.entries(tabs).forEach(([n,[t,v]]) => { t.setAttribut
 tabs.table[0].onclick = () => show('table'); tabs.dice[0].onclick = () => show('dice');
 
 render(); renderDice();
+// test hook: only when the page is opened with ?test (used by tests/e2e.js)
+if (/[?&]test\b/.test(location.search)) window.__td = { get S(){ return S; }, set S(v){ S = v; }, resolveRound, render, abilityAction, DICE, RARITY };
 const lastTab = (location.hash === '#dice') ? 'dice' : store.get('td-tab'); if (lastTab === 'dice') show('dice');
 })();
 

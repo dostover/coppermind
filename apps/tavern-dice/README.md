@@ -13,6 +13,7 @@ A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice fr
 | [`sim/test_rules.py`](sim/test_rules.py) | Rule checks for the simulator. |
 | [`sim/sim-results.md`](sim/sim-results.md) | Every simulation run (1–18) and the rules decisions it informed. |
 | [`playtest-log.md`](playtest-log.md) | Tabletop playtest notes (Match 1, rules v0.3 — historical). |
+| [`tests/e2e.js`](tests/e2e.js) + [`tests/parity_cases.py`](tests/parity_cases.py) | End-to-end suite (20 checks): gallery, loadouts, every Gold action, Ward/Allow, all 16 activated abilities, Mend/Closing Time, auto-pass, undo, a full match with Tavern Swap, layout — plus a check that the app's rules engine matches the simulator on random turns. |
 | [`tests/play-match.js`](tests/play-match.js) | Playwright regression: plays a full match using only the action bar and checks for errors. |
 
 ## The collection
@@ -38,6 +39,10 @@ cd sim
 python3 tavern_sim.py match --a Soldier,Guardian,Knight,Cleric,Oracle --b Viper,Assassin,Goblin,Undead,Archer -v
 python3 tavern_sim.py field --games 2000      # per-die win rates (random loadouts)
 python3 test_rules.py                         # rule checks
+
+# end-to-end (needs Playwright)
+python3 tests/parity_cases.py 400 1 > /tmp/parity.json
+node tests/e2e.js index.html /tmp/parity.json
 
 # table app regression (needs Playwright)
 npm i -D playwright && node tests/play-match.js
