@@ -2,6 +2,25 @@
 
 Simulator: `claude/tavern_sim.py` (all 24 abilities, all Gold abilities incl. Ward, Last Call, double-KO rules; rule switches in `RULES`). Both sides use the same greedy AI (best expected outcome for the current round; 1 Gold ≈ 0.5 Resolve; trailing players weight survival). Treat results as directional.
 
+## Run 19 — balance pass on eight outliers (2026-10-08) → v0.10.3
+Targeted tests (die always in loadout A + 4 random, random opponent, 600 matches, ±4%), one or two face changes per die, abilities unchanged. Targets: Common 45–50%, Uncommon 48–53%, Rare 51–56%.
+
+| Die (tier) | Before (Run 17) | Change | Final (targeted) |
+|---|---|---|---|
+| Druid (R) | 64% | [💰]→[☠] | 57.7% (other tries: [🛡♥]→[♥] 59.7%, [⚔🛡]→[⚔] 61.8%, both 46.2%, [🛡♥]→[♥]+[💰]→[☠] 47.5%) |
+| Paladin (U) | 61% | [⚔🛡]→[⚔] | 52.2% |
+| Bard (R) | 61% | [💰⚔]→[💰], [🛡♥]→[♥] | 56.7% (one face only: 59.3%) |
+| Assassin (C) | 60% | one [⚔]→[☠] | 52.8% (also tried [⚔⚔]→[⚔]+[⚔]→[☠]: 47.2% targeted / 40% field — too far) |
+| Elemental (R) | 60% | one [⚔]→[💰] | 55.5% |
+| Mimic (R) | 42% | [☠]→[⚔] | 51.2% |
+| Mage (U) | 43% | [☠]→[💰] | 50.7% (with [☠]→[⚔]: 54.8%) |
+| Taxman (U) | 43% | [☠]→[🛡] | 52.0% |
+
+- Confirmation field (1,500 matches, ±6% per die): overall spread 36–61% (was 38–67% in Run 17); median match 15 turns.
+- Druid and Bard are very sensitive to face changes because Wild Shape / Inspiration pick the best face — if they stay hot in play, raise their ability cost instead.
+- Field also flagged (single run, within noise of targets, watch): Fisher 59%, Apothecary 61%, Cook 56%, Warlock 46%, Goblin 43%, Oracle 43%.
+- Raw data: `results27.json`–`results33.json`.
+
 ## Run 18 — Barkeep fix + Closing Time on turn 8 vs turn 10 (2026-10-08) → turn 10 adopted as v0.10.2
 **Barkeep** (targeted: Barkeep always in loadout A + 4 random, random opponent, 600 matches, ±4%): Last Orders from turn 8 → 45.8% · from turn 5 → **49.8% (adopted, v0.10.1)** · from turn 4 → 51.2%.
 
