@@ -312,7 +312,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
   <header class="top">
     <div>
       <h1>Tavern Dice</h1>
-      <div class="ver">Rules v0.10.2 · best of 3 · 52 dice</div>
+      <div class="ver">Rules v0.10.3 · best of 3 · 52 dice</div>
     </div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" id="tab-table" aria-selected="true" aria-controls="view-table">Table</button>
@@ -348,25 +348,25 @@ const SYMNAME = {A:'Attack',D:'Defense',G:'Gold',H:'Heal',S:'Risk',P:'Poison',L:
 const DICE = {
   Alchemist:{f:['G','G','H','HH','GH','S'],role:'Gold',ab:'Transmutation',t:'Spend 1 Gold to turn this die to any of its faces. You can do this more than once.'},
   Archer:{f:['A','A','L','AA','D','G'],role:'Attack',ab:'Precise Shot',t:'If this is the only one of your dice showing ⚔, it deals 1 extra damage.'},
-  Assassin:{f:['A','A','A','AA','P','A'],role:'Attack',ab:'Backstab',t:'If none of your opponent\u2019s dice show 🛡 when results lock, this die deals 1 extra damage. Poisoned shields don\u2019t count.'},
-  Bard:{f:['A','D','H','G','GA','DH'],role:'Tricks',ab:'Inspiration',t:'Once per turn, spend 1 Gold to set this die to the same result as another of your dice.'},
+  Assassin:{f:['A','A','A','AA','P','S'],role:'Attack',ab:'Backstab',t:'If none of your opponent\u2019s dice show 🛡 when results lock, this die deals 1 extra damage. Poisoned shields don\u2019t count.'},
+  Bard:{f:['A','D','H','G','G','H'],role:'Tricks',ab:'Inspiration',t:'Once per turn, spend 1 Gold to set this die to the same result as another of your dice.'},
   Basic:{f:['D','D','A','A','G','G'],role:'Starter',ab:'',t:'No ability. The plain die everyone starts with.'},
   Berserker:{f:['A','A','AA','L','S','D'],role:'Attack',ab:'Bloodlust',t:'If this die shows ⚔, it deals 1 extra damage for each ☠ that hits you this turn. A ☠ rerolled or cancelled before Resolution doesn\u2019t count.'},
   Cleric:{f:['D','D','H','H','HH','DH'],role:'Healing',ab:'Blessing',t:'Give up one ♥ on this die to cancel one ☠ on another of your dice. Once per ♥.'},
   Dragon:{f:['A','L','AA','G','G','S'],role:'Gold',ab:'Hoard',t:'Each time this die gives you Gold, gain 1 more.'},
-  Druid:{f:['A','D','H','DH','AD','G'],role:'Tricks',ab:'Wild Shape',t:'Once per turn, spend 1 Gold to turn this die to any of its faces.'},
+  Druid:{f:['A','D','H','DH','AD','S'],role:'Tricks',ab:'Wild Shape',t:'Once per turn, spend 1 Gold to turn this die to any of its faces.'},
   Dwarven:{f:['A','A','D','D','DD','G'],role:'Defense',ab:'Stubborn',t:'Your opponent can\u2019t Distract this die.'},
-  Elemental:{f:['A','A','A','D','G','S'],role:'Attack',ab:'Volatile',t:'At Resolution, roll this die again; the new result also counts. If it matches the first result, deal 1 extra damage that can\u2019t be blocked.'},
+  Elemental:{f:['A','A','G','D','G','S'],role:'Attack',ab:'Volatile',t:'At Resolution, roll this die again; the new result also counts. If it matches the first result, deal 1 extra damage that can\u2019t be blocked.'},
   Fey:{f:['A','D','H','G','AD','S'],role:'Tricks',ab:'Trickster',t:'Once per turn, swap the results of two of your dice.'},
   Gambler:{f:['G','G','GG','GGG','S','S'],role:'Gold',ab:'High Roller',t:'Once per turn, roll this die again. Both results count.'},
   Goblin:{f:['A','G','G','GG','P','S'],role:'Gold',ab:'Sneaky',t:'If this die shows ☠, spend 1 Gold: your opponent takes that ☠\u2019s damage instead of you. They may Ward it.'},
   Guardian:{f:['D','D','D','DD','A','S'],role:'Defense',ab:'Stand Fast',t:'If this die shows 🛡, you lose 1 less Resolve this turn (including from ☠). Doesn\u2019t reduce Closing Time.'},
   Knight:{f:['A','D','D','S','DD','AD'],role:'Defense',ab:'Counterattack',t:'If this die shows 🛡 and your shields block 2 or more ⚔ this turn, your opponent takes 1 damage. Shields can\u2019t block it.'},
-  Mage:{f:['A','A','AA','AG','G','S'],role:'Attack',ab:'Arcane Surge',t:'If this die shows ⚔, spend 1 Gold: its ⚔ can\u2019t be blocked this turn.'},
-  Mimic:{f:['A','D','G','H','AD','S'],role:'Tricks',ab:'Imitate',t:'At the start of each turn, choose another die in your loadout. Until the turn ends, this die has that die\u2019s ability (once-per-turn abilities can be used again).'},
+  Mage:{f:['A','A','AA','AG','G','G'],role:'Attack',ab:'Arcane Surge',t:'If this die shows ⚔, spend 1 Gold: its ⚔ can\u2019t be blocked this turn.'},
+  Mimic:{f:['A','D','G','H','AD','A'],role:'Tricks',ab:'Imitate',t:'At the start of each turn, choose another die in your loadout. Until the turn ends, this die has that die\u2019s ability (once-per-turn abilities can be used again).'},
   Monster:{f:['AA','AA','AAA','A','S','S'],role:'Attack',ab:'',t:'No ability. Big ⚔ faces pay for its ☠.'},
   Oracle:{f:['D','S','G','G','A','H'],role:'Tricks',ab:'Omen',t:'Once per turn, you may Reroll this die for free.'},
-  Paladin:{f:['A','D','D','DH','H','AD'],role:'Defense',ab:'Divine Protection',t:'Once per turn, if this die shows 🛡, spend 1 Gold to block 1 more damage.'},
+  Paladin:{f:['A','D','D','DH','H','A'],role:'Defense',ab:'Divine Protection',t:'Once per turn, if this die shows 🛡, spend 1 Gold to block 1 more damage.'},
   Soldier:{f:['A','A','D','D','AD','G'],role:'Defense',ab:'Formation',t:'If this die shows 🛡, one other die of yours showing 🛡 gets +1 🛡.'},
   Thief:{f:['G','G','G','GA','A','S'],role:'Gold',ab:'Pickpocket',t:'For each 💰 on this die, you may take 1 Gold from your opponent instead of gaining it.'},
   Undead:{f:['P','A','A','AA','D','H'],role:'Attack',ab:'Relentless',t:'The first time this die is Jammed each round, ignore the Jam.'},
@@ -382,7 +382,7 @@ const DICE = {
   Pilgrim:{f:['H','H','D','A','A',''],role:'Starter',ab:'',t:'No ability. Starter healing, with one blank face.'},
   Barkeep:{f:['G','G','H','D','A','G'],role:'Gold',ab:'Last Orders',t:'From turn 5, each 💰 on this die also counts as a ⚔. You still gain the Gold.'},
   Moneylender:{f:['G','GG','A','D','AG','S'],role:'Gold',ab:'Loan',t:'Once per turn, gain 2 Gold and lose 1 Resolve.'},
-  Taxman:{f:['G','A','D','G','AG','S'],role:'Gold',ab:'Levy',t:'At Resolution, if your opponent has more Gold than you, take 1 Gold from them.'},
+  Taxman:{f:['G','A','D','G','AG','D'],role:'Gold',ab:'Levy',t:'At Resolution, if your opponent has more Gold than you, take 1 Gold from them.'},
   Sawbones:{f:['H','HH','DD','A','AH','S'],role:'Healing',ab:'Triage',t:'This die\u2019s ♥ can also mend Closing Time\u2019s 1 damage.'},
   Puppeteer:{f:['G','A','D','H','AD','AA'],role:'Tricks',ab:'Strings',t:'Once per turn, spend 2 Gold to turn one of your other dice to any of its faces.'},
   Hydra:{f:['A','AA','AA','D','H','S'],role:'Attack',ab:'Regrow',t:'If this die shows ☠, it also counts as ⚔⚔. You still take the ☠ damage.'},
