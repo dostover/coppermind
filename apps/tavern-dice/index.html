@@ -312,7 +312,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
   <header class="top">
     <div>
       <h1>Tavern Dice</h1>
-      <div class="ver">Rules v0.10 · best of 3 · 52 dice</div>
+      <div class="ver">Rules v0.10.1 · best of 3 · 52 dice</div>
     </div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" id="tab-table" aria-selected="true" aria-controls="view-table">Table</button>
@@ -380,7 +380,7 @@ const DICE = {
   Tempest:{f:['L','AA','AA','D','G','S'],role:'Attack',ab:'Chain Lightning',t:'If this die shows ⚡, up to two of your other dice showing ⚔ each change one ⚔ into ⚡ this turn.'},
   Plaguebringer:{f:['P','PP','AP','D','H','S'],role:'Poison',ab:'Epidemic',t:'If this die shows ☣, each ☣ on your other dice counts as two.'},
   Pilgrim:{f:['H','H','D','A','A',''],role:'Starter',ab:'',t:'No ability. Starter healing, with one blank face.'},
-  Barkeep:{f:['G','G','H','D','A','G'],role:'Gold',ab:'Last Orders',t:'From turn 8 (Closing Time), each 💰 on this die also counts as a ⚔. You still gain the Gold.'},
+  Barkeep:{f:['G','G','H','D','A','G'],role:'Gold',ab:'Last Orders',t:'From turn 5, each 💰 on this die also counts as a ⚔. You still gain the Gold.'},
   Moneylender:{f:['G','GG','A','D','AG','S'],role:'Gold',ab:'Loan',t:'Once per turn, gain 2 Gold and lose 1 Resolve.'},
   Taxman:{f:['G','A','D','G','AG','S'],role:'Gold',ab:'Levy',t:'At Resolution, if your opponent has more Gold than you, take 1 Gold from them.'},
   Sawbones:{f:['H','HH','DD','A','AH','S'],role:'Healing',ab:'Triage',t:'This die\u2019s ♥ can also mend Closing Time\u2019s 1 damage.'},
@@ -580,7 +580,7 @@ function totals(X, Y, notes){
   X.extra.forEach(e => { if (e.vol && e.f === X.res[e.i]) { vb++; notes.push(`${X.name}: Volatile match +1`); } });
   const yD = Y.res.reduce((n, f) => n + cnt(f, 'D'), 0) + Y.extra.reduce((n, e) => n + cnt(e.f, 'D'), 0);
   X.res.forEach((f, i) => {
-    if (ab(X,i) === 'Last Orders' && S.turn >= CLOSING && f.includes('G')) { A += cnt(f,'G'); notes.push(`${X.name}: Last Orders +${cnt(f,'G')} ⚔`); }
+    if (ab(X,i) === 'Last Orders' && S.turn >= 5 && f.includes('G')) { A += cnt(f,'G'); notes.push(`${X.name}: Last Orders +${cnt(f,'G')} ⚔`); }
     if (ab(X,i) === 'Regrow' && f.includes('S')) { A += 2; notes.push(`${X.name}: Regrow +2 ⚔`); }
     if (ab(X,i) === 'Arc' && f.includes('L') && yD >= 2) { U++; notes.push(`${X.name}: Arc +1 ⚡`); }
     if (ab(X,i) === 'Chain Lightning' && f.includes('L')) { const k = Math.min(2, X.res.filter((g, j) => j !== i && g.includes('A')).length); if (k) { A -= k; U += k; notes.push(`${X.name}: Chain Lightning turns ${k} ⚔ into ⚡`); } }

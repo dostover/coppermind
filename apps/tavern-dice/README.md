@@ -1,6 +1,6 @@
 # Tavern Dice
 
-A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice from a 52-die collection, rolls them, then spends Gold and uses dice abilities to bend the result before everything resolves at once. Matches are best of 3 rounds. Current rules: **v0.10**.
+A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice from a 52-die collection, rolls them, then spends Gold and uses dice abilities to bend the result before everything resolves at once. Matches are best of 3 rounds. Current rules: **v0.10.1**.
 
 **The dice create the possibilities. Gold creates the decisions. The opponent creates the uncertainty.**
 
@@ -11,7 +11,7 @@ A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice fr
 | [`rules.md`](rules.md) | The rules (source of truth): changelog, turn structure, symbols, Gold actions, all 52 dice with faces/abilities/rarity, rarity template, formats, watch list. |
 | [`sim/tavern_sim.py`](sim/tavern_sim.py) | Balance simulator (Python 3, standard library only). Defaults match the current rules; rule switches live in `RULES`. |
 | [`sim/test_rules.py`](sim/test_rules.py) | Rule checks for the simulator. |
-| [`sim/sim-results.md`](sim/sim-results.md) | Every simulation run (1–17) and the rules decisions it informed. |
+| [`sim/sim-results.md`](sim/sim-results.md) | Every simulation run (1–18) and the rules decisions it informed. |
 | [`playtest-log.md`](playtest-log.md) | Tabletop playtest notes (Match 1, rules v0.3 — historical). |
 | [`tests/play-match.js`](tests/play-match.js) | Playwright regression: plays a full match using only the action bar and checks for errors. |
 

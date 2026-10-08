@@ -129,7 +129,8 @@ RULES = {'counter': True, 'omen': True,
          'two_step': True,
          'clock': 'flat',  # 'escalate' = Last Call (turn−LC+1 per turn, no healing) · 'flat' = Closing Time (1 per turn from LAST_CALL_ROUND, healing allowed)
          'mend': True,         # ♥ only restores Resolve lost this turn (can't go above where you started the turn)
-         'mend_clock': False}   # with mend: ♥ can also offset the clock's 1 damage    # v0.9 candidate: Influence = Fortune (rerolls, Distract) then Tactics (abilities, Jam)   # during Last Call (turn 6+), ♥ restores nothing      # Dwarven: Grudge (+1 damage if opponent shows ♥) instead of Stubborn   # 'match' (v0.6: best of 3 rounds, active player alternates each turn, Tavern Swap between rounds) or 'single'        # Tavern Swap: once per match, from round 2, swap one loadout die for a bench die    # corrode mode: each ♥ may cancel one opposing ☣ instead of healing      # ☣ mode: 'dot' (tokens, 1 dmg/round, ♥ cleanses) or 'corrode' (each ☣ removes one opponent 🛡 this round)      # max Poison tokens on a player     # Counterattack needs at least this many opponent ⚔ blocked    # Goblin: 'old' (= Reroll, no effect) or 'dirty' (pay 1 Gold: ☠ hits opponent instead)
+         'mend_clock': False,
+         'last_orders_turn': 5}      # Barkeep's Last Orders start turn (None = same as Closing Time)   # with mend: ♥ can also offset the clock's 1 damage    # v0.9 candidate: Influence = Fortune (rerolls, Distract) then Tactics (abilities, Jam)   # during Last Call (turn 6+), ♥ restores nothing      # Dwarven: Grudge (+1 damage if opponent shows ♥) instead of Stubborn   # 'match' (v0.6: best of 3 rounds, active player alternates each turn, Tavern Swap between rounds) or 'single'        # Tavern Swap: once per match, from round 2, swap one loadout die for a bench die    # corrode mode: each ♥ may cancel one opposing ☣ instead of healing      # ☣ mode: 'dot' (tokens, 1 dmg/round, ♥ cleanses) or 'corrode' (each ☣ removes one opponent 🛡 this round)      # max Poison tokens on a player     # Counterattack needs at least this many opponent ⚔ blocked    # Goblin: 'old' (= Reroll, no effect) or 'dirty' (pay 1 Gold: ☠ hits opponent instead)
 
 
 def fs(face):
@@ -243,7 +244,7 @@ def totals(X, Y):
     y_def = sum(f.count('D') for f in Y.res) + sum(f.count('D') for _, f in Y.extra)
     for i, f in enumerate(X.res):
         a_ = ab(X, i)
-        if a_ == 'lastorders' and _RND[0] >= LAST_CALL_ROUND:
+        if a_ == 'lastorders' and _RND[0] >= (RULES['last_orders_turn'] or LAST_CALL_ROUND):
             A += f.count('G')
         if a_ == 'regrow' and 'S' in f:
             A += 2

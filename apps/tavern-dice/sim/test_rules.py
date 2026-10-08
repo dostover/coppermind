@@ -96,5 +96,5 @@ Y=mk(['Monster'],['AAA']); assert o(X,Y)['Rx']==6                               
 Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=8)['Rx']==6                       # Closing Time 1, can't be mended
 assert outcome(X,Y,detail=True,rnd=7)['Rx']==7                                               # before turn 8: no clock
 X=mk(['Sawbones'],['HH'],R=7); assert outcome(X,Y,detail=True,rnd=9)['Rx']==7                # Triage mends Closing Time
-X=mk(['Barkeep'],['GG']); Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=8)['Ry']==7 and outcome(X,Y,detail=True,rnd=7)['Ry']==10   # Last Orders from turn 8 (2⚔ + clock)
+X=mk(['Barkeep'],['GG']); Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=5)['Ry']==8 and outcome(X,Y,detail=True,rnd=4)['Ry']==10   # Last Orders from turn 5 (v0.10.1)
 print('v0.10 checks pass')

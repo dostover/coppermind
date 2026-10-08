@@ -2,6 +2,29 @@
 
 Simulator: `claude/tavern_sim.py` (all 24 abilities, all Gold abilities incl. Ward, Last Call, double-KO rules; rule switches in `RULES`). Both sides use the same greedy AI (best expected outcome for the current round; 1 Gold ≈ 0.5 Resolve; trailing players weight survival). Treat results as directional.
 
+## Run 18 — Barkeep fix + Closing Time on turn 8 vs turn 10 (2026-10-08)
+**Barkeep** (targeted: Barkeep always in loadout A + 4 random, random opponent, 600 matches, ±4%): Last Orders from turn 8 → 45.8% · from turn 5 → **49.8% (adopted, v0.10.1)** · from turn 4 → 51.2%.
+
+**Closing Time start** (v0.10.1 rules, 1,000 random Open matches + 200 per matchup, ±8% on matchups):
+
+| | Turn 8 (current) | Turn 10 |
+|---|---|---|
+| Avg round length | 6.2 turns | 6.6 |
+| 90% of rounds end by | turn 10 | turn 11 |
+| Rounds lasting 12+ turns | 6% | 10% |
+| Longest round | 17 | 19 |
+| Median match | 14 turns | 14 |
+| Rounds the clock reaches | 32% | 21% |
+| Rounds the clock decides | 16% | 11% |
+| Healers vs Strikers | 47% | 45% |
+| Healers vs Gold aggro | 66% | 66% |
+| Shields vs Strikers | 68% | 68% |
+| Tier avg (B/C/U/R) | 40/49/50/56 | 40/50/50/55 |
+
+- With Mend in place, moving the clock to turn 10 barely changes balance — healing no longer runs away when the clock is late (contrast Run 15, where Last Call at 10 pushed healers to ~66–67% vs everything).
+- Turn 10 = a bit longer rounds and the clock matters less (reaches 1 in 5 rounds, decides 1 in 9); still no stalls.
+- Raw data: `results26.json`.
+
 ## Run 17 — v0.10 confirmation: Closing Time 8 + Mend + new Triage (2026-10-07)
 1,500 random Open matches (52 dice, bench 6; ≈290 appearances per die, ±6%) + 200 games per matchup. Sawbones' Triage now = "this die's ♥ can also mend Closing Time".
 - Average round 6.2 turns (longest 17); median match 14 turns; the clock reaches 32% of rounds and decides 15% (was 52% / 23% under Last Call).
