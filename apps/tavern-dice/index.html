@@ -173,6 +173,33 @@ svg.ic{width:100%;height:100%;display:block}
 .sheet summary{cursor:pointer;font:700 .85rem var(--caps);letter-spacing:.06em}
 .result.log li{color:var(--muted)}
 .player{transition:box-shadow .2s, border-color .2s}
+.actionbar{position:sticky;bottom:12px;z-index:40;margin:16px auto 0;max-width:820px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px 10px 16px;border-radius:16px;background:rgba(20,13,8,.94);border:1px solid var(--brass-dim);box-shadow:0 10px 30px rgba(0,0,0,.55);backdrop-filter:blur(6px)}
+.ab-status{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:1px}
+.ab-step{font:700 .72rem var(--caps);letter-spacing:.1em;color:var(--brass)}
+.ab-msg{font-size:.98rem;line-height:1.3}
+.ab-msg .hint{font-size:.85rem}
+.ab-btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.ab-btns .btn{white-space:nowrap}
+.ab-btns .btn.primary{font-size:1.05rem;padding:11px 20px;min-width:150px}
+.ab-btns kbd{font:600 .66rem var(--body);opacity:.65;margin-left:6px;border:1px solid currentColor;border-radius:4px;padding:0 4px;vertical-align:1px}
+.ab-undo{padding:8px 12px;font-size:.85rem}
+@media (max-width:560px){.actionbar{bottom:8px;padding:10px}.ab-btns{width:100%}.ab-btns .btn{white-space:normal}.ab-btns .btn.primary{flex:1;min-width:0;padding:10px 12px;font-size:.98rem}.ab-btns kbd{display:none}}
+.player.has-prio,.player.must-respond{border-color:var(--ok);box-shadow:inset 0 0 0 6px rgba(0,0,0,.18),0 0 0 3px var(--ok),0 0 26px rgba(143,207,138,.45),0 10px 24px rgba(0,0,0,.35)}
+.player.must-respond{border-color:#f2a196;box-shadow:inset 0 0 0 6px rgba(0,0,0,.18),0 0 0 3px #f2a196,0 0 26px rgba(242,161,150,.45),0 10px 24px rgba(0,0,0,.35)}
+.player.waiting{filter:saturate(.75) brightness(.82)}
+.player.waiting:hover,.player.waiting:focus-within{filter:none}
+.turnres{border:1px solid var(--brass);border-radius:14px;background:linear-gradient(180deg,rgba(212,169,78,.16),rgba(0,0,0,.25));padding:12px;text-align:left;display:flex;flex-direction:column;gap:10px}
+.turnres h3{margin:0;font:700 .8rem var(--caps);letter-spacing:.12em;color:var(--brass);text-align:center}
+.tr-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tr-p{background:rgba(0,0,0,.25);border-radius:10px;padding:8px;text-align:center;min-width:0}
+.tr-name{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr-big{font:800 2rem/1.1 var(--body);font-variant-numeric:tabular-nums}
+.tr-big.neg{color:var(--danger)}.tr-big.pos{color:var(--ok)}.tr-big.zero{color:var(--muted)}
+.tr-sub{font-size:.78rem;color:var(--muted);display:flex;justify-content:center;align-items:center;gap:4px;flex-wrap:wrap}.tr-sub svg{width:13px;height:13px}
+.tr-det{font-size:.85rem;margin:0;padding-left:18px}
+.tr-det li{margin:2px 0}
+.tr-lc{font-size:.82rem;color:#f2a196;text-align:center}
+.autopass{display:flex;align-items:center;justify-content:center;gap:6px;font-size:.82rem;color:var(--muted);cursor:pointer}
 .player.is-active{border-color:var(--brass);box-shadow:inset 0 0 0 6px rgba(0,0,0,.18),0 0 0 2px var(--brass),0 10px 24px rgba(0,0,0,.35)}
 .ptags{display:flex;align-items:center;gap:6px;min-height:22px;margin-bottom:4px}
 .tag{font:700 .68rem var(--caps);letter-spacing:.1em;border-radius:4px;padding:3px 7px}
@@ -299,7 +326,8 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
       <aside class="center" id="center"></aside>
       <div class="player" id="p1"></div>
     </div>
-    <p class="hint" style="margin-top:14px">Each turn: <b>Roll</b> (active player first), <b>Influence</b> in two steps — <b>Fortune</b> (Reroll, Focus, Mulligan, Distract) then <b>Tactics</b> (abilities, Jam); in each, one action at a time, active player first, two passes end the step — <b>Resolution</b> (everything at once; active player wins ties; healing stops from turn 6). Use abilities with the <b>Use</b> buttons in each player's ability list; <b>Auto</b> abilities apply at Resolution. The <b>Gold actions</b> panel under each player's dice holds the six universal actions; the ones you can use right now light up (you can also tap a die). Actions that target the other player (Distract, Jam, Envenom, Sneaky) are declared in the center first, so they can <b>Ward</b> or <b>Allow</b>. Gold and Resolve update on their own: Gold is paid when you spend it, and 💰 rolled this turn, damage and healing are applied at Resolution — each meter shows what's coming (use <b>Adjust</b> only to fix a mistake). The <b>Showdown</b> in the middle adds up both players' dice side by side — after poison and abilities — shows how much damage each would deal, and what would happen if the turn resolved now.</p>
+    <div class="actionbar" id="bar" role="region" aria-label="Next step" aria-live="polite"></div>
+    <p class="hint" style="margin-top:14px">Each turn: <b>Roll</b> (active player first), <b>Influence</b> in two steps — <b>Fortune</b> (Reroll, Focus, Mulligan, Distract) then <b>Tactics</b> (abilities, Jam); in each, one action at a time, active player first, two passes end the step — <b>Resolution</b> (everything at once; active player wins ties; healing stops from turn 6). The bar at the bottom always shows the next step: press its big button (or <b>Space</b>) to roll, pass, allow or start the next turn. A player who can't do anything passes automatically (switch this off under the Showdown). Use abilities with the <b>Use</b> buttons in each player's ability list; <b>Auto</b> abilities apply at Resolution. The <b>Gold actions</b> panel under each player's dice holds the six universal actions; the ones you can use right now light up (you can also tap a die). Actions that target the other player (Distract, Jam, Envenom, Sneaky) are declared in the center first, so they can <b>Ward</b> or <b>Allow</b>. Gold and Resolve update on their own: Gold is paid when you spend it, and 💰 rolled this turn, damage and healing are applied at Resolution — each meter shows what's coming (use <b>Adjust</b> only to fix a mistake). The <b>Showdown</b> in the middle adds up both players' dice side by side — after poison and abilities — shows how much damage each would deal, and what would happen if the turn resolved now.</p>
   </section>
 
   <section id="view-dice" role="tabpanel" aria-labelledby="tab-dice" hidden>
@@ -696,11 +724,14 @@ function renderPlayer(k, tumble = []){
   const p = S.players[k];
   const el = $('#p' + k);
   el.classList.toggle('is-active', S.active === k);
-  el.classList.toggle('has-prio', S.phase === 'influence' && S.prio === k);
+  const inInf = S.phase === 'influence' && !S.roundWinner && !S.matchWinner;
+  el.classList.toggle('has-prio', inInf && !S.pending && S.prio === k);
+  el.classList.toggle('must-respond', inInf && !!S.pending && S.pending.target === k);
+  el.classList.toggle('waiting', inInf && (S.pending ? S.pending.target !== k : S.prio !== k));
   const swapOpen = S.round > 1 && S.turn === 1 && S.phase === 'roll' && (S.swapUsed[k] || 0) < 2 && !S.matchWinner;
   const loadoutOpen = S.round === 1 && S.turn === 1 && S.phase === 'roll';
   el.innerHTML = `
-    <div class="ptags">${S.active === k ? '<span class="tag act">ACTIVE PLAYER</span>' : ''}${S.phase === 'influence' && S.prio === k && !S.pending ? '<span class="tag prio">YOUR MOVE</span><button class="btn pass" data-act="pass">Pass</button>' : ''}${S.pending && S.pending.target === k ? '<span class="tag respond">RESPOND</span>' : ''}<span class="wins" aria-label="${S.score[k]} rounds won">${[0,1].map(j => `<i class="${j < S.score[k] ? 'on' : ''}"></i>`).join('')}</span></div>
+    <div class="ptags">${S.active === k ? '<span class="tag act">ACTIVE PLAYER</span>' : ''}${S.phase === 'influence' && S.prio === k && !S.pending ? '<span class="tag prio">YOUR MOVE</span>' : ''}${S.pending && S.pending.target === k ? '<span class="tag respond">RESPOND</span>' : ''}<span class="wins" aria-label="${S.score[k]} rounds won">${[0,1].map(j => `<i class="${j < S.score[k] ? 'on' : ''}"></i>`).join('')}</span></div>
     <div class="p-head"><input id="name${k}" value="${p.name.replace(/"/g,'&quot;')}" aria-label="Player ${k+1} name" maxlength="28"></div>
     <div class="meters${editMeters[k] ? ' editing' : ''}">
       ${meterHTML(k, 'R')}${meterHTML(k, 'G')}
@@ -762,6 +793,18 @@ function forecastHTML(){
     ${ko.length ? `<div class="fc-ko">${ko.length === 2 ? `Both drop to 0 — ${S.players[S.active].name} (active) would win the round` : `${ko[0]} would lose the round`}</div>` : ''}
     ${vol ? '<div class="hint">Volatile rolls again at Resolution — not included.</div>' : ''}</div>`;
 }
+function turnResultHTML(r){
+  const col = (x, k) => { const b = r.before ? r.before[k] : { R: x.R, G: x.G }; const after = Math.max(0, x.R), dR = after - b.R, dG = x.G - b.G;
+    return `<div class="tr-p"><div class="tr-name">${x.name}</div>
+      <div class="tr-big ${dR < 0 ? 'neg' : dR > 0 ? 'pos' : 'zero'}">${dR > 0 ? '+' : dR < 0 ? '−' : '±'}${Math.abs(dR)}</div>
+      <div class="tr-sub">${icon('H')} ${b.R} → <b>${after}</b></div>
+      <div class="tr-sub">${icon('G')} ${b.G} → <b>${x.G}</b>${dG ? ` (${dG > 0 ? '+' : '−'}${Math.abs(dG)})` : ''}</div></div>`; };
+  const det = (x, y) => `<li><b>${x.name}</b> deals ${x.dealt}${x.blocked ? ` (${x.blocked} blocked)` : ''}${x.skull ? ` · takes ${x.skull} from own ☠` : ''}${x.heal ? ` · heals ${x.heal}` : ''}</li>`;
+  return `<div class="turnres" role="status"><h3>Turn ${S.turn} result</h3>
+    <div class="tr-cols">${col(r.rows[0], 0)}${col(r.rows[1], 1)}</div>
+    ${r.lc ? `<div class="tr-lc">Last Call: both lose ${r.lc}</div>` : ''}
+    <ul class="tr-det">${det(r.rows[0], r.rows[1])}${det(r.rows[1], r.rows[0])}${r.notes.map(n => `<li>${n}</li>`).join('')}</ul></div>`;
+}
 function renderCenter(){
   const lc = Math.max(0, S.turn - 5);
   const r = S.result, A = S.players[S.active], O = S.players[1 - S.active];
@@ -769,50 +812,109 @@ function renderCenter(){
   const cur = ph === 'influence' ? S.step : ph, order = ['roll','fortune','tactics','resolution'];
   const step = (id, label) => `<li class="${cur === id ? 'now' : (order.indexOf(cur) > order.indexOf(id) ? 'done' : '')}">${label}</li>`;
   let main = '';
-  if (S.matchWinner) main = `<div class="winner">${S.matchWinner} wins the match ${Math.max(...S.score)}–${Math.min(...S.score)}</div><button class="btn primary" data-act="newmatch">New match</button>`;
-  else if (S.roundWinner) main = `<div class="winner">${S.roundWinner}</div><button class="btn primary" data-act="nextround">Start round ${S.round + 1}</button><div class="hint">The loser of this round is active first. Each player may swap up to 2 dice (Tavern Swap) before rolling.</div>`;
-  else if (ph === 'roll') main = `<p class="phase-note"><b>${A.name}</b> rolls first, then <b>${O.name}</b>.</p><button class="btn primary" data-act="roll">Roll</button>`;
+  if (S.matchWinner) main = `<div class="winner">${S.matchWinner} wins the match ${Math.max(...S.score)}–${Math.min(...S.score)}</div>`;
+  else if (S.roundWinner) main = `<div class="winner">${S.roundWinner}</div><div class="hint">The loser of this round is active first. Each player may swap up to 2 dice (Tavern Swap) before rolling.</div>`;
+  else if (ph === 'roll') main = `<p class="phase-note"><b>${A.name}</b> rolls first, then <b>${O.name}</b>.</p>`;
   else if (ph === 'influence' && S.pending) {
     const pd = S.pending, Ac = S.players[pd.actor], T = S.players[pd.target];
     main = `<div class="pending" role="alert"><div class="pd-who">${Ac.name} declares</div><div class="pd-text">${pd.text}</div><div class="pd-detail">${pd.detail} Paid ${pd.cost} Gold.</div>
-      <div class="pd-q"><b>${T.name}</b>, respond:</div>
-      <button class="btn primary" data-act="ward" ${T.G < 1 ? 'disabled' : ''}>Ward · 1 Gold${T.G < 1 ? ' (no Gold)' : ''}</button>
-      <button class="btn" data-act="allow">Allow</button></div>`;
+      <div class="pd-q"><b>${T.name}</b>, respond: <b>Ward</b> (1 Gold) or <b>Allow</b> — below.</div></div>`;
   }
   else if (ph === 'influence') {
     const P = S.players[S.prio];
     const what = S.step === 'fortune' ? 'use a <b>Gold action</b> (Reroll, Focus, Mulligan, Distract) or <b>Omen</b>' : 'use a die <b>ability</b> or <b>Jam</b> from the Gold actions';
     main = `<div class="stepbox"><div class="pd-who">${S.step === 'fortune' ? 'Step 1 · Fortune — settle the dice' : 'Step 2 · Tactics — use the dice'}</div>
-      <p class="phase-note"><b>${P.name}</b>'s move: ${what}, or press <b>Pass</b>.${S.passes ? ` <span class="hint">${S.players[1 - S.prio].name} passed — one more pass ${S.step === 'fortune' ? 'moves to Tactics' : 'ends Influence'}.</span>` : ''}</p></div>
-      ${S.step === 'fortune' ? '<button class="btn quiet" data-act="totactics">Move to Tactics</button>' : '<button class="btn quiet" data-act="toresolve">Move to Resolution</button>'}`;
-  } else if (ph === 'resolution' && !r) main = `<p class="phase-note">Everything resolves at once. If both players drop to 0, <b>${A.name}</b> (active) wins the round.</p><button class="btn primary" data-act="resolve">Resolve</button>`;
-  else if (ph === 'resolution' && r) main = `<button class="btn primary" data-act="nextturn">Next turn — ${O.name} active</button>`;
+      <p class="phase-note"><b>${P.name}</b>'s move: ${what}, or <b>Pass</b>.</p></div>`;
+  }
   $('#center').innerHTML = `
     <div class="round"><small>ROUND ${S.round} OF 3 · TURN</small>${S.turn}</div>
     <div class="score">${S.players[0].name} <b>${S.score[0]}</b> – <b>${S.score[1]}</b> ${S.players[1].name}</div>
     <ol class="steps" aria-label="Turn phases">${step('roll','Roll')}${step('fortune','Fortune')}${step('tactics','Tactics')}${step('resolution','Resolve')}</ol>
     <div class="lastcall ${lc ? '' : 'off'}">${lc ? `Last Call: both lose ${lc} this turn · no healing` : S.turn === 5 ? 'Last Call starts next turn — healing stops' : `Last Call from turn 6`}</div>
+    ${r ? turnResultHTML(r) : ''}
     ${forecastHTML()}
     ${main}
-    ${r ? `<div class="result">
-      ${r.rows.map(x => `<h3>${x.name}</h3><ul>
-        <li>Deals ${x.dealt} · ${x.blocked} blocked</li>
-        ${x.lost ? `<li>Loses ${x.lost}${x.skull ? ` (incl. ${x.skull} own ☠)` : ''}</li>` : ''}${x.heal ? `<li>Heals ${x.heal}</li>` : ''}${x.gold ? `<li>Gold ${x.gold > 0 ? '+' : ''}${x.gold}</li>` : ''}
-      </ul>`).join('')}
-      ${r.lc ? `<h3>Last Call</h3><ul><li>Both lose ${r.lc}</li></ul>` : ''}
-      ${r.notes.length ? `<h3>Abilities &amp; poison</h3><ul>${r.notes.map(n => `<li>${n}</li>`).join('')}</ul>` : ''}
-    </div>` : ''}
     ${S.log.length ? `<div class="result log"><h3>This turn</h3><ul>${S.log.map(l => `<li>${l}</li>`).join('')}</ul></div>` : ''}
-    <button class="btn" data-act="undo" ${hist.length ? '' : 'disabled'}>Undo last action</button>
+    <label class="autopass"><input type="checkbox" data-act="autopass" ${autoPass ? 'checked' : ''}> Auto-pass when a player can't act</label>
     ${S.matchWinner ? '' : '<button class="btn quiet" data-act="newmatch">New match</button>'}`;
 }
 let lastFaces = {}, flashSet = new Set();
+/* ---------- turn flow ---------- */
+let autoPass = store.get('td-autopass') !== false;
+function canAct(k){
+  if (S.phase !== 'influence' || S.pending) return true;
+  const p = S.players[k];
+  const gold = GOLD.filter(g => g.id !== 'ward' && g.step === S.step).some(g => goldState(k, g).ok);
+  if (gold) return true;
+  return p.dice.some((d, i) => { if (p.jam[i]) return false; const a = ab(p, i); if (!a || PASSIVE.includes(a)) return false;
+    if (stepOf(a) !== S.step) return false; const x = abilityAction(k, i); return !!(x && x.ok); });
+}
+function doPass(auto = false){
+  S.passes++; S.log.unshift(`${S.players[S.prio].name} passes${auto ? ' — nothing to do' : ''}`); S.prio = 1 - S.prio;
+  if (S.passes >= 2) {
+    if (S.step === 'fortune') { S.step = 'tactics'; S.prio = S.active; S.passes = 0; S.log.unshift('— Tactics step —'); }
+    else { S.phase = 'resolution'; S.prio = null; }
+  }
+}
+function doResolve(){
+  const r = resolveRound(); r.before = S.players.map(p => ({ R: p.R, G: p.G })); S.result = r;
+  S.players.forEach((p, k) => { p.R = r.rows[k].R; p.G = r.rows[k].G; });
+  const [a, c] = S.players;
+  if (a.R <= 0 || c.R <= 0) {
+    const w = (a.R <= 0 && c.R <= 0) ? S.active : (a.R > 0 ? 0 : 1);
+    S.score[w]++; S.lastLoser = 1 - w;
+    const why = (a.R <= 0 && c.R <= 0) ? ' (both at 0 — active player wins)' : '';
+    if (S.score[w] >= 2) S.matchWinner = S.players[w].name;
+    else S.roundWinner = `${S.players[w].name} wins round ${S.round}${why}`;
+  }
+}
+function autoAdvance(){
+  let guard = 0;
+  while (autoPass && S.phase === 'influence' && !S.pending && !S.roundWinner && !S.matchWinner && !canAct(S.prio) && guard++ < 6) doPass(true);
+  if (S.phase === 'resolution' && !S.result && !S.roundWinner && !S.matchWinner) doResolve();
+}
+function doRoll(){
+  const a = S.active;
+  S.players.forEach(p => { p.res = p.dice.map(roll); p.base = p.res.slice(); p.extra = []; p.surge = []; p.sneak = []; });
+  S.phase = 'influence'; S.step = 'fortune'; S.prio = a; S.passes = 0;
+  S.log.unshift(`${S.players[a].name} rolled first (active), then ${S.players[1-a].name}`);
+  const all = [0,1,2,3,4];
+  render(a === 0 ? all : [], a === 1 ? all : []);
+  setTimeout(() => { const el = document.querySelectorAll(`#p${1-a} .tray .die`); el.forEach(d => { d.classList.remove('tumble'); void d.offsetWidth; d.classList.add('tumble'); }); }, 380);
+}
+function nextTurnState(){ S.pending = null; S.turn++; S.active = 1 - S.active; S.phase = 'roll'; S.prio = null; S.passes = 0; S.result = null; S.log = []; S.players.forEach(p => freshRound(p)); }
+function resultLine(r){
+  return r.rows.map((x, k) => { const b = r.before ? r.before[k] : null; const dR = b ? Math.max(0, x.R) - b.R : 0; return `${x.name} ${dR > 0 ? '+' : dR < 0 ? '−' : '±'}${Math.abs(dR)}`; }).join(' · ');
+}
+function renderBar(){
+  const A = S.players[S.active], O = S.players[1 - S.active], r = S.result;
+  let step = '', msg = '', btns = '';
+  const kbd = '<kbd>Space</kbd>';
+  if (S.matchWinner) { step = 'Match over'; msg = `<b>${S.matchWinner}</b> wins ${Math.max(...S.score)}–${Math.min(...S.score)}`; btns = `<button class="btn primary" data-act="newmatch" data-primary>New match${kbd}</button>`; }
+  else if (S.roundWinner) { step = `Round ${S.round} over`; msg = `<b>${S.roundWinner}</b>${r ? ` <span class="hint">(${resultLine(r)})</span>` : ''}`; btns = `<button class="btn primary" data-act="nextround" data-primary>Start round ${S.round + 1}${kbd}</button>`; }
+  else if (S.phase === 'roll') { step = `Round ${S.round} · Turn ${S.turn} · Roll`; msg = `<b>${A.name}</b> is active and rolls first.${S.turn === 1 ? ' <span class="hint">Change loadouts or Tavern Swap before rolling.</span>' : ''}`; btns = `<button class="btn primary" data-act="roll" data-primary>Roll${kbd}</button>`; }
+  else if (S.phase === 'influence' && S.pending) {
+    const pd = S.pending, T = S.players[pd.target];
+    step = `${STEPNAME[S.step]} · Respond`; msg = `<b>${S.players[pd.actor].name}</b> declares ${pd.text}. <b>${T.name}</b>, Ward or allow?`;
+    btns = `<button class="btn" data-act="ward" ${T.G < 1 ? 'disabled' : ''}>Ward · 1 Gold</button><button class="btn primary" data-act="allow" data-primary>Allow${kbd}</button>`;
+  }
+  else if (S.phase === 'influence') {
+    const P = S.players[S.prio], other = S.players[1 - S.prio];
+    step = S.step === 'fortune' ? 'Step 1 · Fortune' : 'Step 2 · Tactics';
+    msg = `<b>${P.name}</b>'s move — ${S.step === 'fortune' ? 'Gold actions or Omen' : 'die abilities or Jam'}, or pass.${S.passes ? ` <span class="hint">${other.name} passed: passing now ${S.step === 'fortune' ? 'moves to Tactics' : 'resolves the turn'}.</span>` : ''}`;
+    btns = `<button class="btn primary" data-act="pass" data-primary>${P.name}: Pass${kbd}</button>`;
+  }
+  else if (S.phase === 'resolution' && r) { step = `Turn ${S.turn} resolved`; msg = resultLine(r); btns = `<button class="btn primary" data-act="nextroll" data-primary>Roll next turn — ${O.name} active${kbd}</button>`; }
+  $('#bar').innerHTML = `<div class="ab-status"><span class="ab-step">${step}</span><span class="ab-msg">${msg}</span></div>
+    <div class="ab-btns">${btns}<button class="btn ab-undo" data-act="undo" ${hist.length ? '' : 'disabled'} title="Undo last action">Undo</button></div>`;
+}
 function render(t0 = [], t1 = []){
+  autoAdvance();
   flashSet = new Set();
   S.players.forEach((p, k) => p.res.forEach((f, i) => { const key = k + ':' + i; if (key in lastFaces && lastFaces[key] !== f && S.phase !== 'roll') flashSet.add(key); }));
   lastFaces = {}; S.players.forEach((p, k) => p.res.forEach((f, i) => lastFaces[k + ':' + i] = f));
   FC = (!S.result && !S.roundWinner && !S.matchWinner && (S.phase === 'influence' || S.phase === 'resolution')) ? resolveRound(true) : null;
-  hideTip(); renderPlayer(0, t0); renderPlayer(1, t1); renderCenter();
+  hideTip(); renderPlayer(0, t0); renderPlayer(1, t1); renderCenter(); renderBar();
   S.players.forEach((p, k) => ['R','G'].forEach(m => { const key = k + m, v = p[m];
     if (key in lastVals && lastVals[key] !== v) { const el = document.querySelector(`#p${k} .meter[data-m="${m}"] .val`); if (el) { el.classList.remove('bump','up','down'); void el.offsetWidth; el.classList.add('bump', v > lastVals[key] ? 'up' : 'down'); } }
     lastVals[key] = v; })); }
@@ -1113,49 +1215,22 @@ document.addEventListener('click', e => {
   if (b.dataset.f !== undefined) { filter = b.dataset.f || null; if (!b.dataset.f) rfilter = null; return renderDice(); }
   if (b.dataset.k) { const p = S.players[+b.dataset.k], m = b.dataset.m; snap(`Manual: ${p.name} ${m[0] === 'R' ? 'Resolve' : 'Gold'} ${m[1] === '+' ? '+1' : '−1'}`); if (m==='R-') p.R--; if (m==='R+') p.R = Math.min(MAXR, p.R+1); if (m==='G-') p.G = Math.max(0,p.G-1); if (m==='G+') p.G++; return render(); }
   const [act, x, y] = b.dataset.act.split(':');
+  if (act === 'autopass') { autoPass = b.checked; store.set('td-autopass', autoPass); return render(); }
   if (act === 'ward') return respond(true);
   if (act === 'gold') { if (y === 'ward' || !S.pending) goldAction(+x, y); return; }
   if (act === 'allow') return respond(false);
   if (S.pending && act !== 'undo') return;
   if (act === 'die') return dieMenu(+x, +y);
   if (act === 'mulligan') return doMulligan(+x);
-  if (act === 'roll') {
-    snap(); const a = S.active;
-    S.players.forEach(p => { p.res = p.dice.map(roll); p.base = p.res.slice(); p.extra = []; p.surge = []; p.sneak = []; });
-    S.phase = 'influence'; S.step = 'fortune'; S.prio = a; S.passes = 0;
-    S.log.unshift(`${S.players[a].name} rolled first (active), then ${S.players[1-a].name}`);
-    const all = [0,1,2,3,4];
-    render(a === 0 ? all : [], a === 1 ? all : []);
-    setTimeout(() => { const el = document.querySelectorAll(`#p${1-a} .tray .die`); el.forEach(d => { d.classList.remove('tumble'); void d.offsetWidth; d.classList.add('tumble'); }); }, 380);
-    return;
-  }
-  if (act === 'pass') { snap(); S.passes++; S.log.unshift(`${S.players[S.prio].name} passes`); S.prio = 1 - S.prio;
-    if (S.passes >= 2) {
-      if (S.step === 'fortune') { S.step = 'tactics'; S.prio = S.active; S.passes = 0; S.log.unshift('— Tactics step —'); }
-      else { S.phase = 'resolution'; S.prio = null; }
-    }
-    return render(); }
+  if (act === 'roll') { if (S.phase !== 'roll' || S.roundWinner || S.matchWinner) return; snap(); return doRoll(); }
+  if (act === 'pass') { if (S.phase !== 'influence' || S.pending) return; snap(); doPass(); return render(); }
+  if (act === 'nextroll') { snap(); nextTurnState(); return doRoll(); }
   if (act === 'adjust') { editMeters[+x] = !editMeters[+x]; return render(); }
-  if (act === 'totactics') { snap(); S.step = 'tactics'; S.prio = S.active; S.passes = 0; S.log.unshift('— Tactics step —'); return render(); }
-  if (act === 'toresolve') { snap(); S.pending = null; S.phase = 'resolution'; S.prio = null; return render(); }
   if (act === 'loadout') return loadoutPicker(+x);
   if (act === 'swap') return loadoutPicker(+x, true);
-  if (act === 'resolve') {
-    snap();
-    const r = resolveRound(); S.result = r;
-    S.players.forEach((p, k) => { p.R = r.rows[k].R; p.G = r.rows[k].G; });
-    const [a, c] = S.players;
-    if (a.R <= 0 || c.R <= 0) {
-      const w = (a.R <= 0 && c.R <= 0) ? S.active : (a.R > 0 ? 0 : 1);
-      S.score[w]++; S.lastLoser = 1 - w;
-      const why = (a.R <= 0 && c.R <= 0) ? ' (both at 0 — active player wins)' : '';
-      if (S.score[w] >= 2) S.matchWinner = S.players[w].name;
-      else S.roundWinner = `${S.players[w].name} wins round ${S.round}${why}`;
-    }
-    return render();
-  }
+  if (act === 'resolve') { if (S.phase === 'resolution' && !S.result) { snap(); doResolve(); } return render(); }
   if (act === 'undo' && hist.length) { S = JSON.parse(hist.pop()); return render(); }
-  if (act === 'nextturn') { snap(); S.pending = null; S.turn++; S.active = 1 - S.active; S.phase = 'roll'; S.prio = null; S.passes = 0; S.result = null; S.log = []; S.players.forEach(p => freshRound(p)); return render(); }
+  if (act === 'nextturn') { snap(); nextTurnState(); return render(); }
   if (act === 'nextround') { snap(); S.pending = null; S.round++; S.turn = 1; S.active = S.lastLoser; S.phase = 'roll'; S.prio = null; S.passes = 0; S.result = null; S.roundWinner = null; S.log = []; S.swapUsed = [false, false];
     S.players.forEach(p => { p.R = MAXR; p.G = 0; p.rel = []; freshRound(p); }); return render(); }
   if (act === 'newmatch') { snap(); S.pending = null; S.players = S.players.map(p => mkPlayer(p.name, p.dice)); Object.assign(S, { round: 1, turn: 1, score: [0,0], active: rnd(2), phase: 'roll', prio: null, passes: 0, result: null, roundWinner: null, matchWinner: null, swapUsed: [false,false], log: [] }); return render(); }
@@ -1201,6 +1276,13 @@ document.addEventListener('click', e => {
   if (tipPinned) hideTip();
 }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
+// Space / Enter on the page presses the action bar's main button
+document.addEventListener('keydown', e => {
+  if ((e.key !== ' ' && e.key !== 'Enter') || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!ov.hidden || e.target.closest('input,textarea,select,button,a,[contenteditable]') || $('#view-table').hidden) return;
+  const b = document.querySelector('#bar [data-primary]:not([disabled])'); if (!b) return;
+  e.preventDefault(); b.click();
+});
 window.addEventListener('scroll', () => { if (!tip.hidden) hideTip(); }, { passive: true });
 window.addEventListener('resize', hideTip);
 
