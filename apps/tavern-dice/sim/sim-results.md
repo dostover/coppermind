@@ -2,7 +2,7 @@
 
 Simulator: `claude/tavern_sim.py` (all 24 abilities, all Gold abilities incl. Ward, Last Call, double-KO rules; rule switches in `RULES`). Both sides use the same greedy AI (best expected outcome for the current round; 1 Gold ≈ 0.5 Resolve; trailing players weight survival). Treat results as directional.
 
-## Run 18 — Barkeep fix + Closing Time on turn 8 vs turn 10 (2026-10-08)
+## Run 18 — Barkeep fix + Closing Time on turn 8 vs turn 10 (2026-10-08) → turn 10 adopted as v0.10.2
 **Barkeep** (targeted: Barkeep always in loadout A + 4 random, random opponent, 600 matches, ±4%): Last Orders from turn 8 → 45.8% · from turn 5 → **49.8% (adopted, v0.10.1)** · from turn 4 → 51.2%.
 
 **Closing Time start** (v0.10.1 rules, 1,000 random Open matches + 200 per matchup, ±8% on matchups):

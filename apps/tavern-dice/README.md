@@ -1,6 +1,6 @@
 # Tavern Dice
 
-A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice from a 52-die collection, rolls them, then spends Gold and uses dice abilities to bend the result before everything resolves at once. Matches are best of 3 rounds. Current rules: **v0.10.1**.
+A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice from a 52-die collection, rolls them, then spends Gold and uses dice abilities to bend the result before everything resolves at once. Matches are best of 3 rounds. Current rules: **v0.10.2**.
 
 **The dice create the possibilities. Gold creates the decisions. The opponent creates the uncertainty.**
 
@@ -19,7 +19,7 @@ A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice fr
 52 dice: 5 Basic, 23 Common, 14 Uncommon, 10 Rare. Expansion 3 "Tavern Regulars" (v0.9.1) added 12 Commons with simple automatic abilities.
 
 ## How a turn works
-**Roll** (active player first) → **Influence** in two steps — **Fortune** (Reroll, Focus, Mulligan, Distract) then **Tactics** (dice abilities, Jam), alternating one action at a time, two passes end a step; Ward answers targeted actions in either step → **Resolution** (everything at once; the active player wins double KOs). Gold rolled this turn is banked at Resolution. **♥ Mend:** each ♥ restores 1 Resolve lost this turn, never above where you started it. **Closing Time:** from turn 8 both players lose 1 Resolve each turn, and ♥ can't mend it.
+**Roll** (active player first) → **Influence** in two steps — **Fortune** (Reroll, Focus, Mulligan, Distract) then **Tactics** (dice abilities, Jam), alternating one action at a time, two passes end a step; Ward answers targeted actions in either step → **Resolution** (everything at once; the active player wins double KOs). Gold rolled this turn is banked at Resolution. **♥ Mend:** each ♥ restores 1 Resolve lost this turn, never above where you started it. **Closing Time:** from turn 10 both players lose 1 Resolve each turn, and ♥ can't mend it.
 
 ## The table app
 - An **action bar** pinned to the bottom always shows the next step with one big button (Space presses it): Roll, Pass, Allow, Roll next turn. Players who can't act pass automatically (toggle under the Showdown); when both have passed in Tactics the turn resolves on its own.

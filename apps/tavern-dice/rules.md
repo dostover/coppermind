@@ -1,8 +1,9 @@
-# Tavern Dice — Working Rules (Prototype v0.10.1)
+# Tavern Dice — Working Rules (Prototype v0.10.2)
 
 PvP collectible-dice game played inside a D&D campaign. Inspired by Dice Hunter: Dicemancer Quest, minus the monster battles. **The dice create the possibilities. Gold creates the decisions. The opponent creates the uncertainty. The tavern creates the atmosphere.**
 
 ## Changelog
+- **v0.10.2 (2026-10-08, designer-approved):** Closing Time now starts on **turn 10** (was 8). With Mend in place this keeps balance unchanged: rounds average 6.6 turns, the clock reaches about 1 round in 5 and decides about 1 in 9. (Sim Run 18.)
 - **v0.10.1 (2026-10-08, designer-requested):** Barkeep's Last Orders now starts on turn 5 (no longer tied to Closing Time). Barkeep 46% → 50%. (Sim Run 18.)
 - **v0.10 (2026-10-07, designer-approved):** Healing and the round clock reworked so the dice, not the clock, decide rounds. **Last Call → Closing Time:** from turn 8, each player loses a flat 1 Resolve per turn (no escalation, no "no healing" rule). **♥ → Mend:** each ♥ restores 1 Resolve lost this turn, never above where you started the turn; Closing Time's damage can't be mended. Dice updated: Sawbones' Triage now mends Closing Time; Barkeep's Last Orders triggers from turn 8; Cook and Guardian text updated. (Sim Run 16: rounds 5.5 → 6.2 turns, the clock decides 14% of rounds instead of 23%, no stalls, tier balance unchanged.)
 - **v0.9.1 (2026-10-07, designer-requested):** Expansion 3 "Tavern Regulars" — twelve Common dice, each with one simple automatic ability (Bouncer, Cook, Minstrel, Brewer, Drunkard, Watchman, Smith, Cardsharp, Ratcatcher, Fisher, Militia, Herbalist). Collection is now 52 dice (5 Basic, 23 Common, 14 Uncommon, 10 Rare). Seven were trimmed or boosted by one face after the first sim pass. (Sim Run 14.)
@@ -51,7 +52,7 @@ PvP collectible-dice game played inside a D&D campaign. Inspired by Dice Hunter:
    - ☠ — each deals 1 damage to you.
    - 💰 — each gains you 1 Gold.
    - ♥ — **Mend:** each ♥ restores 1 Resolve you lost this turn (from ⚔, ⚡, ☠, counterattacks, poison leftovers — anything except Closing Time). It never takes you above the Resolve you started the turn with; a ♥ with nothing to mend does nothing.
-   - **Closing Time:** from turn 8 of a round onward, at the end of Resolution both players lose **1 Resolve** (every turn, it doesn't grow). Unblockable; ignores all reductions (Stand Fast, Divine Protection, etc.); can't be mended by ♥ (Sawbones' Triage is the exception); does not trigger Bloodlust.
+   - **Closing Time:** from turn 10 of a round onward, at the end of Resolution both players lose **1 Resolve** (every turn, it doesn't grow). Unblockable; ignores all reductions (Stand Fast, Divine Protection, etc.); can't be mended by ♥ (Sawbones' Triage is the exception); does not trigger Bloodlust.
    - **Round end:** a player at 0 or below loses the round. If **both** players are at 0 or below, **the active player wins the round**.
 
 ## Faces
@@ -187,6 +188,7 @@ Track each player's 5 dice, Resolve, Gold, current results, temporary effects, u
 Rules are a prototype. Treat designer proposals as intentional; identify affected mechanics; flag balance/rules problems; update working rules on approval; never silently revert. Prefer small, testable changes.
 
 ## Open questions / watch list
+- **v0.10.2 (Run 18):** Closing Time moved to turn 10 — rounds avg 6.6 turns, 10% run 12+ turns (longest 19); clock decides 11% of rounds. Playtest whether rounds feel too long.
 - **v0.10 (Runs 16–17):** Closing Time 8 + Mend. Rounds avg 6.2 turns, clock decides 15% of rounds; tiers 43/50/50/54%. Watch: healing vs Gold-aggro loadouts 63–71% (was 57%); Barkeep fixed in v0.10.1 (Last Orders from turn 5, 50%); Druid 64%, Paladin 61%, Bard 61%, Assassin 60%, Elemental 60% run hot; the shield-wall loadout (Soldier/Guardian/Knight/Cleric/Paladin) loses almost every defensive mirror because it barely deals damage; new Triage tested fine (Sawbones 50%). Playtest whether a ♥ that "does nothing" on a quiet turn feels bad.
 - **v0.9.1 sim (Run 14, 52 dice):** Expansion 3 tuned into the Common range (47–52%). With the bigger pool, Druid (63%), Paladin (57%), Assassin (56%) and Bard (58%) run hot, and Basic averages 42%. Minstrel and Fisher sit at the top of Common (52%) — watch. Two anti-poison Commons (Watchman, Herbalist) — watch whether ☣ still answers shield walls.
 - **v0.9 sim (Run 13):** two-step Influence ≈ balance-neutral (dice 41–60%, median 11 turns/match). Gold-hungry attack dice lost ground (Mage 48%→42%, Gambler −6 pts); defensive dice gained a little. Distract use fell from 4.8 to 1.7 per match. Watch Mage. Sim result depends on players saving Gold for Tactics.

@@ -102,7 +102,7 @@ MIMIC_PRIORITY = ['wildshape', 'counter', 'standfast', 'hoard', 'omen', 'transmu
 SYM = {'A': '⚔', 'D': '🛡', 'G': '💰', 'H': '♥', 'S': '☠', 'P': '☣', 'L': '⚡'}
 
 START_RESOLVE = 10
-LAST_CALL_ROUND = 8          # v0.10: Closing Time starts on turn 8 (was Last Call on turn 6)
+LAST_CALL_ROUND = 10         # v0.10.2: Closing Time starts on turn 10 (v0.10: 8; Last Call was turn 6)
 GOLD_VALUE = 0.5          # AI: how many Resolve one Gold is worth
 MIN_GAIN = 0.05           # AI: ignore actions that gain less than this
 MAX_ROUNDS = 40

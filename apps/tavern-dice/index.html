@@ -312,7 +312,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
   <header class="top">
     <div>
       <h1>Tavern Dice</h1>
-      <div class="ver">Rules v0.10.1 · best of 3 · 52 dice</div>
+      <div class="ver">Rules v0.10.2 · best of 3 · 52 dice</div>
     </div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" id="tab-table" aria-selected="true" aria-controls="view-table">Table</button>
@@ -327,7 +327,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
       <div class="player" id="p1"></div>
     </div>
     <div class="actionbar" id="bar" role="region" aria-label="Next step" aria-live="polite"></div>
-    <p class="hint" style="margin-top:14px">Each turn: <b>Roll</b> (active player first), <b>Influence</b> in two steps — <b>Fortune</b> (Reroll, Focus, Mulligan, Distract) then <b>Tactics</b> (abilities, Jam); in each, one action at a time, active player first, two passes end the step — <b>Resolution</b> (everything at once; active player wins ties). <b>♥ Mend:</b> each ♥ restores 1 Resolve lost this turn — never above where you started the turn. <b>Closing Time:</b> from turn 8 both players lose 1 Resolve each turn; ♥ can't mend it. The bar at the bottom always shows the next step: press its big button (or <b>Space</b>) to roll, pass, allow or start the next turn. A player who can't do anything passes automatically (switch this off under the Showdown). Use abilities with the <b>Use</b> buttons in each player's ability list; <b>Auto</b> abilities apply at Resolution. The <b>Gold actions</b> panel under each player's dice holds the six universal actions; the ones you can use right now light up (you can also tap a die). Actions that target the other player (Distract, Jam, Envenom, Sneaky) are declared in the center first, so they can <b>Ward</b> or <b>Allow</b>. Gold and Resolve update on their own: Gold is paid when you spend it, and 💰 rolled this turn, damage and healing are applied at Resolution — each meter shows what's coming (use <b>Adjust</b> only to fix a mistake). The <b>Showdown</b> in the middle adds up both players' dice side by side — after poison and abilities — shows how much damage each would deal, and what would happen if the turn resolved now.</p>
+    <p class="hint" style="margin-top:14px">Each turn: <b>Roll</b> (active player first), <b>Influence</b> in two steps — <b>Fortune</b> (Reroll, Focus, Mulligan, Distract) then <b>Tactics</b> (abilities, Jam); in each, one action at a time, active player first, two passes end the step — <b>Resolution</b> (everything at once; active player wins ties). <b>♥ Mend:</b> each ♥ restores 1 Resolve lost this turn — never above where you started the turn. <b>Closing Time:</b> from turn 10 both players lose 1 Resolve each turn; ♥ can't mend it. The bar at the bottom always shows the next step: press its big button (or <b>Space</b>) to roll, pass, allow or start the next turn. A player who can't do anything passes automatically (switch this off under the Showdown). Use abilities with the <b>Use</b> buttons in each player's ability list; <b>Auto</b> abilities apply at Resolution. The <b>Gold actions</b> panel under each player's dice holds the six universal actions; the ones you can use right now light up (you can also tap a die). Actions that target the other player (Distract, Jam, Envenom, Sneaky) are declared in the center first, so they can <b>Ward</b> or <b>Allow</b>. Gold and Resolve update on their own: Gold is paid when you spend it, and 💰 rolled this turn, damage and healing are applied at Resolution — each meter shows what's coming (use <b>Adjust</b> only to fix a mistake). The <b>Showdown</b> in the middle adds up both players' dice side by side — after poison and abilities — shows how much damage each would deal, and what would happen if the turn resolved now.</p>
   </section>
 
   <section id="view-dice" role="tabpanel" aria-labelledby="tab-dice" hidden>
@@ -408,7 +408,7 @@ Object.entries({ Basic: ['Basic','Brawler','Shieldbearer','Peddler','Pilgrim'], 
    Rare: ['Druid','Bard','Fey','Mimic','Warlock','Elemental','Tempest','Plaguebringer','Puppeteer','Hydra'] }).forEach(([t, ds]) => ds.forEach(d => RARITY[d] = t));
 const TIERS = ['Basic','Common','Uncommon','Rare'];
 const MAXR = 10;
-const CLOSING = 8;   // v0.10: Closing Time — from this turn each player loses 1 Resolve per turn
+const CLOSING = 10;  // v0.10.2 (was 8): Closing Time — from this turn each player loses 1 Resolve per turn
 
 const icon = s => `<svg class="ic" aria-hidden="true"><use href="#i-${s}"/></svg>`;
 const faceLabel = f => f ? f.split('').map(c => SYMNAME[c]).join(' + ') : 'blank';

@@ -89,12 +89,12 @@ print('Expansion 3 checks pass')
 
 # --- v0.10: Closing Time + Mend
 import tavern_sim as _T
-assert RULES['clock']=='flat' and RULES['mend'] and not RULES['mend_clock'] and _T.LAST_CALL_ROUND==8
+assert RULES['clock']=='flat' and RULES['mend'] and not RULES['mend_clock'] and _T.LAST_CALL_ROUND==10
 X=mk(['Cleric'],['HH'],R=7); Y=mk(['Oracle'],['G']); assert o(X,Y)['Rx']==7                 # no damage → ♥ restores nothing
 Y=mk(['Monster'],['AA']); assert o(X,Y)['Rx']==7                                             # 2 dmg mended
 Y=mk(['Monster'],['AAA']); assert o(X,Y)['Rx']==6                                            # 3 dmg, 2 mended
-Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=8)['Rx']==6                       # Closing Time 1, can't be mended
-assert outcome(X,Y,detail=True,rnd=7)['Rx']==7                                               # before turn 8: no clock
-X=mk(['Sawbones'],['HH'],R=7); assert outcome(X,Y,detail=True,rnd=9)['Rx']==7                # Triage mends Closing Time
+Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=10)['Rx']==6                       # Closing Time 1, can't be mended
+assert outcome(X,Y,detail=True,rnd=9)['Rx']==7                                               # before turn 10: no clock
+X=mk(['Sawbones'],['HH'],R=7); assert outcome(X,Y,detail=True,rnd=11)['Rx']==7               # Triage mends Closing Time
 X=mk(['Barkeep'],['GG']); Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=5)['Ry']==8 and outcome(X,Y,detail=True,rnd=4)['Ry']==10   # Last Orders from turn 5 (v0.10.1)
 print('v0.10 checks pass')
