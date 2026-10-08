@@ -2,6 +2,60 @@
 
 Simulator: `claude/tavern_sim.py` (all 24 abilities, all Gold abilities incl. Ward, Last Call, double-KO rules; rule switches in `RULES`). Both sides use the same greedy AI (best expected outcome for the current round; 1 Gold ≈ 0.5 Resolve; trailing players weight survival). Treat results as directional.
 
+## Run 17 — v0.10 confirmation: Closing Time 8 + Mend + new Triage (2026-10-07)
+1,500 random Open matches (52 dice, bench 6; ≈290 appearances per die, ±6%) + 200 games per matchup. Sawbones' Triage now = "this die's ♥ can also mend Closing Time".
+- Average round 6.2 turns (longest 17); median match 14 turns; the clock reaches 32% of rounds and decides 15% (was 52% / 23% under Last Call).
+- Matchups: Shields vs Strikers 78%, Healers vs Strikers 50%, Healers vs Gold aggro 63% (Run 16 said 71%; within noise — still a mild watch).
+- Tier averages: Basic 43%, Common 50%, Uncommon 50%, Rare 54% — on target.
+- Sawbones 50% with the new Triage (fine). Barkeep 42% — Last Orders now starts on turn 8, so it fires less; candidate for a buff.
+- Hot (pre-existing, not changed): Druid 64%, Paladin 61%, Bard 61%, Assassin 60%, Elemental 60%. Low: Mimic 42%, Mage 43%, Taxman 43%.
+- Raw data: `results25.json`.
+
+## Run 16 — rethinking healing and the clock (2026-10-07) → option E adopted as v0.10
+Designer feedback: Last Call at turn 6 decides too many rounds; wants a gentle "lose 1 per turn after a while". Tested five setups (v0.9.1 rules otherwise, 52 dice): 600 random Open matches each (bench 6) + 150 games per themed matchup (±8%).
+- **Closing Time** = flat 1 Resolve per turn from turn N, healing still allowed (replaces escalating Last Call + no-heal).
+- **Mend** = each ♥ only restores Resolve lost this turn (can't go above where you started the turn). Sawbones' ♥ may heal 1 above (stand-in for a new Triage).
+
+| | A: now (Last Call 6) | B: Closing Time 8 | C: CT 8 + Mend | D: CT 9 + Mend | **E: CT 8 + Mend, clock can't be mended** |
+|---|---|---|---|---|---|
+| Avg round length | 5.5 turns | 6.9 | 6.5 | 6.6 | **6.2** |
+| Longest round | 9 | 40 (stalls) | 40 (stalls) | 40 (stalls) | **17** |
+| Rounds the clock reaches | 52% | 35% | 31% | 25% | **32%** |
+| Rounds the clock decides* | 23% | 15% | 13% | 11% | **14%** |
+| Healers vs Strikers | 48% | 68% | 54% | 58% | **47%** |
+| Healers vs Gold aggro | 57% | 80% | 71% | 69% | **71%** |
+| Shields vs Strikers | 69% | 72% | 68% | 68% | **69%** |
+| Tier avg (B/C/U/R) | 39/49/49/58 | 39/49/50/57 | 37/50/50/56 | 37/50/51/56 | **38/49/51/56** |
+
+\*Loser would have survived that final turn without the clock's damage.
+- **B** (just flattening the clock) brings back stalls: healing out-paces 1 damage a turn and rounds can run to the 40-turn cap. Healers dominate.
+- **C/D**: Mend helps, but if ♥ can cancel the clock's 1 damage, heal-heavy mirrors still stall.
+- **E** works: rounds a bit longer, no stalls (max 17), the clock decides 14% of rounds instead of 23%, tier balance unchanged, healers about even with attack loadouts. Healers vs Gold aggro rises (57%→71%, ±8%) — watch.
+- Defensive mirror (Shields vs Healers) is ~1–13% in every setup — the shield wall has almost no damage; separate issue. Sawbones' stand-in "heal 1 above" acts as regen in slow mirrors; a different Triage is likely better.
+- Raw data: `results24.json`.
+
+## Run 15 — Last Call start: turn 6 vs 8 vs 10 (2026-10-07) → exploratory, not adopted
+v0.9.1 rules, 52 dice. Per setting: 1,000 random Open matches (bench 6) + 200 games for each of five themed matchups. Per-die rates at this size are ±7%, so only big or aggregate shifts are meaningful.
+
+| | Turn 6 (current) | Turn 8 | Turn 10 |
+|---|---|---|---|
+| Median match length | 13 turns | 14 | 15 |
+| Average round length | 5.5 turns | 6.2 | 6.7 |
+| Rounds that reach Last Call | 54% | 37% | 27% |
+| Rounds lasting 10+ turns | 0% | 13% | 27% (longest 13) |
+| Healers vs Strikers | 48% | 60% | 66% |
+| Healers vs Gold aggro | 51% | 60% | 67% |
+| Shield wall vs Strikers | 80% | 80% | 80% |
+| Gold actions per match (Reroll+Focus+Mulligan+Distract) | 11.8 | — | 15.6 |
+| Tier averages (B / C / U / R) | 43 / 49 / 50 / 56% | 43 / 49 / 50 / 56% | 44 / 49 / 52 / 55% |
+
+Lineups: Healers = Cleric, Sawbones, Pilgrim, Cook, Druid · Strikers = Archer, Assassin, Mage, Elemental, Monster · Gold aggro = Gambler, Dragon, Mage, Assassin, Berserker · Shield wall = Soldier, Guardian, Knight, Cleric, Paladin.
+- The main effect is healing: "no healing from turn 6" is what keeps heal-heavy loadouts in check. Pushed to turn 10, healing loadouts go from even to ~2:1 favourites.
+- Tier balance barely moves; rounds get ~20% longer and more Gold gets spent.
+- Side finding: the Soldier/Guardian/Knight/Cleric/Paladin shield wall wins ~80% against Strikers at every setting — worth a look on its own.
+- Idea not yet tested: split Last Call — keep "no healing" at turn 6, start the Resolve drain later.
+- Raw data: `results23.json`.
+
 ## Run 14 — Expansion 3 "Tavern Regulars": 12 Common dice (2026-10-07) → v0.9.1
 Target: Common 45–50% (Open format). **First pass:** 3,000 random Open matches with all 52 dice (v0.9 rules, bench 6; ~575 appearances per die, margin ≈ ±4%; median 13 turns). **Tuning:** each miss got a one-face change, then a targeted retest (test die always in loadout A plus 4 random, random opponent, 600 matches, seats alternated).
 

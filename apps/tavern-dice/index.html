@@ -312,7 +312,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
   <header class="top">
     <div>
       <h1>Tavern Dice</h1>
-      <div class="ver">Rules v0.9.1 · best of 3 · 52 dice</div>
+      <div class="ver">Rules v0.10 · best of 3 · 52 dice</div>
     </div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" id="tab-table" aria-selected="true" aria-controls="view-table">Table</button>
@@ -327,7 +327,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
       <div class="player" id="p1"></div>
     </div>
     <div class="actionbar" id="bar" role="region" aria-label="Next step" aria-live="polite"></div>
-    <p class="hint" style="margin-top:14px">Each turn: <b>Roll</b> (active player first), <b>Influence</b> in two steps — <b>Fortune</b> (Reroll, Focus, Mulligan, Distract) then <b>Tactics</b> (abilities, Jam); in each, one action at a time, active player first, two passes end the step — <b>Resolution</b> (everything at once; active player wins ties; healing stops from turn 6). The bar at the bottom always shows the next step: press its big button (or <b>Space</b>) to roll, pass, allow or start the next turn. A player who can't do anything passes automatically (switch this off under the Showdown). Use abilities with the <b>Use</b> buttons in each player's ability list; <b>Auto</b> abilities apply at Resolution. The <b>Gold actions</b> panel under each player's dice holds the six universal actions; the ones you can use right now light up (you can also tap a die). Actions that target the other player (Distract, Jam, Envenom, Sneaky) are declared in the center first, so they can <b>Ward</b> or <b>Allow</b>. Gold and Resolve update on their own: Gold is paid when you spend it, and 💰 rolled this turn, damage and healing are applied at Resolution — each meter shows what's coming (use <b>Adjust</b> only to fix a mistake). The <b>Showdown</b> in the middle adds up both players' dice side by side — after poison and abilities — shows how much damage each would deal, and what would happen if the turn resolved now.</p>
+    <p class="hint" style="margin-top:14px">Each turn: <b>Roll</b> (active player first), <b>Influence</b> in two steps — <b>Fortune</b> (Reroll, Focus, Mulligan, Distract) then <b>Tactics</b> (abilities, Jam); in each, one action at a time, active player first, two passes end the step — <b>Resolution</b> (everything at once; active player wins ties). <b>♥ Mend:</b> each ♥ restores 1 Resolve lost this turn — never above where you started the turn. <b>Closing Time:</b> from turn 8 both players lose 1 Resolve each turn; ♥ can't mend it. The bar at the bottom always shows the next step: press its big button (or <b>Space</b>) to roll, pass, allow or start the next turn. A player who can't do anything passes automatically (switch this off under the Showdown). Use abilities with the <b>Use</b> buttons in each player's ability list; <b>Auto</b> abilities apply at Resolution. The <b>Gold actions</b> panel under each player's dice holds the six universal actions; the ones you can use right now light up (you can also tap a die). Actions that target the other player (Distract, Jam, Envenom, Sneaky) are declared in the center first, so they can <b>Ward</b> or <b>Allow</b>. Gold and Resolve update on their own: Gold is paid when you spend it, and 💰 rolled this turn, damage and healing are applied at Resolution — each meter shows what's coming (use <b>Adjust</b> only to fix a mistake). The <b>Showdown</b> in the middle adds up both players' dice side by side — after poison and abilities — shows how much damage each would deal, and what would happen if the turn resolved now.</p>
   </section>
 
   <section id="view-dice" role="tabpanel" aria-labelledby="tab-dice" hidden>
@@ -360,7 +360,7 @@ const DICE = {
   Fey:{f:['A','D','H','G','AD','S'],role:'Tricks',ab:'Trickster',t:'Once per turn, swap the results of two of your dice.'},
   Gambler:{f:['G','G','GG','GGG','S','S'],role:'Gold',ab:'High Roller',t:'Once per turn, roll this die again. Both results count.'},
   Goblin:{f:['A','G','G','GG','P','S'],role:'Gold',ab:'Sneaky',t:'If this die shows ☠, spend 1 Gold: your opponent takes that ☠\u2019s damage instead of you. They may Ward it.'},
-  Guardian:{f:['D','D','D','DD','A','S'],role:'Defense',ab:'Stand Fast',t:'If this die shows 🛡, you lose 1 less Resolve this turn (including from ☠). Doesn\u2019t reduce Last Call.'},
+  Guardian:{f:['D','D','D','DD','A','S'],role:'Defense',ab:'Stand Fast',t:'If this die shows 🛡, you lose 1 less Resolve this turn (including from ☠). Doesn\u2019t reduce Closing Time.'},
   Knight:{f:['A','D','D','S','DD','AD'],role:'Defense',ab:'Counterattack',t:'If this die shows 🛡 and your shields block 2 or more ⚔ this turn, your opponent takes 1 damage. Shields can\u2019t block it.'},
   Mage:{f:['A','A','AA','AG','G','S'],role:'Attack',ab:'Arcane Surge',t:'If this die shows ⚔, spend 1 Gold: its ⚔ can\u2019t be blocked this turn.'},
   Mimic:{f:['A','D','G','H','AD','S'],role:'Tricks',ab:'Imitate',t:'At the start of each turn, choose another die in your loadout. Until the turn ends, this die has that die\u2019s ability (once-per-turn abilities can be used again).'},
@@ -380,15 +380,15 @@ const DICE = {
   Tempest:{f:['L','AA','AA','D','G','S'],role:'Attack',ab:'Chain Lightning',t:'If this die shows ⚡, up to two of your other dice showing ⚔ each change one ⚔ into ⚡ this turn.'},
   Plaguebringer:{f:['P','PP','AP','D','H','S'],role:'Poison',ab:'Epidemic',t:'If this die shows ☣, each ☣ on your other dice counts as two.'},
   Pilgrim:{f:['H','H','D','A','A',''],role:'Starter',ab:'',t:'No ability. Starter healing, with one blank face.'},
-  Barkeep:{f:['G','G','H','D','A','G'],role:'Gold',ab:'Last Orders',t:'From turn 6 (Last Call), each 💰 on this die also counts as a ⚔. You still gain the Gold.'},
+  Barkeep:{f:['G','G','H','D','A','G'],role:'Gold',ab:'Last Orders',t:'From turn 8 (Closing Time), each 💰 on this die also counts as a ⚔. You still gain the Gold.'},
   Moneylender:{f:['G','GG','A','D','AG','S'],role:'Gold',ab:'Loan',t:'Once per turn, gain 2 Gold and lose 1 Resolve.'},
   Taxman:{f:['G','A','D','G','AG','S'],role:'Gold',ab:'Levy',t:'At Resolution, if your opponent has more Gold than you, take 1 Gold from them.'},
-  Sawbones:{f:['H','HH','DD','A','AH','S'],role:'Healing',ab:'Triage',t:'This die\u2019s ♥ still heal during Last Call (turn 6 on).'},
+  Sawbones:{f:['H','HH','DD','A','AH','S'],role:'Healing',ab:'Triage',t:'This die\u2019s ♥ can also mend Closing Time\u2019s 1 damage.'},
   Puppeteer:{f:['G','A','D','H','AD','AA'],role:'Tricks',ab:'Strings',t:'Once per turn, spend 2 Gold to turn one of your other dice to any of its faces.'},
   Hydra:{f:['A','AA','AA','D','H','S'],role:'Attack',ab:'Regrow',t:'If this die shows ☠, it also counts as ⚔⚔. You still take the ☠ damage.'},
   // Expansion 3 "Tavern Regulars" (Common)
   Bouncer:{f:['D','D','A','D','A','G'],role:'Defense',ab:'Doorman',t:'If this die shows 🛡 and your opponent shows 3 or more ⚔, it gets +1 🛡.'},
-  Cook:{f:['H','H','D','A','G','DH'],role:'Healing',ab:'Hearty Stew',t:'If this die shows ♥ and you have 5 or less Resolve, it heals 1 more. Last Call still stops healing.'},
+  Cook:{f:['H','H','D','A','G','DH'],role:'Healing',ab:'Hearty Stew',t:'If this die shows ♥ and you have 5 or less Resolve, it heals 1 more.'},
   Minstrel:{f:['H','G','A','D','G','A'],role:'Tricks',ab:'Rousing Tune',t:'If this die shows ♥, one other die of yours showing ⚔ gets +1 ⚔.'},
   Brewer:{f:['G','G','H','D','A','G'],role:'Gold',ab:'Strong Brew',t:'If this die shows ♥, you also gain 1 Gold.'},
   Drunkard:{f:['AA','A','A','S','D','A'],role:'Attack',ab:'Liquid Courage',t:'If this die shows ⚔ and you have 5 or less Resolve, it deals 1 extra damage.'},
@@ -408,6 +408,7 @@ Object.entries({ Basic: ['Basic','Brawler','Shieldbearer','Peddler','Pilgrim'], 
    Rare: ['Druid','Bard','Fey','Mimic','Warlock','Elemental','Tempest','Plaguebringer','Puppeteer','Hydra'] }).forEach(([t, ds]) => ds.forEach(d => RARITY[d] = t));
 const TIERS = ['Basic','Common','Uncommon','Rare'];
 const MAXR = 10;
+const CLOSING = 8;   // v0.10: Closing Time — from this turn each player loses 1 Resolve per turn
 
 const icon = s => `<svg class="ic" aria-hidden="true"><use href="#i-${s}"/></svg>`;
 const faceLabel = f => f ? f.split('').map(c => SYMNAME[c]).join(' + ') : 'blank';
@@ -579,7 +580,7 @@ function totals(X, Y, notes){
   X.extra.forEach(e => { if (e.vol && e.f === X.res[e.i]) { vb++; notes.push(`${X.name}: Volatile match +1`); } });
   const yD = Y.res.reduce((n, f) => n + cnt(f, 'D'), 0) + Y.extra.reduce((n, e) => n + cnt(e.f, 'D'), 0);
   X.res.forEach((f, i) => {
-    if (ab(X,i) === 'Last Orders' && S.turn >= 6 && f.includes('G')) { A += cnt(f,'G'); notes.push(`${X.name}: Last Orders +${cnt(f,'G')} ⚔`); }
+    if (ab(X,i) === 'Last Orders' && S.turn >= CLOSING && f.includes('G')) { A += cnt(f,'G'); notes.push(`${X.name}: Last Orders +${cnt(f,'G')} ⚔`); }
     if (ab(X,i) === 'Regrow' && f.includes('S')) { A += 2; notes.push(`${X.name}: Regrow +2 ⚔`); }
     if (ab(X,i) === 'Arc' && f.includes('L') && yD >= 2) { U++; notes.push(`${X.name}: Arc +1 ⚡`); }
     if (ab(X,i) === 'Chain Lightning' && f.includes('L')) { const k = Math.min(2, X.res.filter((g, j) => j !== i && g.includes('A')).length); if (k) { A -= k; U += k; notes.push(`${X.name}: Chain Lightning turns ${k} ⚔ into ⚡`); } }
@@ -627,13 +628,16 @@ function resolveRound(preview = false){
   const l0 = Math.min(levy(P0, P1), Math.max(0, P1.G + gy)), l1 = Math.min(levy(P1, P0), Math.max(0, P0.G + gx));
   if (l0) { gx += l0; gy -= l0; notes.push(`${P0.name}: Levy takes ${l0} Gold`); }
   if (l1) { gy += l1; gx -= l1; notes.push(`${P1.name}: Levy takes ${l1} Gold`); }
-  const noHeal = S.turn >= 6;
+  // v0.10 Mend: each ♥ only restores Resolve lost this turn; Closing Time can't be mended (except by Triage)
+  const lc = S.turn >= CLOSING ? 1 : 0;
   const tri = P => P.res.reduce((n, f, i) => n + (ab(P,i) === 'Triage' && !P.venom.includes(i) ? cnt(f,'H') : 0), 0);
-  const hx = noHeal ? Math.min(tx.H, tri(P0)) : tx.H, hy = noHeal ? Math.min(ty.H, tri(P1)) : ty.H;
-  if (noHeal && (tx.H > hx || ty.H > hy)) notes.push('Last Call: ♥ restores nothing');
-  if (noHeal && (hx || hy)) notes.push('Triage: Sawbones still heals');
-  const heal0 = Math.max(0, Math.min(hx, MAXR - (P0.R - lx))), heal1 = Math.max(0, Math.min(hy, MAXR - (P1.R - ly)));
-  const lc = Math.max(0, S.turn - 5);
+  const tr0 = Math.min(lc, tri(P0)), tr1 = Math.min(lc, tri(P1));
+  const heal0 = Math.max(0, Math.min(tx.H, lx + tr0)), heal1 = Math.max(0, Math.min(ty.H, ly + tr1));
+  const hx = heal0, hy = heal1;
+  [[P0, tx.H, heal0, lx], [P1, ty.H, heal1, ly]].forEach(([P, h, used, lost]) => {
+    if (h > used) notes.push(`${P.name}: ${h - used} ♥ had nothing to mend`);
+    if (used > lost) notes.push(`${P.name}: Triage mends Closing Time`);
+  });
   const rawP = P => allFaces(P).reduce((n, x) => n + cnt(x.f, 'P'), 0), rawD = P => allFaces(P).reduce((n, x) => n + cnt(x.f, 'D'), 0);
   const sd = [
     { A: tx.A, U: tx.U, D: tx.D, rawD: rawD(P0), P: rawP(P0), H: tx.H, heal: hx, S: tx.S, push: tx.push, gold: gx, counter: cx, through: Math.max(0, tx.A - ty.D), sf: sfx },
@@ -799,14 +803,14 @@ function turnResultHTML(r){
       <div class="tr-big ${dR < 0 ? 'neg' : dR > 0 ? 'pos' : 'zero'}">${dR > 0 ? '+' : dR < 0 ? '−' : '±'}${Math.abs(dR)}</div>
       <div class="tr-sub">${icon('H')} ${b.R} → <b>${after}</b></div>
       <div class="tr-sub">${icon('G')} ${b.G} → <b>${x.G}</b>${dG ? ` (${dG > 0 ? '+' : '−'}${Math.abs(dG)})` : ''}</div></div>`; };
-  const det = (x, y) => `<li><b>${x.name}</b> deals ${x.dealt}${x.blocked ? ` (${x.blocked} blocked)` : ''}${x.skull ? ` · takes ${x.skull} from own ☠` : ''}${x.heal ? ` · heals ${x.heal}` : ''}</li>`;
+  const det = (x, y) => `<li><b>${x.name}</b> deals ${x.dealt}${x.blocked ? ` (${x.blocked} blocked)` : ''}${x.skull ? ` · takes ${x.skull} from own ☠` : ''}${x.heal ? ` · mends ${x.heal}` : ''}</li>`;
   return `<div class="turnres" role="status"><h3>Turn ${S.turn} result</h3>
     <div class="tr-cols">${col(r.rows[0], 0)}${col(r.rows[1], 1)}</div>
-    ${r.lc ? `<div class="tr-lc">Last Call: both lose ${r.lc}</div>` : ''}
+    ${r.lc ? `<div class="tr-lc">Closing Time: both lose ${r.lc}</div>` : ''}
     <ul class="tr-det">${det(r.rows[0], r.rows[1])}${det(r.rows[1], r.rows[0])}${r.notes.map(n => `<li>${n}</li>`).join('')}</ul></div>`;
 }
 function renderCenter(){
-  const lc = Math.max(0, S.turn - 5);
+  const lc = S.turn >= CLOSING ? 1 : 0;
   const r = S.result, A = S.players[S.active], O = S.players[1 - S.active];
   const ph = S.phase;
   const cur = ph === 'influence' ? S.step : ph, order = ['roll','fortune','tactics','resolution'];
@@ -830,7 +834,7 @@ function renderCenter(){
     <div class="round"><small>ROUND ${S.round} OF 3 · TURN</small>${S.turn}</div>
     <div class="score">${S.players[0].name} <b>${S.score[0]}</b> – <b>${S.score[1]}</b> ${S.players[1].name}</div>
     <ol class="steps" aria-label="Turn phases">${step('roll','Roll')}${step('fortune','Fortune')}${step('tactics','Tactics')}${step('resolution','Resolve')}</ol>
-    <div class="lastcall ${lc ? '' : 'off'}">${lc ? `Last Call: both lose ${lc} this turn · no healing` : S.turn === 5 ? 'Last Call starts next turn — healing stops' : `Last Call from turn 6`}</div>
+    <div class="lastcall ${lc ? '' : 'off'}">${lc ? `Closing Time: both lose 1 this turn · ♥ can't mend it` : S.turn === CLOSING - 1 ? 'Closing Time starts next turn — lose 1 each turn' : `Closing Time from turn ${CLOSING}`}</div>
     ${r ? turnResultHTML(r) : ''}
     ${forecastHTML()}
     ${main}

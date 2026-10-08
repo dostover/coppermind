@@ -66,8 +66,8 @@ o = lambda X, Y: outcome(X, Y, detail=True)
 X=mk(['Bouncer'],['D']); Y=mk(['Monster','Basic'],['AA','A']); assert o(X,Y)['Rx']==9    # 3⚔ vs 2🛡
 Y=mk(['Monster'],['AA']); assert o(X,Y)['Rx']==9
 # Hearty Stew: +1 ♥ at ≤5 Resolve
-X=mk(['Cook'],['H'],R=5); Y=mk(['Oracle'],['G']); assert o(X,Y)['Rx']==7
-X=mk(['Cook'],['H'],R=6); assert o(X,Y)['Rx']==7
+X=mk(['Cook'],['H'],R=5); Y=mk(['Monster'],['AA']); assert o(X,Y)['Rx']==5     # 2 dmg, 2 ♥ mend it all
+X=mk(['Cook'],['H'],R=6); assert o(X,Y)['Rx']==5                                    # no Stew above 5: 1 ♥ mends 1
 # Rousing Tune: ♥ gives another ⚔ die +1
 X=mk(['Minstrel','Basic'],['H','A']); Y=mk(['Oracle'],['G']); assert o(X,Y)['Ry']==8
 # Strong Brew: ♥ → +1 Gold
@@ -86,3 +86,15 @@ Y=mk(['Herbalist','Dwarven'],['H','DD']); X=mk(['Viper','Monster'],['P','AA']); 
 X=mk(['Cardsharp','Basic','Peddler'],['G','G','G']); Y=mk(['Oracle'],['D']); assert o(X,Y)['Gx']==4
 X=mk(['Fisher'],['G']); Y=mk(['Oracle'],['D']); Y.G=2; assert o(X,Y)['Gx']==2
 print('Expansion 3 checks pass')
+
+# --- v0.10: Closing Time + Mend
+import tavern_sim as _T
+assert RULES['clock']=='flat' and RULES['mend'] and not RULES['mend_clock'] and _T.LAST_CALL_ROUND==8
+X=mk(['Cleric'],['HH'],R=7); Y=mk(['Oracle'],['G']); assert o(X,Y)['Rx']==7                 # no damage → ♥ restores nothing
+Y=mk(['Monster'],['AA']); assert o(X,Y)['Rx']==7                                             # 2 dmg mended
+Y=mk(['Monster'],['AAA']); assert o(X,Y)['Rx']==6                                            # 3 dmg, 2 mended
+Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=8)['Rx']==6                       # Closing Time 1, can't be mended
+assert outcome(X,Y,detail=True,rnd=7)['Rx']==7                                               # before turn 8: no clock
+X=mk(['Sawbones'],['HH'],R=7); assert outcome(X,Y,detail=True,rnd=9)['Rx']==7                # Triage mends Closing Time
+X=mk(['Barkeep'],['GG']); Y=mk(['Oracle'],['G']); assert outcome(X,Y,detail=True,rnd=8)['Ry']==7 and outcome(X,Y,detail=True,rnd=7)['Ry']==10   # Last Orders from turn 8 (2⚔ + clock)
+print('v0.10 checks pass')

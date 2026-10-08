@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tavern Dice simulator — rules v0.9 (defaults); older rule options kept as RULES switches
+Tavern Dice simulator — rules v0.10 (defaults); older rule options kept as RULES switches
 
 Implements every die ability, all six universal Gold abilities, Last Call and
 sudden death. Both players are driven by the same greedy AI: on its turn in the
@@ -102,7 +102,7 @@ MIMIC_PRIORITY = ['wildshape', 'counter', 'standfast', 'hoard', 'omen', 'transmu
 SYM = {'A': '⚔', 'D': '🛡', 'G': '💰', 'H': '♥', 'S': '☠', 'P': '☣', 'L': '⚡'}
 
 START_RESOLVE = 10
-LAST_CALL_ROUND = 6
+LAST_CALL_ROUND = 8          # v0.10: Closing Time starts on turn 8 (was Last Call on turn 6)
 GOLD_VALUE = 0.5          # AI: how many Resolve one Gold is worth
 MIN_GAIN = 0.05           # AI: ignore actions that gain less than this
 MAX_ROUNDS = 40
@@ -126,7 +126,10 @@ RULES = {'counter': True, 'omen': True,
          'swap_n': 2,          # dice each player may swap before rounds 2 and 3
          'grudge': False,
          'lc_noheal': True,
-         'two_step': True}    # v0.9 candidate: Influence = Fortune (rerolls, Distract) then Tactics (abilities, Jam)   # during Last Call (turn 6+), ♥ restores nothing      # Dwarven: Grudge (+1 damage if opponent shows ♥) instead of Stubborn   # 'match' (v0.6: best of 3 rounds, active player alternates each turn, Tavern Swap between rounds) or 'single'        # Tavern Swap: once per match, from round 2, swap one loadout die for a bench die    # corrode mode: each ♥ may cancel one opposing ☣ instead of healing      # ☣ mode: 'dot' (tokens, 1 dmg/round, ♥ cleanses) or 'corrode' (each ☣ removes one opponent 🛡 this round)      # max Poison tokens on a player     # Counterattack needs at least this many opponent ⚔ blocked    # Goblin: 'old' (= Reroll, no effect) or 'dirty' (pay 1 Gold: ☠ hits opponent instead)
+         'two_step': True,
+         'clock': 'flat',  # 'escalate' = Last Call (turn−LC+1 per turn, no healing) · 'flat' = Closing Time (1 per turn from LAST_CALL_ROUND, healing allowed)
+         'mend': True,         # ♥ only restores Resolve lost this turn (can't go above where you started the turn)
+         'mend_clock': False}   # with mend: ♥ can also offset the clock's 1 damage    # v0.9 candidate: Influence = Fortune (rerolls, Distract) then Tactics (abilities, Jam)   # during Last Call (turn 6+), ♥ restores nothing      # Dwarven: Grudge (+1 damage if opponent shows ♥) instead of Stubborn   # 'match' (v0.6: best of 3 rounds, active player alternates each turn, Tavern Swap between rounds) or 'single'        # Tavern Swap: once per match, from round 2, swap one loadout die for a bench die    # corrode mode: each ♥ may cancel one opposing ☣ instead of healing      # ☣ mode: 'dot' (tokens, 1 dmg/round, ♥ cleanses) or 'corrode' (each ☣ removes one opponent 🛡 this round)      # max Poison tokens on a player     # Counterattack needs at least this many opponent ⚔ blocked    # Goblin: 'old' (= Reroll, no effect) or 'dirty' (pay 1 Gold: ☠ hits opponent instead)
 
 
 def fs(face):
@@ -295,6 +298,11 @@ def strip_dice(X, Y):
     return Y2, Px - len(hit)
 
 
+def clock_dmg(rnd):
+    if rnd is None or rnd < LAST_CALL_ROUND: return 0
+    return 1 if RULES['clock'] == 'flat' else rnd - LAST_CALL_ROUND + 1
+
+
 _RND = [0]
 def outcome(X, Y, detail=False, rnd=None):
     _RND[0] = rnd or 0
@@ -342,9 +350,17 @@ def outcome(X, Y, detail=False, rnd=None):
     tx, ty = min(cap_p, X.poison + Py), min(cap_p, Y.poison + Px)
     cl_x, cl_y = min(Hx, tx), min(Hy, ty)
     tx -= cl_x; ty -= cl_y; Hx -= cl_x; Hy -= cl_y
-    if RULES['lc_noheal'] and rnd is not None and rnd >= LAST_CALL_ROUND:
+    if RULES['clock'] == 'escalate' and RULES['lc_noheal'] and rnd is not None and rnd >= LAST_CALL_ROUND:
         tri = lambda P: sum(f.count('H') for i, f in enumerate(P.res) if ab(P, i) == 'triage' and i not in P.venom)
         Hx, Hy = min(Hx, tri(X)), min(Hy, tri(Y))
+    if RULES['clock'] == 'flat':
+        c = clock_dmg(rnd)
+        if RULES['mend']:
+            tri = lambda P: sum(f.count('H') for i, f in enumerate(P.res) if ab(P, i) == 'triage' and i not in P.venom)
+            mx = lx + (c if RULES['mend_clock'] else min(c, tri(X)))   # Triage (Sawbones): its ♥ can mend Closing Time
+            my = ly + (c if RULES['mend_clock'] else min(c, tri(Y)))
+            Hx, Hy = min(Hx, mx), min(Hy, my)
+        lx += c; ly += c
     Rx, Ry = X.R - lx + Hx, Y.R - ly + Hy
     cap = RULES['cap']
     if cap is not None:
@@ -362,7 +378,7 @@ def outcome(X, Y, detail=False, rnd=None):
 def value(M, O, rnd):
     """Score of the current table from M's point of view (zero-sum)."""
     Rm, Ro, Gm, Go = outcome(M, O, rnd=rnd)
-    lc = max(0, rnd - LAST_CALL_ROUND + 1)
+    lc = max(0, rnd - LAST_CALL_ROUND + 1) if RULES['clock'] == 'escalate' else 0
     Rm -= lc; Ro -= lc
     if Ro <= 0 and Rm > 0:
         return 100 + Rm
@@ -802,10 +818,15 @@ class Game:
         A.R, B.R, A.G, B.G = d['Rx'], d['Ry'], d['Gx'], d['Gy']
         A.poison, B.poison = d['tx'], d['ty']
         self.stats['A_poison_dmg'] += d['tx']; self.stats['B_poison_dmg'] += d['ty']
-        lc = max(0, self.rnd - LAST_CALL_ROUND + 1)
+        lc = max(0, self.rnd - LAST_CALL_ROUND + 1) if RULES['clock'] == 'escalate' else 0
         if lc:
             A.R -= lc; B.R -= lc
+        ck = clock_dmg(self.rnd)
+        if ck:
             self.stats['lastcall'] += 1
+            if (A.R <= 0 or B.R <= 0):   # did the clock decide it? (would the loser have survived without it)
+                lo = A if A.R < B.R or (A.R <= 0 and B.R > 0) else B
+                if lo.R + ck > 0: self.stats['clock_ko'] += 1
         self.say(f"  Resolve: A dealt {d['x']['atk']}+{d['x']['counter']}ctr, took {d['x']['skull']}☠, healed {d['x']['heal']} | "
                  f"B dealt {d['y']['atk']}+{d['y']['counter']}ctr, took {d['y']['skull']}☠, healed {d['y']['heal']}"
                  + (f' | Last Call −{lc}' if lc else ''))
