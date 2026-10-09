@@ -312,7 +312,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
   <header class="top">
     <div>
       <h1>Tavern Dice</h1>
-      <div class="ver">Rules v0.10.3 · best of 3 · 52 dice</div>
+      <div class="ver">Rules v0.10.4 · best of 3 · 52 dice</div>
     </div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" id="tab-table" aria-selected="true" aria-controls="view-table">Table</button>
@@ -349,12 +349,12 @@ const DICE = {
   Alchemist:{f:['G','G','H','HH','GH','S'],role:'Gold',ab:'Transmutation',t:'Spend 1 Gold to turn this die to any of its faces. You can do this more than once.'},
   Archer:{f:['A','A','L','AA','D','G'],role:'Attack',ab:'Precise Shot',t:'If this is the only one of your dice showing ⚔, it deals 1 extra damage.'},
   Assassin:{f:['A','A','A','AA','P','S'],role:'Attack',ab:'Backstab',t:'If none of your opponent\u2019s dice show 🛡 when results lock, this die deals 1 extra damage. Poisoned shields don\u2019t count.'},
-  Bard:{f:['A','D','H','G','G','H'],role:'Tricks',ab:'Inspiration',t:'Once per turn, spend 1 Gold to set this die to the same result as another of your dice.'},
+  Bard:{f:['A','D','H','G','GA','DH'],role:'Tricks',ab:'Inspiration',t:'Once per turn, spend 2 Gold to set this die to the same result as another of your dice.'},
   Basic:{f:['D','D','A','A','G','G'],role:'Starter',ab:'',t:'No ability. The plain die everyone starts with.'},
   Berserker:{f:['A','A','AA','L','S','D'],role:'Attack',ab:'Bloodlust',t:'If this die shows ⚔, it deals 1 extra damage for each ☠ that hits you this turn. A ☠ rerolled or cancelled before Resolution doesn\u2019t count.'},
   Cleric:{f:['D','D','H','H','HH','DH'],role:'Healing',ab:'Blessing',t:'Give up one ♥ on this die to cancel one ☠ on another of your dice. Once per ♥.'},
   Dragon:{f:['A','L','AA','G','G','S'],role:'Gold',ab:'Hoard',t:'Each time this die gives you Gold, gain 1 more.'},
-  Druid:{f:['A','D','H','DH','AD','S'],role:'Tricks',ab:'Wild Shape',t:'Once per turn, spend 1 Gold to turn this die to any of its faces.'},
+  Druid:{f:['A','D','H','DH','AD','G'],role:'Tricks',ab:'Wild Shape',t:'Once per turn, spend 2 Gold to turn this die to any of its faces.'},
   Dwarven:{f:['A','A','D','D','DD','G'],role:'Defense',ab:'Stubborn',t:'Your opponent can\u2019t Distract this die.'},
   Elemental:{f:['A','A','G','D','G','S'],role:'Attack',ab:'Volatile',t:'At Resolution, roll this die again; the new result also counts. If it matches the first result, deal 1 extra damage that can\u2019t be blocked.'},
   Fey:{f:['A','D','H','G','AD','S'],role:'Tricks',ab:'Trickster',t:'Once per turn, swap the results of two of your dice.'},
@@ -661,8 +661,8 @@ function tallyHTML(p){
   allFaces(p).forEach(({f}) => f.split('').forEach(c => t[c]++));
   return SYM.filter(s => t[s]).map(s => `<span title="${SYMNAME[s]}">${icon(s)}${t[s]}</span>`).join('') || '<span class="hint">No symbols</span>';
 }
-const COST = { 'Wild Shape':'1 Gold · once per turn', 'Transmutation':'1 Gold · any time', 'Dark Bargain':'1 Resolve · any time',
-  'Inspiration':'1 Gold · once per turn', 'Arcane Surge':'1 Gold', 'Divine Protection':'1 Gold · once per turn',
+const COST = { 'Wild Shape':'2 Gold · once per turn', 'Transmutation':'1 Gold · any time', 'Dark Bargain':'1 Resolve · any time',
+  'Inspiration':'2 Gold · once per turn', 'Arcane Surge':'1 Gold', 'Divine Protection':'1 Gold · once per turn',
   'High Roller':'Free · once per turn', 'Trickster':'Free · once per turn', 'Blessing':'Costs one ♥ on the Cleric',
   'Loan':'Free · gain 2 Gold, lose 1 Resolve · once per turn', 'Strings':'2 Gold · once per turn', 'Sneaky':'1 Gold', 'Toxin Coat':'1 Gold · once per turn', 'Envenom':'1 Gold · once per turn', 'Omen':'Free · once per turn', 'Imitate':'Free · choose each turn' };
 const abText = a => DICE[NAMES.find(n => DICE[n].ab === a)].t;
@@ -982,17 +982,17 @@ function abilityAction(k, i){
   const faces = DICE[name].f;
   const mk = (label, cost, ok, why, run) => ({ label, cost, ok, why, run });
   switch (a) {
-    case 'Wild Shape': return mk('Wild Shape', '1 Gold · once per turn', p.G >= 1 && !once, once ? 'Used this turn' : 'Needs 1 Gold', () =>
-      chooseFace('Wild Shape', `Pay 1 Gold: ${name} becomes any of its faces.`, faces, nf => { snap(`${p.name}: Wild Shape ${name} → ${nf.split('').map(c=>SYMNAME[c]).join('+')}`); p.G--; p.used[key] = 1; p.res[i] = nf; render(); }, name));
+    case 'Wild Shape': return mk('Wild Shape', '2 Gold · once per turn', p.G >= 2 && !once, once ? 'Used this turn' : 'Needs 2 Gold', () =>
+      chooseFace('Wild Shape', `Pay 2 Gold: ${name} becomes any of its faces.`, faces, nf => { snap(`${p.name}: Wild Shape ${name} → ${nf.split('').map(c=>SYMNAME[c]).join('+')} (2 Gold)`); p.G -= 2; p.used[key] = 1; p.res[i] = nf; render(); }, name));
     case 'Transmutation': return mk('Transmutation', '1 Gold', p.G >= 1, 'Needs 1 Gold', () =>
       chooseFace('Transmutation', `Pay 1 Gold: ${name} becomes any of its faces.`, faces, nf => { snap(`${p.name}: Transmutation on ${name}`); p.G--; p.res[i] = nf; render(); }, name));
     case 'Dark Bargain': return mk('Dark Bargain', '1 Resolve', p.R > 1, 'Not enough Resolve', () =>
       chooseFace('Dark Bargain', `Lose 1 Resolve: ${name} becomes any of its faces.`, faces, nf => { snap(`${p.name}: Dark Bargain (−1 Resolve)`); p.R--; p.res[i] = nf; render(); }, name));
     case 'Inspiration': {
       const others = p.res.map((x,j) => j).filter(j => j !== i);
-      return mk('Inspiration', '1 Gold · once per turn', p.G >= 1 && !once, once ? 'Used this turn' : 'Needs 1 Gold', () =>
-        chooseItem('Inspiration', 'Pay 1 Gold: copy another of your dice’s results.', others.map(j => ({ label: p.dice[j], html: dieHTML(p.res[j],{size:'sm',label:p.dice[j]}) })), ([x]) => {
-          const j = others[x]; snap(`${p.name}: Inspiration copies ${p.dice[j]}`); p.G--; p.used[key] = 1; p.res[i] = p.res[j]; render(); }));
+      return mk('Inspiration', '2 Gold · once per turn', p.G >= 2 && !once, once ? 'Used this turn' : 'Needs 2 Gold', () =>
+        chooseItem('Inspiration', 'Pay 2 Gold: copy another of your dice’s results.', others.map(j => ({ label: p.dice[j], html: dieHTML(p.res[j],{size:'sm',label:p.dice[j]}) })), ([x]) => {
+          const j = others[x]; snap(`${p.name}: Inspiration copies ${p.dice[j]} (2 Gold)`); p.G -= 2; p.used[key] = 1; p.res[i] = p.res[j]; render(); }));
     }
     case 'Arcane Surge': return mk(p.surge.includes(i) ? 'Surge active' : 'Arcane Surge', '1 Gold', p.G >= 1 && f.includes('A') && !p.surge.includes(i), p.surge.includes(i) ? 'Already active' : !f.includes('A') ? 'Needs ⚔ showing' : 'Needs 1 Gold', () => {
       snap(`${p.name}: Arcane Surge on ${name}`); p.G--; p.surge.push(i); render(); });

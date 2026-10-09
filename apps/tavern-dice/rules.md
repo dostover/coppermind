@@ -1,9 +1,10 @@
-# Tavern Dice — Working Rules (Prototype v0.10.3)
+# Tavern Dice — Working Rules (Prototype v0.10.4)
 
 PvP collectible-dice game played inside a D&D campaign. Inspired by Dice Hunter: Dicemancer Quest, minus the monster battles. **The dice create the possibilities. Gold creates the decisions. The opponent creates the uncertainty. The tavern creates the atmosphere.**
 
 ## Changelog
-- **v0.10.3 (2026-10-08, designer-approved):** Balance pass on the eight dice the simulator kept flagging, one or two face changes each, abilities unchanged. Nerfs: Druid [💰]→[☠] (64%→58%), Paladin [⚔🛡]→[⚔] (61%→52%), Bard [💰⚔]→[💰] and [🛡♥]→[♥] (61%→57%), Assassin one [⚔]→[☠] (60%→~49%), Elemental one [⚔]→[💰] (60%→56%). Buffs: Mimic [☠]→[⚔] (42%→51%), Mage [☠]→[💰] (43%→51%), Taxman [☠]→[🛡] (43%→52%). (Sim Run 19.)
+- **v0.10.4 (2026-10-09, designer-approved):** Wild Shape (Druid) and Inspiration (Bard) now cost **2 Gold** (was 1). Druid and Bard get their original faces back (the v0.10.3 face changes are undone). Druid 52.8%, Bard 54.5% — both inside the Rare range. (Sim Run 20.)
+- **v0.10.3 (2026-10-08, designer-approved):** Balance pass on the eight dice the simulator kept flagging, one or two face changes each, abilities unchanged. Nerfs: Druid [💰]→[☠] (64%→58%; undone in v0.10.4), Paladin [⚔🛡]→[⚔] (61%→52%), Bard [💰⚔]→[💰] and [🛡♥]→[♥] (61%→57%; undone in v0.10.4), Assassin one [⚔]→[☠] (60%→~49%), Elemental one [⚔]→[💰] (60%→56%). Buffs: Mimic [☠]→[⚔] (42%→51%), Mage [☠]→[💰] (43%→51%), Taxman [☠]→[🛡] (43%→52%). (Sim Run 19.)
 - **v0.10.2 (2026-10-08, designer-approved):** Closing Time now starts on **turn 10** (was 8). With Mend in place this keeps balance unchanged: rounds average 6.6 turns, the clock reaches about 1 round in 5 and decides about 1 in 9. (Sim Run 18.)
 - **v0.10.1 (2026-10-08, designer-requested):** Barkeep's Last Orders now starts on turn 5 (no longer tied to Closing Time). Barkeep 46% → 50%. (Sim Run 18.)
 - **v0.10 (2026-10-07, designer-approved):** Healing and the round clock reworked so the dice, not the clock, decide rounds. **Last Call → Closing Time:** from turn 8, each player loses a flat 1 Resolve per turn (no escalation, no "no healing" rule). **♥ → Mend:** each ♥ restores 1 Resolve lost this turn, never above where you started the turn; Closing Time's damage can't be mended. Dice updated: Sawbones' Triage now mends Closing Time; Barkeep's Last Orders triggers from turn 8; Cook and Guardian text updated. (Sim Run 16: rounds 5.5 → 6.2 turns, the clock decides 14% of rounds instead of 23%, no stalls, tier balance unchanged.)
@@ -88,8 +89,8 @@ Rarity ≠ bigger numbers. Rare dice offer interactions, specialized strategies,
 6. **Archer's** *(Common)* — [⚔][⚔][⚡][⚔⚔][🛡][💰] — *Precise Shot:* If this is the only one of your dice showing ⚔, it deals 1 extra damage. Focused damage.
 7. **Cleric's** *(Uncommon)* — [🛡][🛡][♥][♥][♥♥][🛡♥] — *Blessing:* Give up one ♥ on this die to cancel one ☠ on another of your dice. Once per ♥. Healing/support.
 8. **Mage's** *(Uncommon)* — [⚔][⚔][⚔⚔][⚔💰][💰][💰] — *Arcane Surge:* If this die shows ⚔, spend 1 Gold: its ⚔ can't be blocked this turn. Resource-hungry caster. Sim 51% (v0.10.3; was [⚔][⚔][⚔⚔][⚔💰][💰][☠]).
-9. **Druid's** *(Rare)* — [⚔][🛡][♥][🛡♥][⚔🛡][☠] — *Wild Shape:* Once per turn, spend 1 Gold to turn this die to any of its faces. Flexible. Sim 58% — top of Rare, watch (v0.10.3; was [⚔][🛡][♥][🛡♥][⚔🛡][💰]).
-10. **Bard's** *(Rare)* — [⚔][🛡][♥][💰][💰][♥] — *Inspiration:* Once per turn, spend 1 Gold to set this die to the same result as another of your dice. Adaptive support. Sim 57% (v0.10.3; was [⚔][🛡][♥][💰][💰⚔][🛡♥]).
+9. **Druid's** *(Rare)* — [⚔][🛡][♥][🛡♥][⚔🛡][💰] — *Wild Shape:* Once per turn, spend 2 Gold to turn this die to any of its faces. Flexible. Sim 53% (v0.10.4: cost 1 → 2 Gold; original faces).
+10. **Bard's** *(Rare)* — [⚔][🛡][♥][💰][💰⚔][🛡♥] — *Inspiration:* Once per turn, spend 2 Gold to set this die to the same result as another of your dice. Adaptive support. Sim 55% (v0.10.4: cost 1 → 2 Gold; original faces).
 11. **Assassin's** *(Common)* — [⚔][⚔][⚔][⚔⚔][☣][☠] — *Backstab:* If none of your opponent's dice show 🛡 when results lock, this die deals 1 extra damage. Poisoned shields don't count. Anti-defense. Sim ~49% (v0.10.3; was [⚔][⚔][⚔][⚔⚔][☣][⚔]).
 12. **Paladin's** *(Uncommon)* — [⚔][🛡][🛡][🛡♥][♥][⚔] — *Divine Protection:* Once per turn, if this die shows 🛡, spend 1 Gold to block 1 more damage. Gold-powered defense. Sim 52% (v0.10.3; was [⚔][🛡][🛡][🛡♥][♥][⚔🛡]).
 13. **Dragon's** *(Uncommon)* — [⚔][⚡][⚔⚔][💰][💰][☠] — *Hoard:* Each time this die gives you Gold, gain 1 more. Gold engine.
@@ -189,7 +190,7 @@ Track each player's 5 dice, Resolve, Gold, current results, temporary effects, u
 Rules are a prototype. Treat designer proposals as intentional; identify affected mechanics; flag balance/rules problems; update working rules on approval; never silently revert. Prefer small, testable changes.
 
 ## Open questions / watch list
-- **v0.10.3 (Run 19):** Druid (58%) and Bard (57%) sit just above the Rare range — Wild Shape and Inspiration make them very sensitive to face changes (Druid swings 46%↔62% with one face). If they stay hot in play, consider raising their ability cost instead of more face changes.
+- **v0.10.4 (Run 20):** Druid and Bard fixed by raising Wild Shape / Inspiration to 2 Gold (faces restored). Mimic copying them pays 2 too.
 - **v0.10.2 (Run 18):** Closing Time moved to turn 10 — rounds avg 6.6 turns, 10% run 12+ turns (longest 19); clock decides 11% of rounds. Playtest whether rounds feel too long.
 - **v0.10 (Runs 16–17):** Closing Time 8 + Mend. Rounds avg 6.2 turns, clock decides 15% of rounds; tiers 43/50/50/54%. Watch: healing vs Gold-aggro loadouts 63–71% (was 57%); Barkeep fixed in v0.10.1 (Last Orders from turn 5, 50%); outliers tuned in v0.10.3; the shield-wall loadout (Soldier/Guardian/Knight/Cleric/Paladin) loses almost every defensive mirror because it barely deals damage; new Triage tested fine (Sawbones 50%). Playtest whether a ♥ that "does nothing" on a quiet turn feels bad.
 - **v0.9.1 sim (Run 14, 52 dice):** Expansion 3 tuned into the Common range (47–52%). With the bigger pool, Druid (63%), Paladin (57%), Assassin (56%) and Bard (58%) run hot, and Basic averages 42%. Minstrel and Fisher sit at the top of Common (52%) — watch. Two anti-poison Commons (Watchman, Herbalist) — watch whether ☣ still answers shield walls.

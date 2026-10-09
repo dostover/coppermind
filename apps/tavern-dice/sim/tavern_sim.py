@@ -29,8 +29,8 @@ FACES = {
     'Archer':    ['A', 'A', 'L', 'AA', 'D', 'G'],
     'Cleric':    ['D', 'D', 'H', 'H', 'HH', 'DH'],
     'Mage':      ['A', 'A', 'AA', 'AG', 'G', 'G'],
-    'Druid':     ['A', 'D', 'H', 'DH', 'AD', 'S'],
-    'Bard':      ['A', 'D', 'H', 'G', 'G', 'H'],
+    'Druid':     ['A', 'D', 'H', 'DH', 'AD', 'G'],
+    'Bard':      ['A', 'D', 'H', 'G', 'GA', 'DH'],
     'Assassin':  ['A', 'A', 'A', 'AA', 'P', 'S'],
     'Paladin':   ['A', 'D', 'D', 'DH', 'H', 'A'],
     'Dragon':    ['A', 'L', 'AA', 'G', 'G', 'S'],
@@ -110,6 +110,7 @@ MAX_ROUNDS = 40
 # Rule switches for experiments
 RULES = {'counter': True, 'omen': True,
          'cap': 10,            # max Resolve (None = uncapped)
+         'flex_cost': 2,       # Gold cost of Wild Shape / Inspiration when flex == 'gold'
          'flex': 'gold',       # Wild Shape / Inspiration: 'free' (once/round), 'gold' (1 Gold, once/round), 'match' (once per match)
          'dko': 'higher',      # double KO: 'rolloff' or 'higher' (higher Resolve wins, roll-off on tie)
          'sneaky': 'dirty',
@@ -502,7 +503,7 @@ def candidate_actions(M, O, rnd):
             if a in ('wildshape', 'inspiration'):
                 if (i, a) in M.used: continue
                 if RULES['flex'] == 'match' and (i, a) in M.gused: continue
-                if RULES['flex'] == 'gold' and M.G < 1: continue
+                if RULES['flex'] == 'gold' and M.G < RULES['flex_cost']: continue
             if a == 'transmute' and M.G < 1: continue
             if a == 'bargain' and M.R <= 1: continue
             opts = set(FACES[M.dice[i]]) if a != 'inspiration' else {M.res[j] for j in range(n) if j != i}
@@ -510,7 +511,8 @@ def candidate_actions(M, O, rnd):
             best, bf = -1e9, None
             for nf in opts:
                 m = M.copy(); m.res[i] = nf
-                if a == 'transmute' or (a in ('wildshape', 'inspiration') and RULES['flex'] == 'gold'): m.G -= 1
+                if a == 'transmute': m.G -= 1
+                if a in ('wildshape', 'inspiration') and RULES['flex'] == 'gold': m.G -= RULES['flex_cost']
                 if a == 'bargain': m.R -= 1
                 v = value(m, O, rnd)
                 if v > best: best, bf = v, nf
@@ -697,7 +699,7 @@ class Game:
             if k == 'bargain': M.R -= 1; self.stats[f'{M.name}_bargain_loss'] += 1
             if k in ('wildshape', 'inspiration'):
                 M.used.add((i, k)); M.gused.add((i, k))
-                if RULES['flex'] == 'gold': M.G -= 1
+                if RULES['flex'] == 'gold': M.G -= RULES['flex_cost']
             self.say(f"  {M.name}: {k.title()} {M.dice[i]} {fs(old)}→{fs(a['face'])}")
         elif k == 'trickster':
             x, y = a['pair']; M.used.add((a['i'], 'trickster'))
@@ -784,7 +786,7 @@ class Game:
         GOLD_AB = {'wildshape', 'inspiration', 'transmute', 'surge', 'divine', 'sneaky', 'envenom', 'coat', 'strings'}
         COSTS = {'reroll': 1, 'focus': 2, 'mulligan': 2, 'distract': 1}
         def reserve(P):   # Gold a sensible player keeps for the Tactics step
-            return min(2, sum(1 for i in range(len(P.dice)) if ab(P, i) in GOLD_AB))
+            return min(2, sum((RULES['flex_cost'] if ab(P, i) in ('wildshape', 'inspiration') else 1) for i in range(len(P.dice)) if ab(P, i) in GOLD_AB))
         steps_def = [lambda k: k in FORTUNE, lambda k: k not in FORTUNE] if RULES['two_step'] else [lambda k: True]
         for allowed in steps_def:
             passes, steps, t = 0, 0, 0
