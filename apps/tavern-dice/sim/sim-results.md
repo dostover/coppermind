@@ -2,6 +2,14 @@
 
 Simulator: `claude/tavern_sim.py` (all 24 abilities, all Gold abilities incl. Ward, Last Call, double-KO rules; rule switches in `RULES`). Both sides use the same greedy AI (best expected outcome for the current round; 1 Gold ≈ 0.5 Resolve; trailing players weight survival). Treat results as directional.
 
+## Run 20 — Wild Shape and Inspiration cost 2 Gold (2026-10-09) → v0.10.4
+Targeted tests (600 matches, ±4%), with Druid and Bard back on their **original faces**:
+- Druid (Wild Shape 2 Gold): **52.8%** (Rare target 51–56%; was 64% at 1 Gold, 58% with the v0.10.3 face change)
+- Bard (Inspiration 2 Gold): **54.5%** (was 61% at 1 Gold, 57% with the v0.10.3 face changes)
+- Mimic (can copy either ability, also pays 2): 50.5% — unchanged within noise.
+- The sim AI now keeps up to 2 Gold back from the Fortune step for a 2-Gold ability (`reserve()` counts ability cost). New rule switch: `RULES['flex_cost']`.
+- Raw data: `results34.json`, `results35.json`.
+
 ## Run 19 — balance pass on eight outliers (2026-10-08) → v0.10.3
 Targeted tests (die always in loadout A + 4 random, random opponent, 600 matches, ±4%), one or two face changes per die, abilities unchanged. Targets: Common 45–50%, Uncommon 48–53%, Rare 51–56%.
 
