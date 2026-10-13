@@ -30,6 +30,7 @@ A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice fr
 - **Gold actions** panel per player: the six universal actions light up only when usable, with hover tooltips.
 - Targeted actions are declared first so the opponent can Ward or Allow.
 - Gold and Resolve update automatically; each meter previews the change coming at Resolution. Manual adjustments live behind **Adjust**.
+- Hover any die (in a player's tray, on an ability row, or in the Loadout / Tavern Swap picker) to see all six of its faces, with the face showing now outlined.
 - Undo, turn log, Tavern Swap between rounds, a browsable gallery of all 52 dice with rarity filters.
 
 ## Running things
