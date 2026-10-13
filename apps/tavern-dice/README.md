@@ -13,7 +13,7 @@ A PvP collectible-dice minigame for a D&D campaign. Each player brings 5 dice fr
 | [`sim/test_rules.py`](sim/test_rules.py) | Rule checks for the simulator. |
 | [`sim/sim-results.md`](sim/sim-results.md) | Every simulation run (1–20) and the rules decisions it informed. |
 | [`playtest-log.md`](playtest-log.md) | Tabletop playtest notes (Match 1, rules v0.3 — historical). |
-| [`tests/e2e.js`](tests/e2e.js) + [`tests/parity_cases.py`](tests/parity_cases.py) | End-to-end suite (20 checks): gallery, loadouts, every Gold action, Ward/Allow, all 16 activated abilities, Mend/Closing Time, auto-pass, undo, a full match with Tavern Swap, layout — plus a check that the app's rules engine matches the simulator on random turns. |
+| [`tests/e2e.js`](tests/e2e.js) + [`tests/parity_cases.py`](tests/parity_cases.py) | End-to-end suite (21 checks): gallery, loadouts, every Gold action, Ward/Allow, all 16 activated abilities, Mend/Closing Time, auto-pass, undo, a full match with Tavern Swap, layout — plus a check that the app's rules engine matches the simulator on random turns. |
 | [`tests/play-match.js`](tests/play-match.js) | Playwright regression: plays a full match using only the action bar and checks for errors. |
 
 ## The collection

@@ -102,6 +102,30 @@ async function setup({ d0, d1, r0, r1, G = [5, 5], R = [10, 10], step = 'fortune
     return `ability "${a}", gold "${g}"`;
   });
 
+  await test('Hovering a die shows all six faces (current face outlined)', async () => {
+    await fresh({ autopass: false });
+    const info = () => page.$eval('#tip', e => e.hidden ? null : { name: e.querySelector('.tn').textContent, faces: e.querySelectorAll('.tfaces .die').length, up: e.querySelectorAll('.tface.up').length });
+    await page.$eval('#p0 .tray', e => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(120);
+    await page.hover('#p0 .tray .dwrap >> nth=0'); await page.waitForTimeout(100);
+    const pre = await info(); ok(pre && pre.faces === 6 && pre.up === 0, 'before roll: ' + JSON.stringify(pre));
+    await page.mouse.move(2, 2); await primary(); await page.waitForTimeout(500);
+    const out = [];
+    for (const k of [0, 1]) for (let i = 0; i < 5; i++) {
+      await page.$eval(`#p${k} .tray`, e => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(60);
+      await page.hover(`#p${k} .tray .dwrap >> nth=${i}`); await page.waitForTimeout(60);
+      const t = await info(); const want = (await S()).players[k].dice[i];
+      ok(t && t.name === want && t.faces === 6 && t.up === 1, `p${k} die ${i}: ${JSON.stringify(t)} expected ${want}`);
+      out.push(t.name); await page.mouse.move(2, 2); await page.waitForTimeout(40);
+    }
+    ok(await page.$eval('#tip', e => e.hidden), 'tooltip stays open after leaving');
+    await page.hover('#p0 .drow .swatch >> nth=0'); await page.waitForTimeout(80);
+    const sw = await info(); ok(sw && sw.faces === 6, 'ability-row swatch');
+    await page.mouse.move(2, 2);
+    await page.click('#p0 .tray .dwrap >> nth=0 >> .die'); await page.waitForTimeout(80);
+    ok(!(await page.$eval('#ov', e => e.hidden)), 'click no longer opens the die menu'); await page.click('#sheet [data-m="close"]');
+    return `10 tray dice + ability row: ${out.slice(0, 3).join(', ')}…`;
+  });
+
   // ---------------------------------------------------------------- Gold actions & declare/Ward
   await test('Reroll costs 1 Gold and passes priority', async () => {
     await fresh({ autopass: false });
