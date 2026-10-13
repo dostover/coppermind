@@ -147,6 +147,8 @@ svg.ic{width:100%;height:100%;display:block}
 .pick .pn{display:flex;align-items:center;gap:6px;min-width:0}
 .pick .rar{font:700 .62rem var(--caps);padding:1px 5px;border-radius:4px;letter-spacing:.04em}
 .tip .tfaces{display:flex;gap:4px;margin:8px 0 6px}.tip .tfaces .die{--s:34px}
+.tip .tface{display:flex;border-radius:9px;padding:2px;outline:2px solid transparent}.tip .tface.up{outline-color:var(--brass)}
+.tip{width:min(300px,calc(100vw - 32px))}
 .facepick{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
 .dwrap{position:relative}
 .badge{position:absolute;left:50%;top:-8px;transform:translateX(-50%);font:700 .62rem/1 var(--caps);letter-spacing:.06em;white-space:nowrap;background:var(--brass);color:var(--oak);border-radius:4px;padding:3px 5px;z-index:3}
@@ -705,7 +707,7 @@ function dieRow(k, i){
     act = a ? `<button type="button" class="btn use" data-use="${k}:${i}" ${ok ? '' : 'disabled'}>${D.ab === 'Imitate' && !p.mimic ? 'Choose' : (a.label === abName || a.label.length > 12 ? 'Use' : a.label)}</button><span class="dcost">${ok ? (COST[abName] || a.cost) : why}</span>` : '';
   }
   return `<div class="drow${p.jam[i] ? ' jammed' : ''}${p.used[i + ':' + abName] ? ' used' : ''}">
-    <span class="swatch die m-${d} t-${MAT[d] ? MAT[d].tone : 'light'}" aria-hidden="true"></span>
+    <span class="swatch die m-${d} t-${MAT[d] ? MAT[d].tone : 'light'}" aria-hidden="true" data-dtip="${d}"></span>
     <div class="dinfo">
       <div class="dname">${d} <span class="rar mini r-${RARITY[d]}">${RARITY[d][0]}</span>${copied ? ` <button type="button" class="linkbtn" data-remimic="${k}:${i}">change</button>` : ''}</div>
       <div class="dab">${abName ? `<b>${copied ? 'Imitating ' + copied : abName}.</b> ${text}` : text}</div>
@@ -742,7 +744,7 @@ function renderPlayer(k, tumble = []){
     </div>
     <div class="tray${S.phase === 'roll' ? ' stale' : ''}">
       ${p.dice.map((d,i) => `<div class="slot">
-        <div class="dwrap${flashSet.has(k + ':' + i) && !tumble.includes(i) ? ' flash' : ''}${S.pending && S.pending.target === k && S.pending.type !== 'sneaky' && S.pending.i === i ? ' targeted' : ''}">${dieHTML(p.res[i], { button: `die:${k}:${i}`, jam: p.jam[i], tumble: tumble.includes(i), label: d })}${badges(p,i).map(t => `<span class="badge">${t}</span>`).join('')}</div>
+        <div data-dtip="${d}" data-dcur="${p.res[i] || ''}" class="dwrap${flashSet.has(k + ':' + i) && !tumble.includes(i) ? ' flash' : ''}${S.pending && S.pending.target === k && S.pending.type !== 'sneaky' && S.pending.i === i ? ' targeted' : ''}">${dieHTML(p.res[i], { button: `die:${k}:${i}`, jam: p.jam[i], tumble: tumble.includes(i), label: d })}${badges(p,i).map(t => `<span class="badge">${t}</span>`).join('')}</div>
         <span class="nm" data-dtip="${d}">${d}</span>
         ${S.phase !== 'roll' && p.base && p.base[i] !== undefined && p.base[i] !== p.res[i] ? `<span class="was" title="Rolled ${faceLabel(p.base[i])}">was ${dieHTML(p.base[i], { size: 'xs', label: 'rolled', mat: d })}</span>` : ''}
         ${p.extra.filter(e => e.i===i).length ? `<div class="extras">${p.extra.filter(e => e.i===i).map(e => dieHTML(e.f,{size:'sm',ghost:true,label:d+' extra roll'})).join('')}</div>` : ''}
@@ -1249,15 +1251,16 @@ function goldTipHTML(k, id){
     <span class="tc">${g.cost} Gold</span> <span class="tc ${g.step === 'fortune' ? 'free' : 'pass'}">${step}</span>
     ${st.ok ? '' : `<div class="tw">${st.why === 'Not your move' ? `Not your move — wait for ${S.players[1 - k].name} to act or pass.` : st.why === 'When targeted' ? 'Only when your opponent targets you.' : `Not now: ${st.why}.`}</div>`}`;
 }
-function dieTipHTML(n){
-  const d = DICE[n];
+function dieTipHTML(n, cur){
+  const d = DICE[n]; let marked = false;
   return `<div class="tn">${n}</div><div class="tm">${RARITY[n]} · ${d.role}${MAT[n] ? ' · ' + MAT[n].name : ''}</div>
-    <div class="tfaces">${d.f.map(f => dieHTML(f, { size: 'sm', label: n })).join('')}</div>
+    <div class="tfaces">${d.f.map(f => { const up = cur !== undefined && !marked && f === cur; if (up) marked = true; return `<span class="tface${up ? ' up' : ''}">${dieHTML(f, { size: 'sm', label: n })}</span>`; }).join('')}</div>
+    ${marked ? '<div class="tm">Outlined: the face showing now.</div>' : ''}
     <div>${d.ab ? `<b>${d.ab}.</b> ` : ''}${d.t}</div>
     ${d.ab ? `<span class="tc ${PASSIVE.includes(d.ab) ? 'pass' : /^Free/.test(COST[d.ab] || '') ? 'free' : ''}">${PASSIVE.includes(d.ab) ? 'Passive · automatic' : (COST[d.ab] || '')}</span>` : ''}`;
 }
 function showTip(el){
-  if (el.dataset.dtip) tip.innerHTML = dieTipHTML(el.dataset.dtip);
+  if (el.dataset.dtip) tip.innerHTML = dieTipHTML(el.dataset.dtip, S.phase === 'roll' ? undefined : el.dataset.dcur);
   else if (el.dataset.gtip) { const [k, id] = el.dataset.gtip.split(':'); tip.innerHTML = goldTipHTML(+k, id); }
   else { const [k, i] = el.dataset.tip.split(':').map(Number); tip.innerHTML = tipHTML(k, i); }
   tip.hidden = false; tipFor = el;
