@@ -22,6 +22,36 @@ db.pragma("journal_mode = WAL");
 // SQLite doesn't enforce foreign keys unless told to per-connection.
 db.pragma("foreign_keys = ON");
 
+// card_instances' full shape, shared by the CREATE below and by the in-place
+// rebuild further down (migrateCardInstances) that upgrades an older database
+// whose CHECK constraint predates 'gift'/'welcome' - SQLite can't ALTER a
+// CHECK constraint, so the only way to widen it is to rebuild the table.
+//
+// acquired_via:
+// - 'redemption': minted by redeeming a code (including the bonus pass-it-on
+//   card a fan's first redemption grants - see redemptionCodesRepo.redeem)
+// - 'trade': moved here by a confirmed trade
+// - 'gift': received as someone else's pass-it-on card (see giftsRepo)
+// - 'welcome': the starter card a brand-new fan gets when they join from
+//   another fan's trade link, so they have something to trade on the spot
+//
+// pass_on = 1 marks a pass-it-on card still waiting to be given away. It
+// can't be traded, and it stops being a pass-it-on card (pass_on = 0) the
+// moment someone new claims it.
+function CARD_INSTANCES_TABLE_SQL(tableName: string): string {
+  return `CREATE TABLE IF NOT EXISTS ${tableName} (
+    id TEXT PRIMARY KEY,
+    template_id TEXT NOT NULL REFERENCES card_templates(id),
+    owner_fan_id TEXT NOT NULL REFERENCES fans(id),
+    acquired_via TEXT NOT NULL
+      CHECK (acquired_via IN ('redemption', 'trade', 'gift', 'welcome')),
+    redemption_code_id TEXT REFERENCES redemption_codes(id),
+    pass_on INTEGER NOT NULL DEFAULT 0 CHECK (pass_on IN (0, 1)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );`;
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS fans (
     id TEXT PRIMARY KEY,
@@ -118,15 +148,9 @@ db.exec(`
   -- A specific fan's specific owned card. owner_fan_id is always exactly one
   -- fan - ownership is strictly single-owner by design, no shared-ownership
   -- table exists. This is the row that moves (owner_fan_id changes) on trade.
-  CREATE TABLE IF NOT EXISTS card_instances (
-    id TEXT PRIMARY KEY,
-    template_id TEXT NOT NULL REFERENCES card_templates(id),
-    owner_fan_id TEXT NOT NULL REFERENCES fans(id),
-    acquired_via TEXT NOT NULL CHECK (acquired_via IN ('redemption', 'trade')),
-    redemption_code_id TEXT REFERENCES redemption_codes(id),
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
+  -- The shape here must stay identical to CARD_INSTANCES_TABLE_SQL below,
+  -- which rebuilds an older database's copy of this table in place.
+  ${CARD_INSTANCES_TABLE_SQL("card_instances")}
 
   CREATE INDEX IF NOT EXISTS idx_card_instances_owner ON card_instances(owner_fan_id);
 
@@ -157,7 +181,58 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_trade_items_trade ON trade_items(trade_id);
+
+  -- One handoff of a pass-it-on card from the fan holding it to someone new.
+  -- The giver creates it on the spot (it shows as a one-time QR/link), and it
+  -- expires quickly, so claiming one still means the two fans were together -
+  -- the same presence requirement trades have. token is what the QR encodes;
+  -- id stays internal.
+  CREATE TABLE IF NOT EXISTS gifts (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL UNIQUE,
+    card_instance_id TEXT NOT NULL REFERENCES card_instances(id),
+    from_fan_id TEXT NOT NULL REFERENCES fans(id),
+    to_fan_id TEXT REFERENCES fans(id),
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (status IN ('pending', 'claimed', 'cancelled')),
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    claimed_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_gifts_card ON gifts(card_instance_id);
 `);
+
+// Rebuilds card_instances on a database created before 'gift'/'welcome' and
+// pass_on existed (see CARD_INSTANCES_TABLE_SQL above). Uses SQLite's
+// documented create-copy-drop-rename procedure, with foreign key enforcement
+// paused for the swap so trade_items' references to card_instances survive.
+// A no-op on any database that already has the current shape.
+function migrateCardInstances(): void {
+  const row = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'card_instances'`)
+    .get() as { sql: string } | undefined;
+  if (!row || row.sql.includes("'welcome'")) return;
+
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.transaction(() => {
+      db.exec(CARD_INSTANCES_TABLE_SQL("card_instances_new"));
+      db.exec(`
+        INSERT INTO card_instances_new
+          (id, template_id, owner_fan_id, acquired_via, redemption_code_id, pass_on, created_at, updated_at)
+        SELECT id, template_id, owner_fan_id, acquired_via, redemption_code_id, 0, created_at, updated_at
+        FROM card_instances;
+        DROP TABLE card_instances;
+        ALTER TABLE card_instances_new RENAME TO card_instances;
+        CREATE INDEX IF NOT EXISTS idx_card_instances_owner ON card_instances(owner_fan_id);
+      `);
+    })();
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
+}
+migrateCardInstances();
 
 // fans.email was added after the original table shape shipped (auth wasn't
 // designed yet) - ALTER TABLE ADD COLUMN, guarded so it's a no-op on a
@@ -215,6 +290,21 @@ export const fansRepo = {
 
   getByEmail(email: string): FanRow | undefined {
     return db.prepare(`SELECT * FROM fans WHERE email = ?`).get(email) as FanRow | undefined;
+  },
+
+  // Quick join: a name-only fan with no email, created when someone new
+  // scans another fan's trade or pass-it-on QR code (see
+  // src/app/api/auth/join/route.ts). This is a demo-phase shortcut so a new
+  // person can join in seconds without an email round trip; such a fan can't
+  // sign back in on another device yet. Adding an email to an existing guest
+  // is on the "before real fans" list in claude/technical-decisions.md.
+  createGuest(input: { id: string; displayName: string; createdAt: string }): FanRow {
+    db.prepare(`INSERT INTO fans (id, display_name, email, created_at) VALUES (?, ?, NULL, ?)`).run(
+      input.id,
+      input.displayName,
+      input.createdAt
+    );
+    return db.prepare(`SELECT * FROM fans WHERE id = ?`).get(input.id) as FanRow;
   },
 };
 
@@ -489,6 +579,36 @@ export const cardTemplatesRepo = {
   },
 };
 
+// The two cards the app itself hands out rather than a redemption code:
+// the pass-it-on card (bonus on a fan's first redemption, meant to be given
+// to someone new) and the welcome card (what a brand-new fan gets when they
+// join from someone's trade link). Fixed ids so code can find them without a
+// lookup by title. ensureSystemTemplates() runs at startup and again from
+// scripts/seed.ts after it wipes card_templates.
+export const PASS_IT_ON_TEMPLATE_ID = "system-pass-it-on";
+export const WELCOME_TEMPLATE_ID = "system-welcome";
+
+export function ensureSystemTemplates(): void {
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO card_templates (id, type, title, description, created_at)
+     VALUES (?, 'milestone', ?, ?, ?)`
+  );
+  const now = new Date().toISOString();
+  insert.run(
+    PASS_IT_ON_TEMPLATE_ID,
+    "Pass It On",
+    "Somebody wanted you here. Every fan's first card comes with one of these to give to someone new.",
+    now
+  );
+  insert.run(
+    WELCOME_TEMPLATE_ID,
+    "Welcome to Banana Ball",
+    "Your first card - earned by showing up to trade with another fan.",
+    now
+  );
+}
+ensureSystemTemplates();
+
 export interface RedemptionCodeRow {
   id: string;
   code: string;
@@ -506,11 +626,14 @@ export interface CardInstanceRow {
   id: string;
   template_id: string;
   owner_fan_id: string;
-  acquired_via: "redemption" | "trade";
+  acquired_via: AcquiredVia;
   redemption_code_id: string | null;
+  pass_on: 0 | 1;
   created_at: string;
   updated_at: string;
 }
+
+export type AcquiredVia = "redemption" | "trade" | "gift" | "welcome";
 
 export const redemptionCodesRepo = {
   issue(input: {
@@ -546,12 +669,16 @@ export const redemptionCodesRepo = {
   // if the code doesn't exist or was already redeemed/voided - callers
   // should catch and turn that into a user-facing "this code isn't valid"
   // response rather than a 500.
+  //
+  // A fan's very first redemption also mints one bonus pass-it-on card
+  // (passOnInstance), in the same transaction - see the growth-loop section
+  // of claude/card-value-model.md. Every later redemption returns null there.
   redeem(input: {
     code: string;
     fanId: string;
     newInstanceId: string;
     redeemedAt: string;
-  }): CardInstanceRow {
+  }): { instance: CardInstanceRow; passOnInstance: CardInstanceRow | null } {
     const tx = db.transaction(() => {
       const existing = db
         .prepare(`SELECT * FROM redemption_codes WHERE code = ?`)
@@ -561,6 +688,8 @@ export const redemptionCodesRepo = {
       if (existing.status !== "unredeemed") {
         throw new Error(`Redemption code ${input.code} is ${existing.status}, not unredeemed.`);
       }
+
+      const isFirstRedemption = !hasRedeemedAnyCode(input.fanId);
 
       db.prepare(
         `UPDATE redemption_codes
@@ -581,14 +710,46 @@ export const redemptionCodesRepo = {
         input.redeemedAt
       );
 
-      return db
+      const instance = db
         .prepare(`SELECT * FROM card_instances WHERE id = ?`)
         .get(input.newInstanceId) as CardInstanceRow;
+
+      let passOnInstance: CardInstanceRow | null = null;
+      if (isFirstRedemption) {
+        const passOnId = randomUUID();
+        db.prepare(
+          `INSERT INTO card_instances
+             (id, template_id, owner_fan_id, acquired_via, redemption_code_id, pass_on, created_at, updated_at)
+           VALUES (?, ?, ?, 'redemption', ?, 1, ?, ?)`
+        ).run(
+          passOnId,
+          PASS_IT_ON_TEMPLATE_ID,
+          input.fanId,
+          existing.id,
+          input.redeemedAt,
+          input.redeemedAt
+        );
+        passOnInstance = db
+          .prepare(`SELECT * FROM card_instances WHERE id = ?`)
+          .get(passOnId) as CardInstanceRow;
+      }
+
+      return { instance, passOnInstance };
     });
 
     return tx();
   },
 };
+
+// True once a fan has redeemed at least one code themselves. Used both to
+// decide whether a redemption is a fan's first (and so earns a pass-it-on
+// card) and to decide who counts as "someone new" who can receive one.
+function hasRedeemedAnyCode(fanId: string): boolean {
+  return (
+    db.prepare(`SELECT 1 FROM redemption_codes WHERE redeemed_by_fan_id = ? LIMIT 1`).get(fanId) !==
+    undefined
+  );
+}
 
 export const cardInstancesRepo = {
   getById(id: string): CardInstanceRow | undefined {
@@ -621,14 +782,49 @@ export const cardInstancesRepo = {
            ct.player_name AS player_name,
            ct.stats AS stats,
            ci.acquired_via AS acquired_via,
+           ci.pass_on AS pass_on,
+           giver.display_name AS gifted_by,
            ci.updated_at AS acquired_at
          FROM card_instances ci
          JOIN card_templates ct ON ct.id = ci.template_id
+         LEFT JOIN gifts g
+           ON g.card_instance_id = ci.id AND g.status = 'claimed' AND g.to_fan_id = ci.owner_fan_id
+         LEFT JOIN fans giver ON giver.id = g.from_fan_id
          WHERE ci.owner_fan_id = ?
          ORDER BY ci.updated_at DESC`
       )
-      .all(fanId) as (Omit<OwnedCardView, "stats"> & { stats: string | null })[];
-    return rows.map((row) => ({ ...row, stats: parseCardStats(row.stats) }));
+      .all(fanId) as (Omit<OwnedCardView, "stats" | "pass_on"> & {
+      stats: string | null;
+      pass_on: 0 | 1;
+    })[];
+    return rows.map((row) => ({
+      ...row,
+      stats: parseCardStats(row.stats),
+      pass_on: row.pass_on === 1,
+    }));
+  },
+
+  // What this fan can put into a trade right now: everything they own except
+  // pass-it-on cards (those can only be given, never traded) and anything
+  // already tied up in another pending trade.
+  listTradeable(fanId: string): OwnedCardView[] {
+    const pendingIds = tradesRepo.pendingCardInstanceIds(fanId);
+    return cardInstancesRepo
+      .listByOwnerWithTemplate(fanId)
+      .filter((card) => !card.pass_on && !pendingIds.has(card.instance_id));
+  },
+
+  // The starter card a brand-new fan gets when they join from someone's
+  // trade link (see src/app/api/auth/join/route.ts), so their first trade can
+  // happen on the spot instead of after they've found a code to redeem.
+  grantWelcome(fanId: string, now: string): CardInstanceRow {
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO card_instances
+         (id, template_id, owner_fan_id, acquired_via, created_at, updated_at)
+       VALUES (?, ?, ?, 'welcome', ?, ?)`
+    ).run(id, WELCOME_TEMPLATE_ID, fanId, now, now);
+    return db.prepare(`SELECT * FROM card_instances WHERE id = ?`).get(id) as CardInstanceRow;
   },
 };
 
@@ -641,9 +837,189 @@ export interface OwnedCardView {
   image_path: string | null;
   player_name: string | null;
   stats: Record<string, string | number> | null;
-  acquired_via: "redemption" | "trade";
+  acquired_via: AcquiredVia;
+  // True for a pass-it-on card still waiting to be given to someone new.
+  pass_on: boolean;
+  // Display name of the fan who passed this card on, for a card received as a
+  // gift; null otherwise.
+  gifted_by: string | null;
   acquired_at: string;
 }
+
+// ---- Pass-it-on gifts -------------------------------------------------------
+
+// How long a pass-it-on QR stays claimable. Short on purpose: the giver makes
+// one while standing with the person they're giving it to.
+export const GIFT_TTL_MINUTES = 15;
+
+export interface GiftRow {
+  id: string;
+  token: string;
+  card_instance_id: string;
+  from_fan_id: string;
+  to_fan_id: string | null;
+  status: "pending" | "claimed" | "cancelled";
+  expires_at: string;
+  created_at: string;
+  claimed_at: string | null;
+}
+
+export interface GiftView {
+  token: string;
+  status: GiftRow["status"];
+  expired: boolean;
+  expiresAt: string;
+  fromFan: { id: string; displayName: string };
+  toFanId: string | null;
+  card: { title: string; description: string; type: CardTemplateRow["type"] };
+}
+
+// Thrown for anything that's the fan's situation rather than a server fault
+// (expired code, already claimed, not eligible) - routes turn it into a 400
+// with this message, the same way redemption errors are handled.
+export class GiftError extends Error {}
+
+export const giftsRepo = {
+  // Starts a handoff for one of the giver's pass-it-on cards. Any earlier
+  // unclaimed handoff for the same card is cancelled, so only the newest QR
+  // the giver showed can be claimed.
+  create(input: { fromFanId: string; cardInstanceId: string; now: Date }): GiftRow {
+    const tx = db.transaction(() => {
+      const card = db
+        .prepare(`SELECT * FROM card_instances WHERE id = ?`)
+        .get(input.cardInstanceId) as CardInstanceRow | undefined;
+      if (!card || card.owner_fan_id !== input.fromFanId) {
+        throw new GiftError("That's not a card you own.");
+      }
+      if (card.pass_on !== 1) {
+        throw new GiftError("Only pass-it-on cards can be given away.");
+      }
+
+      db.prepare(
+        `UPDATE gifts SET status = 'cancelled' WHERE card_instance_id = ? AND status = 'pending'`
+      ).run(input.cardInstanceId);
+
+      const expires = new Date(input.now);
+      expires.setMinutes(expires.getMinutes() + GIFT_TTL_MINUTES);
+      const id = randomUUID();
+      db.prepare(
+        `INSERT INTO gifts (id, token, card_instance_id, from_fan_id, expires_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(
+        id,
+        randomUUID(),
+        input.cardInstanceId,
+        input.fromFanId,
+        expires.toISOString(),
+        input.now.toISOString()
+      );
+      return db.prepare(`SELECT * FROM gifts WHERE id = ?`).get(id) as GiftRow;
+    });
+    return tx();
+  },
+
+  getView(token: string, now: string): GiftView | undefined {
+    const row = db
+      .prepare(
+        `SELECT g.token, g.status, g.expires_at, g.to_fan_id,
+                f.id AS from_id, f.display_name AS from_name,
+                ct.title, ct.description, ct.type
+         FROM gifts g
+         JOIN fans f ON f.id = g.from_fan_id
+         JOIN card_instances ci ON ci.id = g.card_instance_id
+         JOIN card_templates ct ON ct.id = ci.template_id
+         WHERE g.token = ?`
+      )
+      .get(token) as
+      | {
+          token: string;
+          status: GiftRow["status"];
+          expires_at: string;
+          to_fan_id: string | null;
+          from_id: string;
+          from_name: string;
+          title: string;
+          description: string;
+          type: CardTemplateRow["type"];
+        }
+      | undefined;
+    if (!row) return undefined;
+    return {
+      token: row.token,
+      status: row.status,
+      expired: row.status === "pending" && row.expires_at <= now,
+      expiresAt: row.expires_at,
+      fromFan: { id: row.from_id, displayName: row.from_name },
+      toFanId: row.to_fan_id,
+      card: { title: row.title, description: row.description, type: row.type },
+    };
+  },
+
+  // Whether this fan counts as "someone new" who can receive a pass-it-on
+  // card: they've never redeemed a code themselves and never received one
+  // before. That keeps the card doing its one job - bringing a new fan in -
+  // rather than circulating between fans who are already collecting.
+  canReceive(fanId: string): boolean {
+    if (hasRedeemedAnyCode(fanId)) return false;
+    const received = db
+      .prepare(`SELECT 1 FROM gifts WHERE to_fan_id = ? AND status = 'claimed' LIMIT 1`)
+      .get(fanId);
+    return received === undefined;
+  },
+
+  // Moves the card to the recipient in one transaction: it becomes an
+  // ordinary card in their collection (pass_on cleared, acquired_via 'gift')
+  // and the handoff is marked claimed. The UPDATE ... WHERE status =
+  // 'pending' row count is the race guard, so two people scanning the same
+  // QR can't both claim it.
+  claim(input: { token: string; toFanId: string; now: string }): GiftRow {
+    const tx = db.transaction(() => {
+      const gift = db.prepare(`SELECT * FROM gifts WHERE token = ?`).get(input.token) as
+        | GiftRow
+        | undefined;
+      if (!gift) throw new GiftError("That pass-it-on code isn't valid.");
+      if (gift.status === "claimed") throw new GiftError("Someone already claimed this card.");
+      if (gift.status === "cancelled") {
+        throw new GiftError("This code was replaced. Ask for a fresh one.");
+      }
+      if (gift.expires_at <= input.now) {
+        throw new GiftError("This code expired. Ask for a fresh one.");
+      }
+      if (gift.from_fan_id === input.toFanId) {
+        throw new GiftError("You can't pass a card to yourself. Show this code to someone new.");
+      }
+      if (!giftsRepo.canReceive(input.toFanId)) {
+        throw new GiftError(
+          "Pass-it-on cards are for fans who are just getting started, and you're already collecting."
+        );
+      }
+
+      const card = db
+        .prepare(`SELECT * FROM card_instances WHERE id = ?`)
+        .get(gift.card_instance_id) as CardInstanceRow | undefined;
+      if (!card || card.owner_fan_id !== gift.from_fan_id || card.pass_on !== 1) {
+        throw new GiftError("This card isn't available to pass on anymore.");
+      }
+
+      const claimed = db
+        .prepare(
+          `UPDATE gifts SET status = 'claimed', to_fan_id = ?, claimed_at = ?
+           WHERE id = ? AND status = 'pending'`
+        )
+        .run(input.toFanId, input.now, gift.id);
+      if (claimed.changes === 0) throw new GiftError("Someone already claimed this card.");
+
+      db.prepare(
+        `UPDATE card_instances
+         SET owner_fan_id = ?, acquired_via = 'gift', pass_on = 0, updated_at = ?
+         WHERE id = ?`
+      ).run(input.toFanId, input.now, card.id);
+
+      return db.prepare(`SELECT * FROM gifts WHERE id = ?`).get(gift.id) as GiftRow;
+    });
+    return tx();
+  },
+};
 
 export interface TradeRow {
   id: string;

@@ -56,6 +56,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (offerCard.pass_on === 1 || requestCard.pass_on === 1) {
+    return NextResponse.json(
+      { error: "Pass-it-on cards can only be given to someone new, not traded." },
+      { status: 400 }
+    );
+  }
+
   if (
     tradesRepo.isCardInPendingTrade(offerCardInstanceId) ||
     tradesRepo.isCardInPendingTrade(requestCardInstanceId)

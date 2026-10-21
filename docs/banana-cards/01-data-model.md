@@ -169,8 +169,9 @@ A specific fan's specific owned card. This is what moves in a trade.
 | id | TEXT (uuid) | primary key |
 | template_id | TEXT (uuid) | FK → `card_templates.id` |
 | owner_fan_id | TEXT (uuid) | FK → `fans.id` — single owner, always exactly one |
-| acquired_via | TEXT | `redemption` \| `trade` |
+| acquired_via | TEXT | `redemption` \| `trade` \| `gift` \| `welcome` (see "Growth loops" below) |
 | redemption_code_id | TEXT (uuid) | nullable FK → `redemption_codes.id`, set if acquired via redemption |
+| pass_on | INTEGER | `1` for a pass-it-on card still waiting to be given away; `0` otherwise |
 | created_at | TEXT (ISO) | when this instance was first created (redeemed) |
 | updated_at | TEXT (ISO) | bumped whenever `owner_fan_id` changes via trade |
 
@@ -206,6 +207,67 @@ target) and multi-card trades without a schema change.
 On a trade's `status` moving to `confirmed`, each `trade_items` row's
 `card_instance` gets `owner_fan_id` updated to `to_fan_id`, `acquired_via` set to
 `trade`, and `updated_at` bumped. This is done as a single transaction.
+
+`gift`, `welcome` and `pass_on` were added for the growth loops below. Since
+SQLite can't widen a `CHECK` constraint in place, `db.ts`'s
+`migrateCardInstances()` rebuilds an older database's `card_instances` table
+with SQLite's documented create-copy-drop-rename procedure (existing rows and
+trade references are kept); a fresh database just gets the current shape.
+
+### `gifts`
+One handoff of a pass-it-on card from the fan holding it to someone new. The
+giver creates it on the spot and shows it as a one-time QR; it expires after
+15 minutes, so a claim still means the two fans were together.
+
+| column | type | notes |
+|---|---|---|
+| id | TEXT (uuid) | primary key |
+| token | TEXT | unique; what the QR link encodes (`/gift/<token>`) |
+| card_instance_id | TEXT (uuid) | FK → `card_instances.id` |
+| from_fan_id | TEXT (uuid) | FK → `fans.id` |
+| to_fan_id | TEXT (uuid) | nullable FK → `fans.id`, set on claim |
+| status | TEXT | `pending` \| `claimed` \| `cancelled` (a newer code for the same card cancels older ones) |
+| expires_at | TEXT (ISO) | |
+| created_at | TEXT (ISO) | |
+| claimed_at | TEXT (ISO) | nullable |
+
+## Growth loops (demo)
+
+The two fan-base-building mechanisms proposed in `claude/card-value-model.md`
+("Fan First and fan base building", section 4), built into the demo:
+
+**Pass It On.** A fan's first redemption also mints one bonus card from the
+`system-pass-it-on` template with `pass_on = 1`, in the same transaction
+(`redemptionCodesRepo.redeem()` returns it as `passOnInstance`). It can't be
+traded (excluded from `cardInstancesRepo.listTradeable()` and rejected by
+`POST /api/trades`) and sits outside the collection grid. From `/trade`, the
+fan taps "Show pass-it-on code": `POST /api/gifts` creates a `gifts` row and
+returns the link plus a server-generated QR. The new person opens
+`/gift/<token>` (`GET /api/gifts/[token]` is its JSON twin, no sign-in
+needed), joins with a name if they have no account, and `POST
+/api/gifts/[token]/claim` moves the card to them as an ordinary card
+(`acquired_via = 'gift'`, `pass_on = 0`), shown as "A gift from <giver>". Only
+"someone new" can receive one: a fan who has never redeemed a code and never
+received a pass-it-on card (`giftsRepo.canReceive()`).
+
+**No-install first trade.** A fan's trade QR now encodes a link,
+`/trade?with=<fanId>`, rather than the bare fan id, so any phone's camera app
+opens it. A signed-in fan landing there gets that fan looked up automatically.
+Someone with no account gets a name-only quick join (`POST /api/auth/join`
+with `tradeWithFanId`), which also grants a `system-welcome` "Welcome to Banana
+Ball" card (`acquired_via = 'welcome'`) so they have something to offer, then
+the same trade screen. The other fan confirms as usual. Typing the bare fan id
+or pasting the full link into the trade-code box both still work.
+
+**Quick-join fans** are `fans` rows with a null `email`
+(`fansRepo.createGuest()`). They get the same bearer token + cookie as email
+sign-in, so everything downstream treats them the same, but they can't sign
+back in on another device yet - a demo-phase shortcut listed under "Before
+real fans" in `claude/technical-decisions.md`.
+
+QR links are built from the request's own host (`src/lib/origin.ts`), so a
+demo served on a LAN address produces codes a second phone on the same
+network can open.
 
 ## Collection view
 
@@ -284,6 +346,11 @@ up yet, `request-code` echoes the one-time code back as `devCode` instead of
 sending it (see `redemption_codes`/two-phase-login notes above), so there's
 nothing further to configure to demo with them.
 
+Because personas get their cards through the real redemption path, each one's
+first grant also mints a Pass It On card, so every persona can demo the
+pass-it-on handoff straight away: show the code from `/trade` and open the
+link in a private window (or on another phone) as the new fan.
+
 ## What's deliberately not here yet
 
 - No pricing/value fields anywhere — intentional, per the "no marketplace
@@ -292,6 +359,8 @@ nothing further to configure to demo with them.
   single-owner (see `card-value-model.md`).
 - No geolocation verification implementation — `verification_method` is a
   reserved column, not a built feature.
+- No way yet for a quick-join (name-only) fan to add an email and sign in on
+  another device.
 - No real camera-based QR scanning — the web reference client uses typed/
   displayed codes; an actual scan is a mobile-client enhancement on top of
   the same `fanId`-based lookup, not a schema change.

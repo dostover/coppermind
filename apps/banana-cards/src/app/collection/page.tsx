@@ -23,7 +23,11 @@ export default async function CollectionPage() {
     );
   }
 
-  const cards = cardInstancesRepo.listByOwnerWithTemplate(fan.id);
+  // Pass-it-on cards aren't really part of the collection - they're waiting
+  // to be given away - so they sit in their own callout instead of the grid.
+  const allCards = cardInstancesRepo.listByOwnerWithTemplate(fan.id);
+  const cards = allCards.filter((c) => !c.pass_on);
+  const passOnCount = allCards.length - cards.length;
 
   return (
     <main className="page page-wide">
@@ -31,6 +35,13 @@ export default async function CollectionPage() {
       <p>
         Signed in as <strong>{fan.display_name}</strong>.
       </p>
+
+      {passOnCount > 0 && (
+        <p className="pass-it-on-callout">
+          You have {passOnCount === 1 ? "a Pass It On card" : `${passOnCount} Pass It On cards`} to give to
+          someone new. <Link href="/trade#pass-it-on">Pass it on</Link>
+        </p>
+      )}
 
       {cards.length === 0 ? (
         <p>

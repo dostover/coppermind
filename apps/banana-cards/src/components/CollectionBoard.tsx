@@ -4,7 +4,16 @@ import { useMemo, useState } from "react";
 import type { OwnedCardView } from "@/lib/db";
 
 type SortKey = "newest" | "oldest" | "title" | "type";
-type ViaFilter = "all" | "redemption" | "trade";
+type ViaFilter = "all" | OwnedCardView["acquired_via"];
+
+const VIA_ORDER: OwnedCardView["acquired_via"][] = ["redemption", "trade", "gift", "welcome"];
+
+const VIA_LABELS: Record<OwnedCardView["acquired_via"], { filter: string; stat: string }> = {
+  redemption: { filter: "Redeemed", stat: "redeemed" },
+  trade: { filter: "Traded", stat: "traded" },
+  gift: { filter: "Gifts", stat: "gifted to you" },
+  welcome: { filter: "Welcome", stat: "welcome" },
+};
 
 // Fixed display order for the card taxonomy (card_templates.type) - filter
 // pills only show types the fan actually owns at least one of, in this
@@ -38,17 +47,16 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
 
   const stats = useMemo(() => {
     const byType = new Map<OwnedCardView["type"], number>();
-    let redemption = 0;
-    let trade = 0;
+    const byVia = new Map<OwnedCardView["acquired_via"], number>();
     for (const card of cards) {
       byType.set(card.type, (byType.get(card.type) ?? 0) + 1);
-      if (card.acquired_via === "redemption") redemption++;
-      else trade++;
+      byVia.set(card.acquired_via, (byVia.get(card.acquired_via) ?? 0) + 1);
     }
-    return { total: cards.length, byType, redemption, trade };
+    return { total: cards.length, byType, byVia };
   }, [cards]);
 
   const availableTypes = TYPE_ORDER.filter((t) => stats.byType.has(t));
+  const availableVias = VIA_ORDER.filter((v) => stats.byVia.has(v));
 
   const visible = useMemo(() => {
     let list = cards;
@@ -82,8 +90,11 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
             {stats.byType.get(t)} {TYPE_LABELS[t]}
           </span>
         ))}
-        <span className="collection-stat-pill">{stats.redemption} redeemed</span>
-        <span className="collection-stat-pill">{stats.trade} traded</span>
+        {availableVias.map((v) => (
+          <span key={v} className="collection-stat-pill">
+            {stats.byVia.get(v)} {VIA_LABELS[v].stat}
+          </span>
+        ))}
       </div>
 
       <div className="collection-controls">
@@ -108,14 +119,14 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
         </div>
 
         <div className="collection-filter-group">
-          {(["all", "redemption", "trade"] as ViaFilter[]).map((v) => (
+          {(["all", ...availableVias] as ViaFilter[]).map((v) => (
             <button
               type="button"
               key={v}
               className={"filter-pill" + (viaFilter === v ? " filter-pill-selected" : "")}
               onClick={() => setViaFilter(v)}
             >
-              {v === "all" ? "Any source" : v === "redemption" ? "Redeemed" : "Traded"}
+              {v === "all" ? "Any source" : VIA_LABELS[v].filter}
             </button>
           ))}
         </div>
@@ -140,6 +151,7 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
               <span className="card-tile-type">{card.type}</span>
               <h2>{card.title}</h2>
               {card.player_name && <p className="card-tile-player">{card.player_name}</p>}
+              {card.gifted_by && <p className="card-tile-gift">A gift from {card.gifted_by}</p>}
               {card.description && <p>{card.description}</p>}
               {card.stats && (
                 <p className="card-tile-stats">

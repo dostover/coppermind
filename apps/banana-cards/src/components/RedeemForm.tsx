@@ -22,6 +22,7 @@ export function RedeemForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<RedeemedCard | null>(null);
+  const [gotPassOn, setGotPassOn] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,8 +40,12 @@ export function RedeemForm() {
       if (!res.ok) {
         throw new Error(await extractErrorMessage(res, "That code didn't work."));
       }
-      const data = (await res.json()) as { card: RedeemedCard };
+      const data = (await res.json()) as {
+        card: RedeemedCard;
+        passOnCard: { instanceId: string } | null;
+      };
       setRedeemed(data.card);
+      setGotPassOn(data.passOnCard !== null);
       setCode("");
       router.refresh();
     } catch (err) {
@@ -63,8 +68,20 @@ export function RedeemForm() {
               .join(" · ")}
           </p>
         )}
+        {gotPassOn && (
+          <p className="pass-it-on-callout">
+            <strong>Bonus for your first card:</strong> a Pass It On card to give to someone new to Banana
+            Ball. <a href="/trade#pass-it-on">Pass it on</a>
+          </p>
+        )}
         <div className="redeem-actions">
-          <button type="button" onClick={() => setRedeemed(null)}>
+          <button
+            type="button"
+            onClick={() => {
+              setRedeemed(null);
+              setGotPassOn(false);
+            }}
+          >
             Redeem another code
           </button>
           <a href="/collection" className="link-button">

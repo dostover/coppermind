@@ -22,6 +22,7 @@ import {
   redemptionCodesRepo,
   fansRepo,
   tradesRepo,
+  ensureSystemTemplates,
   type CardTemplateRow,
 } from "../src/lib/db";
 
@@ -31,6 +32,7 @@ const rawDb = new Database(path.join(dataDir, "banana-cards.sqlite"));
 
 console.log("Wiping existing data...");
 rawDb.exec(`
+  DELETE FROM gifts;
   DELETE FROM trade_items;
   DELETE FROM trades;
   DELETE FROM card_instances;
@@ -42,6 +44,10 @@ rawDb.exec(`
   DELETE FROM fans;
 `);
 rawDb.close();
+
+// The pass-it-on and welcome cards are created by the app itself, not by a
+// redemption code - put them back after the wipe above removed them.
+ensureSystemTemplates();
 
 const now = new Date().toISOString();
 
@@ -446,7 +452,7 @@ function grantCard(fan: Persona, templateId: string): string {
   const code = `DEMO-GRANT-${String(demoGrantCount).padStart(3, "0")}`;
   redemptionCodesRepo.issue({ id: randomUUID(), code, templateId, issuedVia: "staff", createdAt: now });
   return redemptionCodesRepo.redeem({ code, fanId: fan.id, newInstanceId: randomUUID(), redeemedAt: now })
-    .id;
+    .instance.id;
 }
 
 // Peel Master Flex: the collector - a broad, mixed collection so the
@@ -518,3 +524,7 @@ console.log("  peelmaster@example.com   Peel Master Flex   9 cards, broad mixed 
 console.log("  rookienanas@example.com  Rookie Nanas       2 cards, brand-new fan");
 console.log("  sluggo@example.com       Sluggo             4 cards, 1 confirmed trade, 1 pending trade to confirm");
 console.log("  zesty@example.com        Zesty              3 cards, 1 pending trade awaiting Sluggo");
+console.log(
+  "\nEach persona also holds one Pass It On card (every fan's first redemption grants one) - " +
+    "show it from /trade and open the link in a private window to try the new-fan side."
+);

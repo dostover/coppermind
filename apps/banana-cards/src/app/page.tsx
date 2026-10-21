@@ -14,7 +14,8 @@ export default async function Home() {
       {fan ? (
         <div className="welcome-card">
           <p>
-            Signed in as <strong>{fan.display_name}</strong>.
+            Signed in as <strong>{fan.display_name}</strong>
+            {fan.email === null && " (quick join, no email yet)"}.
           </p>
           <nav className="nav-links">
             <Link href="/redeem">Redeem a code</Link>

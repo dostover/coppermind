@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { OwnedCardView, TradeView } from "@/lib/db";
 import { extractErrorMessage } from "@/lib/fetchError";
 
@@ -14,21 +14,47 @@ import { extractErrorMessage } from "@/lib/fetchError";
 // That's the proposer's half of "both confirm" - Fan B's explicit Confirm
 // tap below is the other half, and is the only thing that actually moves
 // ownership.
+//
+// The QR encodes a link (/trade?with=<fanId>) rather than the bare id, so a
+// phone's camera app opens it directly. Arriving through that link sets
+// initialWithFanId, and the lookup runs on its own - the scanning fan goes
+// straight to picking cards. Pasting the link into the code box works too.
+//
+// Pass-it-on cards live here as well, because handing one over is the same
+// in-person moment as a trade: the giver shows a one-time QR and someone new
+// scans it (see /gift/[token]).
 type LookupResult = {
   fan: { id: string; displayName: string };
   cards: OwnedCardView[];
 };
 
+// Accepts either a bare fan id or a full trade link someone pasted in.
+function fanIdFromInput(input: string): string {
+  const trimmed = input.trim();
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("with") ?? trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
 export function TradeBoard({
   myFanId,
+  myTradeLink,
   myQrDataUrl,
   myEligibleCards,
+  passOnCards,
   trades,
+  initialWithFanId,
 }: {
   myFanId: string;
+  myTradeLink: string;
   myQrDataUrl: string;
   myEligibleCards: OwnedCardView[];
+  passOnCards: OwnedCardView[];
   trades: TradeView[];
+  initialWithFanId?: string;
 }) {
   const router = useRouter();
   const [code, setCode] = useState("");
@@ -38,15 +64,11 @@ export function TradeBoard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleLookup(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = code.trim();
-    if (!trimmed) return;
-
+  const lookUpFan = useCallback(async (fanId: string) => {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/trades/lookup/${encodeURIComponent(trimmed)}`);
+      const res = await fetch(`/api/trades/lookup/${encodeURIComponent(fanId)}`);
       if (!res.ok) {
         throw new Error(await extractErrorMessage(res, "Couldn't find that fan."));
       }
@@ -59,7 +81,23 @@ export function TradeBoard({
     } finally {
       setBusy(false);
     }
+  }, []);
+
+  function handleLookup(e: React.FormEvent) {
+    e.preventDefault();
+    const fanId = fanIdFromInput(code);
+    if (fanId) void lookUpFan(fanId);
   }
+
+  // Arrived by scanning someone's trade QR: look them up straight away. The
+  // ref keeps this to once per page load even though router.refresh() after
+  // a proposal re-renders the board.
+  const autoLookedUp = useRef(false);
+  useEffect(() => {
+    if (!initialWithFanId || autoLookedUp.current) return;
+    autoLookedUp.current = true;
+    void lookUpFan(initialWithFanId);
+  }, [initialWithFanId, lookUpFan]);
 
   async function handlePropose() {
     if (!lookup || !offerId || !requestId) return;
@@ -131,13 +169,21 @@ export function TradeBoard({
       <section className="trade-code-box">
         <h2>My trade code</h2>
         <p>Show this to a fan you&apos;re trading with in person.</p>
+        <p className="trade-code-hint">
+          They can scan it with their phone camera, even if they don&apos;t have Banana Cards yet.
+        </p>
         <Image src={myQrDataUrl} alt="Your trade QR code" width={160} height={160} unoptimized />
         <code className="trade-code-text">{myFanId}</code>
+        <a className="trade-code-link" href={myTradeLink}>
+          {myTradeLink}
+        </a>
       </section>
+
+      {passOnCards.length > 0 && <PassItOn cards={passOnCards} />}
 
       <section className="trade-start">
         <h2>Start a trade</h2>
-        <p>Enter the code the other fan showed you.</p>
+        <p>Enter the code (or paste the link) the other fan showed you.</p>
         <form onSubmit={handleLookup} className="redeem-form">
           <input
             value={code}
@@ -311,5 +357,99 @@ function TradeRow({
       </p>
       {children && <div className="trade-row-actions">{children}</div>}
     </div>
+  );
+}
+
+// The giver's half of a pass-it-on handoff. Tapping the button asks the API
+// for a fresh one-time link (any earlier one for this card stops working)
+// and shows it as a QR for the new fan to scan. There's no "sent" state to
+// track here - once it's claimed, the card simply leaves this fan's
+// collection on the next refresh.
+function PassItOn({ cards }: { cards: OwnedCardView[] }) {
+  const router = useRouter();
+  const [gift, setGift] = useState<{
+    cardInstanceId: string;
+    url: string;
+    qrDataUrl: string;
+    expiresAt: string;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleShow(cardInstanceId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/gifts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardInstanceId }),
+      });
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Couldn't make a code."));
+      const data = (await res.json()) as {
+        gift: { url: string; qrDataUrl: string; expiresAt: string };
+      };
+      setGift({ cardInstanceId, ...data.gift });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't make a code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const card = cards[0];
+  const expiresAt = gift
+    ? new Date(gift.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : null;
+
+  return (
+    <section className="pass-it-on" id="pass-it-on">
+      <h2>Pass it on</h2>
+      <p>
+        You have {cards.length === 1 ? "a card" : `${cards.length} cards`} to give to someone new to Banana
+        Ball. It&apos;s not yours to keep or trade &mdash; it&apos;s how you bring a friend in.
+      </p>
+      <div className="card-tile pass-it-on-card">
+        <span className="card-tile-type">pass it on</span>
+        <h3>{card.title}</h3>
+        <p>{card.description}</p>
+      </div>
+
+      {gift ? (
+        <div className="pass-it-on-code">
+          <p>Have them scan this with their phone camera:</p>
+          <Image src={gift.qrDataUrl} alt="Pass-it-on QR code" width={180} height={180} unoptimized />
+          <a className="trade-code-link" href={gift.url}>
+            {gift.url}
+          </a>
+          <p className="trade-code-hint">Works once, until {expiresAt}.</p>
+          <div className="redeem-actions">
+            <button type="button" onClick={() => router.refresh()}>
+              They got it
+            </button>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => handleShow(gift.cardInstanceId)}
+              disabled={busy}
+            >
+              New code
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="redeem-actions">
+          <button type="button" onClick={() => handleShow(card.instance_id)} disabled={busy}>
+            {busy ? "One sec..." : "Show pass-it-on code"}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="sign-in-error">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

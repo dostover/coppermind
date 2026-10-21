@@ -459,3 +459,96 @@ body {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* Quick join (name-only sign-up from a scanned QR) - reuses .redeem-form's
+   layout, but names keep the case the fan typed. */
+.quick-join input {
+  text-transform: none;
+}
+
+.quick-join-note,
+.quick-join-alt,
+.trade-code-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.quick-join-alt {
+  margin-top: 1rem;
+}
+
+.trade-code-link {
+  font-size: 0.8rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+/* A primary-looking link, for when the next step is navigation rather than
+   an action (e.g. "Trade with Sluggo" after claiming a gift). */
+.button-link {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  text-decoration: none;
+}
+
+/* Pass it on */
+.pass-it-on {
+  padding: 1.25rem;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pass-it-on-card,
+.gift-card {
+  max-width: 280px;
+}
+
+.gift-card {
+  margin: 1.5rem 0 0.5rem;
+}
+
+.pass-it-on-code {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.pass-it-on-code img {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.pass-it-on-callout {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.card-tile-gift {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.gift-unavailable {
+  margin-top: 1rem;
+}
+
+/* .redeem-actions styles every <button> as a primary action; a text-style
+   secondary action next to one (e.g. "New code") should stay a plain link. */
+.redeem-actions button.link-button {
+  background: none;
+  padding: 0;
+  font-weight: 400;
+  color: var(--muted);
+}
