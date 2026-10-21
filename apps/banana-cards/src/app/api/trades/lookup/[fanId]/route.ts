@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fansRepo, cardInstancesRepo, tradesRepo } from "@/lib/db";
+import { fansRepo, cardInstancesRepo } from "@/lib/db";
 import { getFanFromRequest } from "@/lib/authSession";
 
 // Resolves a fan code shown in person (see card-value-model.md's mutual
@@ -28,9 +28,9 @@ export async function GET(
     return NextResponse.json({ error: "No fan found with that code." }, { status: 404 });
   }
 
-  const cards = cardInstancesRepo
-    .listByOwnerWithTemplate(fanId)
-    .filter((card) => !tradesRepo.isCardInPendingTrade(card.instance_id));
+  // Pass-it-on cards and cards already in a pending trade are left out -
+  // neither can go into a new trade.
+  const cards = cardInstancesRepo.listTradeable(fanId);
 
   return NextResponse.json({
     fan: { id: other.id, displayName: other.display_name },

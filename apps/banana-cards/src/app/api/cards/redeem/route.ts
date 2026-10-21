@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Enter a code." }, { status: 400 });
   }
 
-  let instance;
+  let result;
   try {
-    instance = redemptionCodesRepo.redeem({
+    result = redemptionCodesRepo.redeem({
       code,
       fanId: fan.id,
       newInstanceId: randomUUID(),
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
 
+  const { instance, passOnInstance } = result;
   const template = cardTemplatesRepo.getById(instance.template_id);
 
   return NextResponse.json({
@@ -47,5 +48,8 @@ export async function POST(req: NextRequest) {
       type: template?.type ?? null,
       stats: parseCardStats(template?.stats ?? null),
     },
+    // Set only on a fan's first redemption: the bonus card they're meant to
+    // give to someone new (see giftsRepo in src/lib/db.ts).
+    passOnCard: passOnInstance ? { instanceId: passOnInstance.id } : null,
   });
 }
