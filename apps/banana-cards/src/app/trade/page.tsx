@@ -1,7 +1,7 @@
 import Link from "next/link";
 import QRCode from "qrcode";
 import { getFanFromCookies } from "@/lib/authSession";
-import { cardInstancesRepo, fansRepo, tradesRepo } from "@/lib/db";
+import { cardInstancesRepo, fansRepo, setsRepo, tradesRepo } from "@/lib/db";
 import { getRequestOrigin, tradeLinkFor } from "@/lib/origin";
 import { TradeBoard } from "@/components/TradeBoard";
 import { JoinToTrade } from "@/components/JoinToTrade";
@@ -51,6 +51,22 @@ export default async function TradePage({
   const passOnCards = cardInstancesRepo.listByOwnerWithTemplate(fan.id).filter((c) => c.pass_on);
   const trades = tradesRepo.listForFan(fan.id);
 
+  // For each card this fan is missing from a set: which set, and whether it's
+  // the last one needed. The trade screen uses it to say "finishes your set:
+  // The Tour" on the other fan's cards - a reason to trade that's about the
+  // collection, never about value.
+  const setNeeds: Record<string, { setTitle: string; completes: boolean }> = {};
+  for (const set of setsRepo.listProgressForFan(fan.id)) {
+    const missing = set.items.filter((i) => !i.owned);
+    for (const item of missing) {
+      const existing = setNeeds[item.templateId];
+      const completes = missing.length === 1;
+      if (!existing || (completes && !existing.completes)) {
+        setNeeds[item.templateId] = { setTitle: set.title, completes };
+      }
+    }
+  }
+
   // Generated server-side so the client component just renders an <img> -
   // no QR library needed in the browser bundle. It encodes a link rather
   // than the bare fan id, so any phone's camera app can open it directly;
@@ -72,6 +88,7 @@ export default async function TradePage({
         myEligibleCards={myEligibleCards}
         passOnCards={passOnCards}
         trades={trades}
+        setNeeds={setNeeds}
         initialWithFanId={withFan && withFan.id !== fan.id ? withFan.id : undefined}
       />
       <p>

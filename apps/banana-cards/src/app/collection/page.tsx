@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getFanFromCookies } from "@/lib/authSession";
-import { cardInstancesRepo } from "@/lib/db";
+import { cardInstancesRepo, setsRepo } from "@/lib/db";
 import { CollectionBoard } from "@/components/CollectionBoard";
+import { SetsBoard } from "@/components/SetsBoard";
 
 // Server component reads the collection directly via the repo (no round
 // trip through /api/cards/mine - that route exists as the API-first twin
@@ -28,6 +29,7 @@ export default async function CollectionPage() {
   const allCards = cardInstancesRepo.listByOwnerWithTemplate(fan.id);
   const cards = allCards.filter((c) => !c.pass_on);
   const passOnCount = allCards.length - cards.length;
+  const sets = setsRepo.listProgressForFan(fan.id);
 
   return (
     <main className="page page-wide">
@@ -48,7 +50,12 @@ export default async function CollectionPage() {
           No cards yet. <Link href="/redeem">Redeem a code</Link> to get your first one.
         </p>
       ) : (
-        <CollectionBoard cards={cards} />
+        <>
+          {/* Sets lead: they're what gives the collection a next step. */}
+          {sets.length > 0 && <SetsBoard sets={sets} />}
+          <h2 className="collection-cards-heading">My cards</h2>
+          <CollectionBoard cards={cards} />
+        </>
       )}
 
       <p>
