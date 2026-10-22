@@ -90,9 +90,13 @@ of a full card product across six teams, and it still does physical's one essent
 job (proving presence) via the redemption moment itself.
 
 The condition: this decision moves 100% of the weight of "trading value" and
-"social, not financial" onto the digital trade UX — it is now the single
-highest-stakes design surface in the product. Two requirements that follow from
-that, both treated as hard constraints, not nice-to-haves:
+"social, not financial" onto the digital trade UX — it is now the product's
+biggest *risk*: the place it could slide into looking like a marketplace. (It is
+not the core *experience*. That's getting the card — scanning a token at the
+game and seeing what you got — which every fan does first and many fans may do
+without ever trading. See "Restated priority" in `prioritization.md`,
+2026-10-22.) Two requirements that follow from that risk, both treated as hard
+constraints, not nice-to-haves:
 
 1. **No marketplace grammar anywhere** in the trade flow — no visible rarity counts
    next to a trade, no "value," no browsable global inventory of tradeable cards

@@ -18,7 +18,7 @@ export default async function Home() {
             {fan.email === null && " (quick join, no email yet)"}.
           </p>
           <nav className="nav-links">
-            <Link href="/redeem">Redeem a code</Link>
+            <Link href="/redeem">Get a card</Link>
             <Link href="/collection">My collection</Link>
             <Link href="/trade">Trade with a fan</Link>
           </nav>
@@ -26,14 +26,23 @@ export default async function Home() {
         </div>
       ) : (
         <p>
-          <Link href="/sign-in">Sign in</Link> to get started.
+          Got a token from the ballpark? Scan its QR code with your phone&apos;s camera to claim your card.
+          Already collecting? <Link href="/sign-in">Sign in</Link>.
         </p>
       )}
 
       {/* Dev-only - hidden from a production build. Lets a demo jump
           straight between seeded personas without re-typing email/code each
           time, whether or not someone's currently signed in. */}
-      {process.env.NODE_ENV !== "production" && <DemoPersonaSwitcher />}
+      {process.env.NODE_ENV !== "production" && (
+        <>
+          <DemoPersonaSwitcher />
+          <p className="dev-hint">
+            Demo: <Link href="/tokens">print or scan demo tokens</Link> to try claiming a card the way a fan
+            would at the gate.
+          </p>
+        </>
+      )}
     </main>
   );
 }

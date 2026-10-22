@@ -628,22 +628,31 @@ export const WELCOME_TEMPLATE_ID = "system-welcome";
 
 export function ensureSystemTemplates(): void {
   const insert = db.prepare(
-    `INSERT OR IGNORE INTO card_templates (id, type, title, description, created_at)
-     VALUES (?, 'milestone', ?, ?, ?)`
+    `INSERT OR IGNORE INTO card_templates (id, type, title, description, image_path, created_at)
+     VALUES (?, 'milestone', ?, ?, ?, ?)`
   );
   const now = new Date().toISOString();
   insert.run(
     PASS_IT_ON_TEMPLATE_ID,
     "Pass It On",
     "Somebody wanted you here. Every fan's first card comes with one of these to give to someone new.",
+    "/cards/pass-it-on.svg",
     now
   );
   insert.run(
     WELCOME_TEMPLATE_ID,
     "Welcome to Banana Ball",
     "Your first card - earned by showing up to trade with another fan.",
+    "/cards/welcome.svg",
     now
   );
+  // A database whose system cards predate their art gets it filled in.
+  db.prepare(
+    `UPDATE card_templates SET image_path = ? WHERE id = ? AND image_path IS NULL`
+  ).run("/cards/pass-it-on.svg", PASS_IT_ON_TEMPLATE_ID);
+  db.prepare(
+    `UPDATE card_templates SET image_path = ? WHERE id = ? AND image_path IS NULL`
+  ).run("/cards/welcome.svg", WELCOME_TEMPLATE_ID);
 }
 ensureSystemTemplates();
 
@@ -693,6 +702,15 @@ export const redemptionCodesRepo = {
       input.issuedVia,
       input.createdAt
     );
+  },
+
+  // Unredeemed codes, for the dev-only demo token sheet (/tokens) - the
+  // stand-in for a stack of physical tokens to hand out. Seed-only
+  // DEMO-GRANT codes are always already redeemed, so they never appear.
+  listUnredeemed(): RedemptionCodeRow[] {
+    return db
+      .prepare(`SELECT * FROM redemption_codes WHERE status = 'unredeemed' ORDER BY code`)
+      .all() as RedemptionCodeRow[];
   },
 
   getByCode(code: string): RedemptionCodeRow | undefined {
@@ -1020,7 +1038,7 @@ export interface GiftView {
   expiresAt: string;
   fromFan: { id: string; displayName: string };
   toFanId: string | null;
-  card: { title: string; description: string; type: CardTemplateRow["type"] };
+  card: { title: string; description: string; type: CardTemplateRow["type"]; imagePath: string | null };
 }
 
 // Thrown for anything that's the fan's situation rather than a server fault
@@ -1072,7 +1090,7 @@ export const giftsRepo = {
       .prepare(
         `SELECT g.token, g.status, g.expires_at, g.to_fan_id,
                 f.id AS from_id, f.display_name AS from_name,
-                ct.title, ct.description, ct.type
+                ct.title, ct.description, ct.type, ct.image_path
          FROM gifts g
          JOIN fans f ON f.id = g.from_fan_id
          JOIN card_instances ci ON ci.id = g.card_instance_id
@@ -1090,6 +1108,7 @@ export const giftsRepo = {
           title: string;
           description: string;
           type: CardTemplateRow["type"];
+          image_path: string | null;
         }
       | undefined;
     if (!row) return undefined;
@@ -1100,7 +1119,7 @@ export const giftsRepo = {
       expiresAt: row.expires_at,
       fromFan: { id: row.from_id, displayName: row.from_name },
       toFanId: row.to_fan_id,
-      card: { title: row.title, description: row.description, type: row.type },
+      card: { title: row.title, description: row.description, type: row.type, imagePath: row.image_path },
     };
   },
 

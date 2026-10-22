@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getFanFromCookies } from "@/lib/authSession";
 import { giftsRepo } from "@/lib/db";
 import { GiftClaim } from "@/components/GiftClaim";
+import { CardArt } from "@/components/CardArt";
 
 // Where a pass-it-on QR lands. Usually opened by someone brand new, straight
 // from their phone's camera app - so it works without an account (quick
@@ -47,6 +48,7 @@ export default async function GiftPage({ params }: { params: Promise<{ token: st
     <main className="page">
       <h1>{gift.fromFan.displayName} is passing you a card</h1>
       <div className="card-tile gift-card">
+        <CardArt src={gift.card.imagePath} />
         <span className="card-tile-type">{gift.card.type}</span>
         <h2>{gift.card.title}</h2>
         <p>{gift.card.description}</p>

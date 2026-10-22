@@ -23,6 +23,16 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) and use the demo fan
 buttons on the home page to switch between fans with one click.
 
+## Demo script: getting a card at the gate
+
+1. Open **print or scan demo tokens** from the home page (or go to `/tokens`).
+   Each token is a QR code standing in for one handed out at the ballpark.
+2. Open a token's link in a private window (or scan it with a phone; see
+   below). As a new fan, type a name and tap **Claim my card**.
+3. The card waits face down. Tap **Tap to reveal your card** to flip it and see
+   what you got, then your progress in its set and the first-card Pass It On
+   bonus.
+
 ## Demo script: bringing a new fan in
 
 1. Sign in as **Sluggo** and open **Trade with a fan**.

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { OwnedCardView } from "@/lib/db";
+import { CardArt } from "./CardArt";
 
 type SortKey = "newest" | "oldest" | "title" | "type";
 type ViaFilter = "all" | OwnedCardView["acquired_via"];
@@ -148,6 +149,7 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
         <div className="card-grid">
           {visible.map((card) => (
             <div key={card.instance_id} className="card-tile">
+              <CardArt src={card.image_path} />
               <span className="card-tile-type">{card.type}</span>
               <h2>{card.title}</h2>
               {card.player_name && <p className="card-tile-player">{card.player_name}</p>}

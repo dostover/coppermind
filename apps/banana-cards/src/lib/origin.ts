@@ -22,3 +22,9 @@ export function tradeLinkFor(origin: string, fanId: string): string {
 export function giftLinkFor(origin: string, token: string): string {
   return `${origin}/gift/${encodeURIComponent(token)}`;
 }
+
+// Where a physical token's QR points: opening it shows the card face down,
+// ready to reveal (see src/app/redeem/page.tsx).
+export function redeemLinkFor(origin: string, code: string): string {
+  return `${origin}/redeem?code=${encodeURIComponent(code)}`;
+}
