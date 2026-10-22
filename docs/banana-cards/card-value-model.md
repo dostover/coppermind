@@ -1,7 +1,7 @@
 # Banana Cards — Value Model Framework
 
 > Copy of `claude/card-value-model.md` from the Banana Cards Claude project,
-> as of 2026-10-20.
+> as of 2026-10-22.
 
 **North star:** every card should make a fan's night better or bring a new fan
 in. Anything that does neither doesn't ship. (Added 2026-10-20 to make the two
@@ -147,14 +147,19 @@ slicker version of the same underlying "you must both be here, now" requirement.
 
 ---
 
-## Fan First and fan base building (2026-10-20)
+## DECISION: Fan First and fan base building (approved 2026-10-22)
 
-Status: proposed direction, awaiting approval — **except the first two growth
-loops in section 4 (Pass It On cards and the no-install first trade), which are
-approved and built into the demo.** Written because the decisions above are
-strong at *protecting* fans (no scarcity, no resale, no marketplace, honest
-about NFT risk) but thin on *delighting* fans and *growing* the fan base — the
-two things Banana Ball actually leads with. Each subsection closes a specific gap.
+Status: **approved as the product's direction.** All eight areas below are
+committed, and the guardrails in section 8 are hard constraints on every future
+decision, alongside "no marketplace grammar." The first two growth loops in
+section 4 (Pass It On cards and the no-install first trade) are built into the
+demo; the rest still need to be prioritized, sized and built. The open
+questions at the end are about *how*, not *whether*.
+
+Why this section exists: the decisions above are strong at *protecting* fans
+(no scarcity, no resale, no marketplace, honest about NFT risk) but were thin
+on *delighting* fans and *growing* the fan base — the two things Banana Ball
+actually leads with. Each subsection closes a specific gap.
 
 ### 1. A fan's night with Banana Cards
 The decisions above describe mechanisms; this is what a fan actually lives through.
@@ -244,7 +249,7 @@ between — without manufacturing compulsion.
   redeemable later.
 - **No streaks, daily-login rewards or countdown pressure** (see guardrails).
 
-### 8. Fan-first guardrails (proposed hard constraints)
+### 8. Fan-first guardrails (hard constraints)
 Alongside "no marketplace grammar":
 
 - **No manipulative design:** no streaks, daily-login rewards, fake urgency or
@@ -256,7 +261,7 @@ Alongside "no marketplace grammar":
   never required to enjoy the game.
 - **Collect the minimum fan data needed,** and never sell or share it.
 
-### Open questions this section raises
+### Open questions (to resolve while building)
 - Consent process for fan moment cards (who asks, when, how a parent OKs it)
 - How long codes stay claimable after a game
 - Whether broadcast codes are allowed under the teams' streaming/broadcast deals
@@ -274,7 +279,7 @@ trade mechanism are all settled enough to start on a data model and MVP (now
 built as a demo in `apps/banana-cards`, including the two section 4 growth
 loops). Remaining items are safe to resolve in parallel with building, not
 blockers:
-- Approve, change or cut the remaining Fan First proposals above
+- Prioritize and sequence the approved Fan First work (sections 1–7)
 - Concrete card taxonomy content: roster / moment / character / trade-only /
   milestone (the schema can support these types generically before every card's
   actual content is authored)
@@ -284,7 +289,7 @@ blockers:
 - Monetization specifics for any specialty packs (pricing, breakeven target)
 
 ## Next steps under consideration
-- Decide on the remaining Fan First proposals
+- Prioritize the approved Fan First work and pick what the next demo phase shows
 - Concrete card taxonomy content (including fan moment and crowd cards)
 - Physical token form factor + distribution plan
 - Positioning/messaging plan
