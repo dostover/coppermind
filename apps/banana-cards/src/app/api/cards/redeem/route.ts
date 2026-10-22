@@ -34,12 +34,19 @@ export async function POST(req: NextRequest) {
       newInstanceId: randomUUID(),
       redeemedAt: new Date().toISOString(),
     });
-  } catch (err) {
+  } catch {
     // redemptionCodesRepo.redeem throws for an unknown code or one that's
-    // already redeemed/void - both are the fan's mistake (a typo, or someone
-    // else already claimed this one), not a server error, so this is a 400
-    // rather than a 500.
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    // already redeemed/void - both are the fan's situation (a typo, or the
+    // token was already scanned), not a server error, so this is a 400 with
+    // a message written for a fan standing in a ballpark.
+    const status = codeRow?.status;
+    const message =
+      status === "redeemed"
+        ? "This card has already been claimed. Each token works once."
+        : status === "void"
+          ? "This token isn't active anymore."
+          : "That code doesn't match a card. Check it and try again.";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   const { instance, passOnInstance } = result;
@@ -51,6 +58,8 @@ export async function POST(req: NextRequest) {
       title: template?.title ?? "Unknown card",
       description: template?.description ?? "",
       type: template?.type ?? null,
+      imagePath: template?.image_path ?? null,
+      perk: template?.perk ?? null,
       stats: parseCardStats(template?.stats ?? null),
     },
     // Set only on a fan's first redemption: the bonus card they're meant to

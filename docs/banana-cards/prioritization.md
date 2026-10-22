@@ -27,6 +27,7 @@ Ties go to the item that teaches us more, or that later items depend on.
 
 | Item | Fan experience | Fan base growth | Demo effort | Shows the idea | Call |
 |---|---|---|---|---|---|
+| **Getting the card:** scan the token with a phone camera, tap to reveal, card art in the app | **High** | Medium | Low | **High** | Done (2026-10-22) |
 | Pass It On cards | Medium | **High** | Low | High | Done |
 | No-install first trade | Medium | **High** | Low | High | Done |
 | Set completion and progress | **High** | Low | Low | **High** | Done (2026-10-22) |
@@ -38,6 +39,41 @@ Ties go to the item that teaches us more, or that later items depend on.
 | Fans in the cards (fan moment, crowd cards) | **High** | Medium | Medium (demo), High (consent) | High | Later |
 | Trade ambassadors (players trading on the concourse) | Medium | Medium | None (operations only) | Low | Later |
 | "A fan's night" rules (phone rule, claim window) | High | Low | Low | Low | Ongoing: applied as constraints to everything above |
+
+## Restated priority (2026-10-22): getting the card comes first
+
+The first version of this list optimized the *second* experience. Trading got
+most of the design attention, because the value model called it the
+highest-stakes surface. But that was about risk (sliding into a marketplace),
+not about what fans spend their night doing.
+
+**Getting the card is the main experience.** Every fan does it first, it's
+where presence value ("you had to be there") is created, and plenty of fans
+will collect without ever trading. Trading still matters — it carries the
+social value and the growth loops — but it depends on fans already having
+cards they care about.
+
+Meanwhile the demo's way of getting a card was the weakest part of it: type a
+code into a box, read "You got a card!" in plain text. So it moves to the top:
+
+- **Scan, don't type.** The token's QR code is a link, so a phone's own camera
+  app opens the card directly. No app to install, no code to type; someone
+  without an account joins with just a name, the same way trade links work.
+- **A reveal moment.** The fan taps to flip the card and see what they got,
+  with its art, then their progress in any set it belongs to. It takes
+  seconds, so it fits before first pitch or between innings and stays out of
+  the show itself.
+- **Card art everywhere.** The illustrations made for the print sheet appear
+  on cards in the collection, in trades and in the reveal.
+
+Social drops and broadcast cards (Next) are other ways of *getting* a card, so
+they'll reuse this scan-and-reveal flow instead of building their own.
+
+**Built 2026-10-22.** Token QR codes open `/redeem?code=…`; a new fan joins
+with a name; the card waits face down until the tap, then flips to show its
+art, story, stats and perk, followed by set progress and the first-card Pass It
+On bonus. All 31 cards carry their illustrations across the app, and a
+dev-only demo token sheet (`/tokens`) stands in for physical tokens.
 
 ## Now: set completion and access perks (built 2026-10-22)
 
@@ -66,6 +102,9 @@ out their own cards on their own channels, because growing their audience is
 part of their pay. They rank just behind sets and perks because they need a
 new mechanic (a shareable drop link with its own labeled card type), while
 sets and perks only reuse what exists.
+
+Both reuse the scan-and-reveal flow above: a drop or broadcast is just another
+way to hand a fan a claim link.
 
 Broadcast cards come right after, because they're the same mechanic with a
 different source: a code shown on a stream instead of a social post. Building

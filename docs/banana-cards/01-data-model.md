@@ -320,6 +320,16 @@ redeemed-vs-traded counts) entirely over the already-fetched list — no new
 query or API needed, since a fan's collection is small enough that doing
 this server-side would just add round trips for no benefit.
 
+Getting a card is the core experience (see "Restated priority" in
+`prioritization.md`). A token's QR encodes a link, `/redeem?code=<code>`
+(`redeemLinkFor` in `src/lib/origin.ts`), so a phone's own camera app opens
+it; someone without an account quick-joins with a name first. The card then
+waits face down until the fan taps to reveal it, which is the moment the code
+is actually claimed, and flips to show its art (`card_templates.image_path`,
+SVGs under `public/cards/`), story, stats and perk. A dev-only page,
+`/tokens`, lists every unredeemed code as a scannable demo token (never saying
+which card it holds) and is hidden in production builds.
+
 The redemption flow itself is `POST /api/cards/redeem`: auth-required,
 resolves a code via `redemptionCodesRepo.redeem()` (the atomic
 redemption_codes + card_instances transaction described above), and returns

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { OwnedCardView, TradeView } from "@/lib/db";
 import { extractErrorMessage } from "@/lib/fetchError";
+import { CardArt } from "./CardArt";
 
 // The web reference client's take on "mutual QR scan" (see
 // card-value-model.md): both fans have to be together for this to work at
@@ -217,6 +218,7 @@ export function TradeBoard({
                     }
                     onClick={() => setOfferId(card.instance_id)}
                   >
+                    <CardArt src={card.image_path} variant="thumb" />
                     <span className="card-tile-type">{card.type}</span>
                     <h2>{card.title}</h2>
                     {card.stats && (
@@ -246,6 +248,7 @@ export function TradeBoard({
                     }
                     onClick={() => setRequestId(card.instance_id)}
                   >
+                    <CardArt src={card.image_path} variant="thumb" />
                     <span className="card-tile-type">{card.type}</span>
                     <h2>{card.title}</h2>
                     {setNeeds[card.template_id] && (
@@ -419,6 +422,7 @@ function PassItOn({ cards }: { cards: OwnedCardView[] }) {
         Ball. It&apos;s not yours to keep or trade &mdash; it&apos;s how you bring a friend in.
       </p>
       <div className="card-tile pass-it-on-card">
+        <CardArt src={card.image_path} />
         <span className="card-tile-type">pass it on</span>
         <h3>{card.title}</h3>
         <p>{card.description}</p>

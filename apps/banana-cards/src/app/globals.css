@@ -696,3 +696,170 @@ body {
 .collection-cards-heading {
   margin-top: 2.5rem;
 }
+
+/* Card art (public/cards/*.svg) */
+.card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 22 / 15;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.card-art-thumb {
+  aspect-ratio: 22 / 11;
+}
+
+/* The reveal: a face-down card that flips when tapped. */
+.reveal {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.reveal-card {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 5 / 7;
+  margin: 0 auto;
+  transform: perspective(1200px) rotateY(0deg);
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.reveal-card-flipped {
+  transform: perspective(1200px) rotateY(180deg);
+}
+
+.reveal-face {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 1px solid var(--foreground);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.reveal-back {
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  color: #1b1a17;
+  background-color: #f5c518;
+  background-image: repeating-linear-gradient(135deg, rgba(27, 26, 23, 0.08) 0 12px, transparent 12px 24px);
+}
+
+.reveal-back-title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.reveal-back-line {
+  margin: 0;
+  font-weight: 600;
+}
+
+.reveal-button {
+  margin-top: 1rem;
+  min-height: 44px;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border: 2px solid #1b1a17;
+  border-radius: 999px;
+  background: #fbf6e9;
+  color: #1b1a17;
+  cursor: pointer;
+}
+
+.reveal-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.reveal-front {
+  transform: rotateY(180deg);
+  gap: 0.45rem;
+  padding: 0.75rem;
+  background: var(--background);
+}
+
+.reveal-front .card-tile-type {
+  align-self: flex-start;
+}
+
+.reveal-title {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.15;
+}
+
+.reveal-description {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.reveal-after {
+  max-width: 420px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-card {
+    transition: none;
+  }
+}
+
+/* Demo tokens (stand-ins for the physical tokens handed out at the gate) */
+.token-grid {
+  list-style: none;
+  margin: 1.5rem 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+  gap: 1rem;
+}
+
+.token {
+  padding: 1rem;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+
+.token img {
+  border-radius: 6px;
+  background: #fff;
+}
+
+.token-brand {
+  margin: 0;
+  font-weight: 800;
+}
+
+.token-line {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.token-code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+}

@@ -54,6 +54,44 @@ ensureSystemTemplates();
 
 const now = new Date().toISOString();
 
+// Card art: flat, representational illustrations in public/cards/ (the same
+// ones as the print-sheet design). No real likenesses, logos or signage -
+// teams are drawn from their names and themes, stadiums from their shape.
+const ART: Record<string, string> = {
+  Handshake: "handshake",
+  "Behind-the-back catch": "behind-the-back-catch",
+  "Banana Baby": "banana-baby",
+  "Yellow Tux": "yellow-tux",
+  "First Home Run of the Season": "first-home-run",
+  "Grayson Stadium": "grayson-stadium",
+  "Truist Park": "truist-park",
+  "Wrigley Field": "wrigley-field",
+  "Fenway Park": "fenway-park",
+  "Memorial Stadium": "memorial-stadium",
+  "Savannah Bananas": "savannah-bananas",
+  "Party Animals": "party-animals",
+  Firefighters: "firefighters",
+  "Texas Tailgaters": "texas-tailgaters",
+  "Loco Beach Coconuts": "loco-beach-coconuts",
+  "Indianapolis Clowns": "indianapolis-clowns",
+  Static: "static",
+  Marmalade: "marmalade",
+  Sizzle: "sizzle",
+  "Two-Step": "two-step",
+  Driftwood: "driftwood",
+  Ringmaster: "ringmaster",
+  "The Home Run Cape": "home-run-cape",
+  "The Pinch-Hit Stilts": "pinch-hit-stilts",
+  "The Rally Kazoo": "rally-kazoo",
+  "Tutu of Triumph": "tutu-of-triumph",
+  "Dancing Umpire": "dancing-umpire",
+  "Banana Nanas": "banana-nanas",
+  "Breakdancing First-Base Coach": "breakdancing-coach",
+};
+function art(title: string): string | undefined {
+  return ART[title] ? `/cards/${ART[title]}.svg` : undefined;
+}
+
 console.log("Seeding events...");
 const completedEventId = randomUUID();
 eventsRepo.create({
@@ -81,6 +119,7 @@ cardTemplatesRepo.create({
   id: rosterTemplateId,
   type: "roster",
   title: "Handshake",
+  imagePath: art("Handshake"),
   description: "Wherever he's playing, he's dancing first.",
   playerName: "Handshake",
   createdAt: now,
@@ -91,6 +130,7 @@ cardTemplatesRepo.create({
   id: momentTemplateId,
   type: "moment",
   title: "Behind-the-back catch",
+  imagePath: art("Behind-the-back catch"),
   description: "The bit everyone screamed about at Grayson Stadium, 9/12.",
   eventId: completedEventId,
   createdAt: now,
@@ -101,6 +141,7 @@ cardTemplatesRepo.create({
   id: characterTemplateId,
   type: "character",
   title: "Banana Baby",
+  imagePath: art("Banana Baby"),
   description: "Honored every single game. This one's from 9/12.",
   perk: "A printable Banana Baby certificate from the 9/12 game",
   eventId: completedEventId,
@@ -112,6 +153,7 @@ cardTemplatesRepo.create({
   id: tradeOnlyTemplateId,
   type: "trade_only",
   title: "Yellow Tux",
+  imagePath: art("Yellow Tux"),
   description: "Never redeemed directly - only ever changes hands by trade.",
   createdAt: now,
 });
@@ -121,6 +163,7 @@ cardTemplatesRepo.create({
   id: milestoneTemplateId,
   type: "milestone",
   title: "First Home Run of the Season",
+  imagePath: art("First Home Run of the Season"),
   description: "Commemorates the record-setting swing.",
   eventId: completedEventId,
   createdAt: now,
@@ -383,6 +426,7 @@ for (const t of newTemplates) {
     title: t.title,
     description: t.description,
     playerName: t.playerName,
+    imagePath: art(t.title),
     stats: t.stats,
     perk: t.perk,
     createdAt: now,
