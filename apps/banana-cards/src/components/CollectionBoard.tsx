@@ -160,6 +160,11 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
                     .join(" · ")}
                 </p>
               )}
+              {card.perk && (
+                <p className="card-tile-perk">
+                  <strong>Unlocks:</strong> {card.perk}
+                </p>
+              )}
             </div>
           ))}
         </div>

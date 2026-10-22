@@ -6,7 +6,8 @@ Digital trading card system and portal for Banana Ball.
 
 Demo of the core card experience: sign in, redeem a code, browse your
 collection, trade in person by QR code, and the two fan-base-building loops
-(Pass It On cards and a no-install first trade from someone's trade link).
+(Pass It On cards and a no-install first trade from someone's trade link),
+plus sets that unlock small perks when you finish them.
 No email service is wired up yet; in development the sign-in code is shown
 on screen. See `../../docs/banana-cards/01-data-model.md` for how it all
 works.
@@ -33,6 +34,16 @@ buttons on the home page to switch between fans with one click.
    code). Type a name and tap **Join and trade**: the new fan gets a Welcome to
    Banana Ball card and lands in a trade with Sluggo. Propose a swap, then
    confirm it as Sluggo.
+
+## Demo script: finishing a set
+
+1. Sign in as **Peel Master Flex** and open **My collection**: the "One Night
+   at Grayson · 9/12" set is finished and its perk is unlocked.
+2. Switch to **Rookie Nanas**, open **Trade with a fan**, and look up Peel's
+   code. His First Home Run card is marked "For your set". Propose a swap,
+   then confirm it as Peel (his set drops back to 2 of 3).
+3. As Rookie Nanas, redeem `BB-CHAR-001`. The confirmation says the set is
+   complete, and the collection shows the perk unlocked.
 
 To use real phones, run the server on your local network
 (`npm run dev -- -H 0.0.0.0`) and open it from the computer by its network

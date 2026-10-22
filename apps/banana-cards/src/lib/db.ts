@@ -261,6 +261,41 @@ if (!cardTemplateColumns.some((c) => c.name === "stats")) {
   db.exec(`ALTER TABLE card_templates ADD COLUMN stats TEXT`);
 }
 
+// card_templates.perk: the "access value" from claude/card-value-model.md -
+// a short description of something small and real this card unlocks (a
+// clip, a photo op, a printable), shown on the card. Nullable: most cards
+// don't carry one. Same guarded-ALTER pattern as stats above.
+if (!cardTemplateColumns.some((c) => c.name === "perk")) {
+  db.exec(`ALTER TABLE card_templates ADD COLUMN perk TEXT`);
+}
+
+// Sets: the "completion value" from claude/card-value-model.md. A set is a
+// themed group of card templates (a tour's stadiums, the league's teams, one
+// night's moments); a fan completes it by owning at least one card of each.
+// Finishing a set unlocks its perk. Sets never expire and every card in one
+// is reachable by redeeming or trading - never by paying - per the fan-first
+// guardrails. Membership is by template, so any copy of a card counts.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS card_sets (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    perk_title TEXT NOT NULL,
+    perk_description TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS card_set_items (
+    set_id TEXT NOT NULL REFERENCES card_sets(id),
+    template_id TEXT NOT NULL REFERENCES card_templates(id),
+    position INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (set_id, template_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_card_set_items_template ON card_set_items(template_id);
+`);
+
 export function parseCardStats(stats: string | null): Record<string, string | number> | null {
   if (!stats) return null;
   try {
@@ -534,6 +569,7 @@ export interface CardTemplateRow {
   event_id: string | null;
   player_name: string | null;
   stats: string | null;
+  perk: string | null;
   created_at: string;
 }
 
@@ -547,12 +583,13 @@ export const cardTemplatesRepo = {
     eventId?: string;
     playerName?: string;
     stats?: Record<string, string | number>;
+    perk?: string;
     createdAt: string;
   }): void {
     db.prepare(
       `INSERT INTO card_templates
-         (id, type, title, description, image_path, event_id, player_name, stats, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, type, title, description, image_path, event_id, player_name, stats, perk, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       input.id,
       input.type,
@@ -562,6 +599,7 @@ export const cardTemplatesRepo = {
       input.eventId ?? null,
       input.playerName ?? null,
       input.stats ? JSON.stringify(input.stats) : null,
+      input.perk ?? null,
       input.createdAt
     );
   },
@@ -781,6 +819,7 @@ export const cardInstancesRepo = {
            ct.image_path AS image_path,
            ct.player_name AS player_name,
            ct.stats AS stats,
+           ct.perk AS perk,
            ci.acquired_via AS acquired_via,
            ci.pass_on AS pass_on,
            giver.display_name AS gifted_by,
@@ -843,8 +882,118 @@ export interface OwnedCardView {
   // Display name of the fan who passed this card on, for a card received as a
   // gift; null otherwise.
   gifted_by: string | null;
+  // What owning this card unlocks (access value), if anything.
+  perk: string | null;
   acquired_at: string;
 }
+
+// ---- Sets (completion value) -----------------------------------------------
+
+export interface SetProgressView {
+  id: string;
+  title: string;
+  description: string;
+  perk: { title: string; description: string };
+  items: { templateId: string; title: string; type: CardTemplateRow["type"]; owned: boolean }[];
+  owned: number;
+  total: number;
+  complete: boolean;
+}
+
+export const setsRepo = {
+  create(input: {
+    id: string;
+    title: string;
+    description: string;
+    perkTitle: string;
+    perkDescription: string;
+    sortOrder: number;
+    templateIds: string[];
+    createdAt: string;
+  }): void {
+    db.transaction(() => {
+      db.prepare(
+        `INSERT INTO card_sets (id, title, description, perk_title, perk_description, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        input.id,
+        input.title,
+        input.description,
+        input.perkTitle,
+        input.perkDescription,
+        input.sortOrder,
+        input.createdAt
+      );
+      const insertItem = db.prepare(
+        `INSERT INTO card_set_items (set_id, template_id, position) VALUES (?, ?, ?)`
+      );
+      input.templateIds.forEach((templateId, i) => insertItem.run(input.id, templateId, i));
+    })();
+  },
+
+  // Every set with this fan's progress through it. A template counts as owned
+  // if the fan holds any copy of it - except a pass-it-on card still waiting
+  // to be given away, which isn't really part of their collection.
+  listProgressForFan(fanId: string): SetProgressView[] {
+    const sets = db
+      .prepare(`SELECT * FROM card_sets ORDER BY sort_order, title`)
+      .all() as {
+      id: string;
+      title: string;
+      description: string;
+      perk_title: string;
+      perk_description: string;
+    }[];
+    const items = db
+      .prepare(
+        `SELECT si.set_id, si.template_id, ct.title, ct.type,
+                EXISTS (
+                  SELECT 1 FROM card_instances ci
+                  WHERE ci.template_id = si.template_id AND ci.owner_fan_id = ? AND ci.pass_on = 0
+                ) AS owned
+         FROM card_set_items si
+         JOIN card_templates ct ON ct.id = si.template_id
+         ORDER BY si.position`
+      )
+      .all(fanId) as {
+      set_id: string;
+      template_id: string;
+      title: string;
+      type: CardTemplateRow["type"];
+      owned: 0 | 1;
+    }[];
+
+    return sets.map((set) => {
+      const setItems = items
+        .filter((i) => i.set_id === set.id)
+        .map((i) => ({ templateId: i.template_id, title: i.title, type: i.type, owned: i.owned === 1 }));
+      const owned = setItems.filter((i) => i.owned).length;
+      return {
+        id: set.id,
+        title: set.title,
+        description: set.description,
+        perk: { title: set.perk_title, description: set.perk_description },
+        items: setItems,
+        owned,
+        total: setItems.length,
+        complete: setItems.length > 0 && owned === setItems.length,
+      };
+    });
+  },
+
+  // True if the fan already holds a copy of this card (outside pass-it-on).
+  // Used to tell whether a newly redeemed card actually moved a set forward.
+  ownsTemplate(fanId: string, templateId: string): boolean {
+    return (
+      db
+        .prepare(
+          `SELECT 1 FROM card_instances
+           WHERE owner_fan_id = ? AND template_id = ? AND pass_on = 0 LIMIT 1`
+        )
+        .get(fanId, templateId) !== undefined
+    );
+  },
+};
 
 // ---- Pass-it-on gifts -------------------------------------------------------
 

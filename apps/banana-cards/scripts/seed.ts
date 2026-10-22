@@ -22,6 +22,7 @@ import {
   redemptionCodesRepo,
   fansRepo,
   tradesRepo,
+  setsRepo,
   ensureSystemTemplates,
   type CardTemplateRow,
 } from "../src/lib/db";
@@ -37,6 +38,8 @@ rawDb.exec(`
   DELETE FROM trades;
   DELETE FROM card_instances;
   DELETE FROM redemption_codes;
+  DELETE FROM card_set_items;
+  DELETE FROM card_sets;
   DELETE FROM card_templates;
   DELETE FROM events;
   DELETE FROM sessions;
@@ -99,6 +102,7 @@ cardTemplatesRepo.create({
   type: "character",
   title: "Banana Baby",
   description: "Honored every single game. This one's from 9/12.",
+  perk: "A printable Banana Baby certificate from the 9/12 game",
   eventId: completedEventId,
   createdAt: now,
 });
@@ -134,6 +138,7 @@ type SeedTemplate = {
   description: string;
   playerName?: string;
   stats?: Record<string, string | number>;
+  perk?: string;
   code?: string;
 };
 
@@ -316,6 +321,7 @@ const specialItems: SeedTemplate[] = [
     id: randomUUID(),
     type: "special_item",
     title: "The Home Run Cape",
+    perk: "A slow-motion clip of the cape's trip around the bases",
     description:
       "Draped on whoever's rounding the bases after a long ball. More theater than equipment, and everyone wants a turn in it.",
     code: "BB-ITEM-001",
@@ -331,6 +337,7 @@ const specialItems: SeedTemplate[] = [
     id: randomUUID(),
     type: "special_item",
     title: "The Rally Kazoo",
+    perk: "The Rally Kazoo as a ringtone",
     description:
       "Passed hand to hand around the dugout during a two-out rally. The tone gets worse the longer the inning goes.",
   },
@@ -348,6 +355,7 @@ const characters: SeedTemplate[] = [
     id: randomUUID(),
     type: "character",
     title: "Dancing Umpire",
+    perk: "A 30-second clip of the full strike-three routine",
     description: "The strike-three call everyone remembers longer than the pitch that earned it.",
     code: "BB-CHAR-002",
   },
@@ -376,6 +384,7 @@ for (const t of newTemplates) {
     description: t.description,
     playerName: t.playerName,
     stats: t.stats,
+    perk: t.perk,
     createdAt: now,
   });
 }
@@ -404,6 +413,66 @@ for (const { code, template } of codes) {
     createdAt: now,
   });
 }
+
+console.log("Seeding sets...");
+// Completion value (see claude/card-value-model.md): themed groups of cards
+// that unlock a small, real perk when a fan holds one of each. Every card in
+// every set can be redeemed or traded for - none is buy-only - and a card can
+// sit in more than one set (Banana Baby is in two). The perks are example
+// content for the demo, not commitments.
+const sets: {
+  title: string;
+  description: string;
+  perkTitle: string;
+  perkDescription: string;
+  templateIds: string[];
+}[] = [
+  {
+    title: "One Night at Grayson · 9/12",
+    description: "Everything that happened on one night at Grayson Stadium.",
+    perkTitle: "The full highlight reel",
+    perkDescription: "Every bit from 9/12 at Grayson Stadium in one video, playable right from your collection.",
+    templateIds: [momentTemplateId, characterTemplateId, milestoneTemplateId],
+  },
+  {
+    title: "Bits and Characters",
+    description: "The people who make the show the show.",
+    perkTitle: "Pregame bit from the rail",
+    perkDescription: "Watch one pregame bit from the field-level rail. Show this at Guest Services when you arrive.",
+    templateIds: [characterTemplateId, ...characters.map((c) => c.id)],
+  },
+  {
+    title: "The Tour",
+    description: "One card for every ballpark on the tour.",
+    perkTitle: "Big-screen shoutout",
+    perkDescription: "Your name on the big screen at your next game. Show this at Guest Services when you arrive.",
+    templateIds: venues.map((v) => v.id),
+  },
+  {
+    title: "The League",
+    description: "Every team in the Banana Ball Championship League.",
+    perkTitle: "Pick-your-squad badge",
+    perkDescription: "Choose your team and show its badge next to your name whenever you trade.",
+    templateIds: teams.map((t) => t.id),
+  },
+  {
+    title: "The Roster",
+    description: "One player from every club, plus Handshake.",
+    perkTitle: "Hello from the dugout",
+    perkDescription: "A short video hello from a player, delivered to your collection.",
+    templateIds: [rosterTemplateId, ...players.map((pl) => pl.id)],
+  },
+  {
+    title: "The Props Department",
+    description: "The gear behind the gags.",
+    perkTitle: "Try on a prop",
+    perkDescription: "A photo wearing the Home Run Cape or the Yellow Tux at the merch stand.",
+    templateIds: [...specialItems.map((i) => i.id), tradeOnlyTemplateId],
+  },
+];
+sets.forEach((set, i) =>
+  setsRepo.create({ id: randomUUID(), ...set, sortOrder: i, createdAt: now })
+);
 
 console.log("\nSeeded. Unredeemed codes to try at /redeem:");
 for (const { code } of codes) console.log(`  ${code}`);
@@ -467,6 +536,11 @@ grantCard(peelMasterFlex, venues[0].id); // Grayson Stadium
 grantCard(peelMasterFlex, specialItems[0].id); // The Home Run Cape
 grantCard(peelMasterFlex, characters[0].id); // Dancing Umpire
 grantCard(peelMasterFlex, milestoneTemplateId);
+// With the moment and Banana Baby, Peel Master Flex has finished the
+// "One Night at Grayson" set - so an unlocked set perk is visible right
+// away without first playing through a redemption or trade.
+grantCard(peelMasterFlex, momentTemplateId);
+grantCard(peelMasterFlex, characterTemplateId);
 
 // Rookie Nanas: a brand-new fan with just a couple of starter cards - the
 // realistic common case, not a collector's account.
@@ -520,7 +594,7 @@ tradesRepo.create({
 });
 
 console.log("\nDemo personas ready - request a sign-in code for any of these at /sign-in:");
-console.log("  peelmaster@example.com   Peel Master Flex   9 cards, broad mixed collection");
+console.log("  peelmaster@example.com   Peel Master Flex   11 cards, broad mixed collection, 1 set complete");
 console.log("  rookienanas@example.com  Rookie Nanas       2 cards, brand-new fan");
 console.log("  sluggo@example.com       Sluggo             4 cards, 1 confirmed trade, 1 pending trade to confirm");
 console.log("  zesty@example.com        Zesty              3 cards, 1 pending trade awaiting Sluggo");

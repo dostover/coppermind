@@ -12,7 +12,7 @@ import { extractErrorMessage } from "@/lib/fetchError";
 // in sync with scripts/seed.ts by convention, not by import (the seed
 // script runs standalone via tsx, outside the Next.js app).
 const PERSONAS = [
-  { email: "peelmaster@example.com", displayName: "Peel Master Flex", blurb: "Broad collector, 9 cards" },
+  { email: "peelmaster@example.com", displayName: "Peel Master Flex", blurb: "Broad collector, 11 cards, 1 set done" },
   { email: "rookienanas@example.com", displayName: "Rookie Nanas", blurb: "Brand-new fan, 2 cards" },
   { email: "sluggo@example.com", displayName: "Sluggo", blurb: "1 confirmed trade, 1 to confirm" },
   { email: "zesty@example.com", displayName: "Zesty", blurb: "Pending trade awaiting Sluggo" },

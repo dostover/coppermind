@@ -34,9 +34,12 @@ it with. Scarcity can still exist but is trivia, not the headline.
    not resale price. This is what keeps trading "social, not financial."
 4. **Completion/set value** — themed sets tied to a season, road-trip stop, or promo
    night; payoff is finishing the story, not owning the rarest single piece.
+   (Built in the demo, 2026-10-22: six sets with progress and a missing-card
+   checklist.)
 5. **Access value** — a card unlocks something small and real (shoutout, digital
    extra, portal badge, photo-op access) rather than being valuable because it's
-   rare.
+   rare. (Built in the demo, 2026-10-22: each set unlocks a perk when finished,
+   and some single cards carry their own.)
 
 ## Monetization stance
 Breakeven, not ROI-driven. Base cards ideally bundled into the existing game-day/

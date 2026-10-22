@@ -118,6 +118,7 @@ codes get issued against it, not by the schema).
 | event_id | TEXT (uuid) | nullable FK → `events.id`; set for `moment` cards tied to a specific game, null for evergreen `roster`/`character` cards |
 | player_name | TEXT | nullable — only meaningful for `roster` cards |
 | stats | TEXT | nullable JSON-encoded object, added via a guarded `ALTER TABLE` after the table first shipped (same pattern as `fans.email`) |
+| perk | TEXT | nullable; what owning this card unlocks (access value), e.g. "A 30-second clip of the full strike-three routine". Guarded `ALTER TABLE` |
 | created_at | TEXT (ISO) | |
 
 `trade_only` templates are never attached to a redemption code directly issued
@@ -230,6 +231,40 @@ giver creates it on the spot and shows it as a one-time QR; it expires after
 | expires_at | TEXT (ISO) | |
 | created_at | TEXT (ISO) | |
 | claimed_at | TEXT (ISO) | nullable |
+
+### `card_sets` / `card_set_items`
+Completion value from `card-value-model.md`: a set is a themed group of card
+templates, and a fan completes it by owning at least one copy of each. Finishing
+a set unlocks its perk (access value). Membership is by template, a card can be
+in more than one set, and every card in a set can be redeemed or traded for -
+never bought.
+
+| `card_sets` column | type | notes |
+|---|---|---|
+| id | TEXT (uuid) | primary key |
+| title | TEXT | e.g. "The Tour" |
+| description | TEXT | |
+| perk_title | TEXT | what finishing it unlocks, e.g. "Big-screen shoutout" |
+| perk_description | TEXT | how the perk works |
+| sort_order | INTEGER | |
+| created_at | TEXT (ISO) | |
+
+| `card_set_items` column | type | notes |
+|---|---|---|
+| set_id | TEXT (uuid) | FK → `card_sets.id`; part of the primary key |
+| template_id | TEXT (uuid) | FK → `card_templates.id`; part of the primary key |
+| position | INTEGER | display order within the set |
+
+`setsRepo.listProgressForFan()` returns every set with the fan's progress
+(a pass-it-on card still waiting to be given away doesn't count). It backs the
+Sets section on `/collection` (started and finished sets first, missing cards
+listed so a fan knows what to ask a friend for), `GET /api/sets/mine`, the set
+progress shown after redeeming (`POST /api/cards/redeem` returns `setProgress`,
+with `newlyCompleted` when that card was the last one missing), and the trade
+screen's hint on the other fan's cards ("For your set: The Tour" / "Finishes
+your set: …"). There are no deadlines, completion percentages across fans, or
+rarity anywhere in it, per the fan-first guardrails. The seeded perks are
+example content.
 
 ## Growth loops (demo)
 
@@ -345,6 +380,12 @@ at `/sign-in` with the email `seed.ts` logs; since no email service is wired
 up yet, `request-code` echoes the one-time code back as `devCode` instead of
 sending it (see `redemption_codes`/two-phase-login notes above), so there's
 nothing further to configure to demo with them.
+
+Six sets are seeded (one night at Grayson, bits and characters, the tour's
+stadiums, the league's teams, the roster, the props), and Peel Master Flex
+starts with the "One Night at Grayson · 9/12" set finished so an unlocked perk
+is visible straight away. Rookie Nanas can finish the same set live: trade with
+Peel for the First Home Run card, then redeem `BB-CHAR-001` (Banana Baby).
 
 Because personas get their cards through the real redemption path, each one's
 first grant also mints a Pass It On card, so every persona can demo the

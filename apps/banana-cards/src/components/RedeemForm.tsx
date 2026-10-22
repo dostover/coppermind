@@ -8,6 +8,15 @@ import { extractErrorMessage } from "@/lib/fetchError";
 // POSTing to the API route, rendered from a plain server page. Success
 // stays on this page (rather than redirecting) so the fan sees exactly
 // which card they just got before deciding what to do next.
+type SetStep = {
+  title: string;
+  owned: number;
+  total: number;
+  complete: boolean;
+  newlyCompleted: boolean;
+  perkTitle: string;
+};
+
 type RedeemedCard = {
   instanceId: string;
   title: string;
@@ -23,6 +32,7 @@ export function RedeemForm() {
   const [error, setError] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<RedeemedCard | null>(null);
   const [gotPassOn, setGotPassOn] = useState(false);
+  const [setProgress, setSetProgress] = useState<SetStep[]>([]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,8 +53,10 @@ export function RedeemForm() {
       const data = (await res.json()) as {
         card: RedeemedCard;
         passOnCard: { instanceId: string } | null;
+        setProgress: SetStep[];
       };
       setRedeemed(data.card);
+      setSetProgress(data.setProgress ?? []);
       setGotPassOn(data.passOnCard !== null);
       setCode("");
       router.refresh();
@@ -67,6 +79,23 @@ export function RedeemForm() {
               .map(([label, value]) => `${label} ${value}`)
               .join(" · ")}
           </p>
+        )}
+        {setProgress.length > 0 && (
+          <ul className="redeem-set-progress">
+            {setProgress.map((set) => (
+              <li key={set.title}>
+                {set.newlyCompleted ? (
+                  <>
+                    <strong>Set complete: {set.title}!</strong> You unlocked {set.perkTitle}.
+                  </>
+                ) : (
+                  <>
+                    <strong>{set.title}:</strong> {set.owned} of {set.total}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
         {gotPassOn && (
           <p className="pass-it-on-callout">

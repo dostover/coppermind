@@ -552,3 +552,147 @@ body {
   font-weight: 400;
   color: var(--muted);
 }
+
+/* Sets (completion value) and perks (access value) */
+.sets-board {
+  margin-top: 2.5rem;
+}
+
+.sets-intro {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.sets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.set-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.set-card-complete {
+  border: 2px solid var(--accent);
+}
+
+.set-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.set-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.set-card-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.set-card-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.set-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.set-progress-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.set-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.set-checklist li {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.set-item-missing {
+  color: var(--muted);
+}
+
+.set-perk {
+  margin-top: auto;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.set-perk p {
+  margin: 0;
+}
+
+.set-perk p + p {
+  margin-top: 0.25rem;
+}
+
+.set-perk-unlocked {
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.set-perk-hint {
+  color: var(--muted);
+}
+
+.card-tile-perk {
+  font-size: 0.8rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border);
+}
+
+.card-tile-set-need {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.redeem-set-progress {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sets-board {
+  margin-top: 1.5rem;
+}
+
+.collection-cards-heading {
+  margin-top: 2.5rem;
+}

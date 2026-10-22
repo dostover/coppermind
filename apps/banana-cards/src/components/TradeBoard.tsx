@@ -46,6 +46,7 @@ export function TradeBoard({
   myEligibleCards,
   passOnCards,
   trades,
+  setNeeds,
   initialWithFanId,
 }: {
   myFanId: string;
@@ -54,6 +55,7 @@ export function TradeBoard({
   myEligibleCards: OwnedCardView[];
   passOnCards: OwnedCardView[];
   trades: TradeView[];
+  setNeeds: Record<string, { setTitle: string; completes: boolean }>;
   initialWithFanId?: string;
 }) {
   const router = useRouter();
@@ -246,6 +248,13 @@ export function TradeBoard({
                   >
                     <span className="card-tile-type">{card.type}</span>
                     <h2>{card.title}</h2>
+                    {setNeeds[card.template_id] && (
+                      <p className="card-tile-set-need">
+                        {setNeeds[card.template_id].completes
+                          ? `Finishes your set: ${setNeeds[card.template_id].setTitle}`
+                          : `For your set: ${setNeeds[card.template_id].setTitle}`}
+                      </p>
+                    )}
                     {card.stats && (
                       <p className="card-tile-stats">
                         {Object.entries(card.stats)
