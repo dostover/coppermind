@@ -24,7 +24,7 @@ db.pragma("foreign_keys = ON");
 
 // card_instances' full shape, shared by the CREATE below and by the in-place
 // rebuild further down (migrateCardInstances) that upgrades an older database
-// whose CHECK constraint predates 'gift'/'welcome' - SQLite can't ALTER a
+// whose CHECK constraint predates the newer values - SQLite can't ALTER a
 // CHECK constraint, so the only way to widen it is to rebuild the table.
 //
 // acquired_via:
@@ -34,6 +34,15 @@ db.pragma("foreign_keys = ON");
 // - 'gift': received as someone else's pass-it-on card (see giftsRepo)
 // - 'welcome': the starter card a brand-new fan gets when they join from
 //   another fan's trade link, so they have something to trade on the spot
+// - 'stream': claimed from a code shown during a live stream of a game
+//   ("you were watching") - see dropsRepo
+// - 'social': claimed from a drop a player or team posted on their own
+//   social channels ("you were following") - see dropsRepo
+//
+// drop_id records which stream or social drop a card came from. Unlike
+// acquired_via (which becomes 'trade' when the card changes hands), it stays
+// with the card for good, so a traded stream card is still honestly labeled
+// as one.
 //
 // pass_on = 1 marks a pass-it-on card still waiting to be given away. It
 // can't be traded, and it stops being a pass-it-on card (pass_on = 0) the
@@ -44,9 +53,10 @@ function CARD_INSTANCES_TABLE_SQL(tableName: string): string {
     template_id TEXT NOT NULL REFERENCES card_templates(id),
     owner_fan_id TEXT NOT NULL REFERENCES fans(id),
     acquired_via TEXT NOT NULL
-      CHECK (acquired_via IN ('redemption', 'trade', 'gift', 'welcome')),
+      CHECK (acquired_via IN ('redemption', 'trade', 'gift', 'welcome', 'stream', 'social')),
     redemption_code_id TEXT REFERENCES redemption_codes(id),
     pass_on INTEGER NOT NULL DEFAULT 0 CHECK (pass_on IN (0, 1)),
+    drop_id TEXT REFERENCES drops(id),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );`;
@@ -212,7 +222,11 @@ function migrateCardInstances(): void {
   const row = db
     .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'card_instances'`)
     .get() as { sql: string } | undefined;
-  if (!row || row.sql.includes("'welcome'")) return;
+  if (!row || row.sql.includes("'social'")) return;
+  // Databases from before pass_on existed get 0 for it.
+  const hasPassOn = (db.prepare(`PRAGMA table_info(card_instances)`).all() as { name: string }[]).some(
+    (c) => c.name === "pass_on"
+  );
 
   db.pragma("foreign_keys = OFF");
   try {
@@ -221,7 +235,8 @@ function migrateCardInstances(): void {
       db.exec(`
         INSERT INTO card_instances_new
           (id, template_id, owner_fan_id, acquired_via, redemption_code_id, pass_on, created_at, updated_at)
-        SELECT id, template_id, owner_fan_id, acquired_via, redemption_code_id, 0, created_at, updated_at
+        SELECT id, template_id, owner_fan_id, acquired_via, redemption_code_id,
+               ${hasPassOn ? "pass_on" : "0"}, created_at, updated_at
         FROM card_instances;
         DROP TABLE card_instances;
         ALTER TABLE card_instances_new RENAME TO card_instances;
@@ -294,6 +309,43 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_card_set_items_template ON card_set_items(template_id);
+`);
+
+// Drops: getting a card beyond the ballpark (see "Beyond the ballpark" in
+// claude/card-value-model.md). A drop hands out one card to every fan who
+// claims it, through a shareable link (/drop/<token>):
+//
+// - kind 'stream': a code shown on a live stream of a game. It only works
+//   while the stream is live (is_live = 1) - "you were watching live" is the
+//   online version of "you had to be there."
+// - kind 'social': a drop a player or team posts on their own social
+//   channels. It stays open until closes_at, a plain end date the poster
+//   sets - no countdowns, no "only 100 left."
+//
+// One card per fan per drop (drop_claims' primary key). source_name is who
+// is behind the drop ("Banana Ball stream", "Static", "Party Animals"),
+// shown on the card so its origin is always honest.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS drops (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL CHECK (kind IN ('stream', 'social')),
+    title TEXT NOT NULL,
+    source_name TEXT NOT NULL,
+    template_id TEXT NOT NULL REFERENCES card_templates(id),
+    event_id TEXT REFERENCES events(id),
+    is_live INTEGER NOT NULL DEFAULT 0 CHECK (is_live IN (0, 1)),
+    closes_at TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS drop_claims (
+    drop_id TEXT NOT NULL REFERENCES drops(id),
+    fan_id TEXT NOT NULL REFERENCES fans(id),
+    card_instance_id TEXT NOT NULL REFERENCES card_instances(id),
+    claimed_at TEXT NOT NULL,
+    PRIMARY KEY (drop_id, fan_id)
+  );
 `);
 
 export function parseCardStats(stats: string | null): Record<string, string | number> | null {
@@ -676,11 +728,12 @@ export interface CardInstanceRow {
   acquired_via: AcquiredVia;
   redemption_code_id: string | null;
   pass_on: 0 | 1;
+  drop_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type AcquiredVia = "redemption" | "trade" | "gift" | "welcome";
+export type AcquiredVia = "redemption" | "trade" | "gift" | "welcome" | "stream" | "social";
 
 export const redemptionCodesRepo = {
   issue(input: {
@@ -841,23 +894,29 @@ export const cardInstancesRepo = {
            ci.acquired_via AS acquired_via,
            ci.pass_on AS pass_on,
            giver.display_name AS gifted_by,
+           d.kind AS drop_kind,
+           d.source_name AS drop_source,
            ci.updated_at AS acquired_at
          FROM card_instances ci
          JOIN card_templates ct ON ct.id = ci.template_id
          LEFT JOIN gifts g
            ON g.card_instance_id = ci.id AND g.status = 'claimed' AND g.to_fan_id = ci.owner_fan_id
          LEFT JOIN fans giver ON giver.id = g.from_fan_id
+         LEFT JOIN drops d ON d.id = ci.drop_id
          WHERE ci.owner_fan_id = ?
          ORDER BY ci.updated_at DESC`
       )
-      .all(fanId) as (Omit<OwnedCardView, "stats" | "pass_on"> & {
+      .all(fanId) as (Omit<OwnedCardView, "stats" | "pass_on" | "source_label"> & {
       stats: string | null;
       pass_on: 0 | 1;
+      drop_kind: DropRow["kind"] | null;
+      drop_source: string | null;
     })[];
-    return rows.map((row) => ({
+    return rows.map(({ drop_kind, drop_source, ...row }) => ({
       ...row,
       stats: parseCardStats(row.stats),
       pass_on: row.pass_on === 1,
+      source_label: drop_kind && drop_source ? dropSourceLabel(drop_kind, drop_source) : null,
     }));
   },
 
@@ -902,6 +961,9 @@ export interface OwnedCardView {
   gifted_by: string | null;
   // What owning this card unlocks (access value), if anything.
   perk: string | null;
+  // Where a stream or social card came from ("Watched live on the Banana
+  // Ball stream", "From Static's drop"). Stays with the card after it's traded. Null otherwise.
+  source_label: string | null;
   acquired_at: string;
 }
 
@@ -917,6 +979,161 @@ export interface SetProgressView {
   total: number;
   complete: boolean;
 }
+
+// ---- Drops (stream and social) ----------------------------------------------
+
+export interface DropRow {
+  id: string;
+  token: string;
+  kind: "stream" | "social";
+  title: string;
+  source_name: string;
+  template_id: string;
+  event_id: string | null;
+  is_live: 0 | 1;
+  closes_at: string | null;
+  created_at: string;
+}
+
+export interface DropView {
+  token: string;
+  kind: DropRow["kind"];
+  title: string;
+  sourceName: string;
+  // Whether a claim would be accepted right now: a live stream, or a social
+  // drop before its end date.
+  open: boolean;
+  isLive: boolean;
+  closesAt: string | null;
+  claimCount: number;
+}
+
+// Thrown for anything that's the fan's situation rather than a server fault;
+// routes turn it into a 400 with this message.
+export class DropError extends Error {}
+
+// The honest label a card from a drop carries everywhere it's shown. For a
+// stream it names the stream rather than the game, since the card's own
+// title already names the game.
+export function dropSourceLabel(kind: DropRow["kind"], sourceName: string): string {
+  return kind === "stream" ? `Watched live on the ${sourceName}` : `From ${sourceName}'s drop`;
+}
+
+function dropIsOpen(drop: DropRow, now: string): boolean {
+  return drop.kind === "stream" ? drop.is_live === 1 : drop.closes_at === null || drop.closes_at > now;
+}
+
+export const dropsRepo = {
+  create(input: {
+    id: string;
+    token: string;
+    kind: DropRow["kind"];
+    title: string;
+    sourceName: string;
+    templateId: string;
+    eventId?: string;
+    isLive?: boolean;
+    closesAt?: string;
+    createdAt: string;
+  }): void {
+    db.prepare(
+      `INSERT INTO drops (id, token, kind, title, source_name, template_id, event_id, is_live, closes_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      input.id,
+      input.token,
+      input.kind,
+      input.title,
+      input.sourceName,
+      input.templateId,
+      input.eventId ?? null,
+      input.isLive ? 1 : 0,
+      input.closesAt ?? null,
+      input.createdAt
+    );
+  },
+
+  getByToken(token: string): DropRow | undefined {
+    return db.prepare(`SELECT * FROM drops WHERE token = ?`).get(token) as DropRow | undefined;
+  },
+
+  toView(drop: DropRow, now: string): DropView {
+    const { n } = db.prepare(`SELECT COUNT(*) AS n FROM drop_claims WHERE drop_id = ?`).get(drop.id) as {
+      n: number;
+    };
+    return {
+      token: drop.token,
+      kind: drop.kind,
+      title: drop.title,
+      sourceName: drop.source_name,
+      open: dropIsOpen(drop, now),
+      isLive: drop.is_live === 1,
+      closesAt: drop.closes_at,
+      claimCount: n,
+    };
+  },
+
+  listAll(): DropRow[] {
+    return db
+      .prepare(`SELECT * FROM drops ORDER BY CASE kind WHEN 'stream' THEN 0 ELSE 1 END, created_at`)
+      .all() as DropRow[];
+  },
+
+  // Starting or ending a stream. Ending one closes its code for good unless
+  // it's started again (a stream that comes back from a delay, say).
+  setLive(token: string, live: boolean): void {
+    db.prepare(`UPDATE drops SET is_live = ? WHERE token = ? AND kind = 'stream'`).run(live ? 1 : 0, token);
+  },
+
+  hasClaimed(token: string, fanId: string): boolean {
+    return (
+      db
+        .prepare(
+          `SELECT 1 FROM drop_claims dc JOIN drops d ON d.id = dc.drop_id WHERE d.token = ? AND dc.fan_id = ?`
+        )
+        .get(token, fanId) !== undefined
+    );
+  },
+
+  // Gives the fan this drop's card, in one transaction: checks the drop is
+  // open, records the claim (its primary key is the one-per-fan guard), and
+  // mints the card with its source. Throws DropError for a closed drop or a
+  // second claim.
+  claim(input: { token: string; fanId: string; newInstanceId: string; now: string }): {
+    instance: CardInstanceRow;
+    drop: DropRow;
+  } {
+    return db.transaction(() => {
+      const drop = db.prepare(`SELECT * FROM drops WHERE token = ?`).get(input.token) as DropRow | undefined;
+      if (!drop) throw new DropError("That drop link doesn't match a card.");
+      if (!dropIsOpen(drop, input.now)) {
+        throw new DropError(
+          drop.kind === "stream"
+            ? "This stream isn't live anymore. Stream cards can only be claimed while the game is on."
+            : "This drop has closed."
+        );
+      }
+      const already = db
+        .prepare(`SELECT 1 FROM drop_claims WHERE drop_id = ? AND fan_id = ?`)
+        .get(drop.id, input.fanId);
+      if (already) throw new DropError("You already have this card. It's one per fan.");
+
+      db.prepare(
+        `INSERT INTO card_instances
+           (id, template_id, owner_fan_id, acquired_via, drop_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(input.newInstanceId, drop.template_id, input.fanId, drop.kind, drop.id, input.now, input.now);
+      db.prepare(
+        `INSERT INTO drop_claims (drop_id, fan_id, card_instance_id, claimed_at) VALUES (?, ?, ?, ?)`
+      ).run(drop.id, input.fanId, input.newInstanceId, input.now);
+
+      const instance = db
+        .prepare(`SELECT * FROM card_instances WHERE id = ?`)
+        .get(input.newInstanceId) as CardInstanceRow;
+      return { instance, drop };
+    })();
+  },
+};
 
 export const setsRepo = {
   create(input: {

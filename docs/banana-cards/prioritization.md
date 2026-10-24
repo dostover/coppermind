@@ -1,7 +1,7 @@
 # Banana Cards — Prioritization (draft)
 
 > Copy of `claude/prioritization.md` from the Banana Cards Claude project,
-> as of 2026-10-22.
+> as of 2026-10-24.
 
 What to build next, in what order, and why. The candidates are the approved
 Fan First areas in `card-value-model.md`, the two value ideas the demo doesn't
@@ -32,8 +32,8 @@ Ties go to the item that teaches us more, or that later items depend on.
 | No-install first trade | Medium | **High** | Low | High | Done |
 | Set completion and progress | **High** | Low | Low | **High** | Done (2026-10-22) |
 | Access perks (cards unlock small real things) | **High** | Medium | Low | **High** | Done (2026-10-22) |
-| Player/team social drops | Medium | **High** | Medium | High | **Next** |
-| Broadcast cards for fans who can't get tickets | Medium | **High** | Low (once social drops exist) | Medium | **Next** |
+| Live stream cards (claimable only while the game is live) | **High** | **High** | Medium | High | Done (2026-10-24) |
+| Player/team social drops | Medium | **High** | Low (once stream drops exist) | High | Done (2026-10-24) |
 | Families and kids (family collection) | **High** | Medium | High | Medium | Later |
 | Card drops as bits / same-night moment cards | **High** | Medium | Medium (demo), High (operations) | High | Later |
 | Fans in the cards (fan moment, crowd cards) | **High** | Medium | Medium (demo), High (consent) | High | Later |
@@ -66,8 +66,8 @@ code into a box, read "You got a card!" in plain text. So it moves to the top:
 - **Card art everywhere.** The illustrations made for the print sheet appear
   on cards in the collection, in trades and in the reveal.
 
-Social drops and broadcast cards (Next) are other ways of *getting* a card, so
-they'll reuse this scan-and-reveal flow instead of building their own.
+Live stream cards and social drops are other ways of *getting* a card, so they
+reuse this scan-and-reveal flow instead of building their own.
 
 **Built 2026-10-22.** Token QR codes open `/redeem?code=…`; a new fan joins
 with a name; the card waits face down until the tap, then flips to show its
@@ -80,7 +80,7 @@ dev-only demo token sheet (`/tokens`) stands in for physical tokens.
 Both are now in the demo: six sets on the collection page with progress and a
 missing-card checklist, a perk unlocked by each finished set, per-card perks on
 a few cards, set progress after redeeming, and a "finishes your set" hint when
-trading. That makes player/team social drops the next item.
+trading.
 
 The value model names five sources of value. The demo shows three (presence,
 character and story, trading). These two complete it, and they're the answer
@@ -95,21 +95,33 @@ sets and perks are what make the collection worth opening in between.
   guardrails hold: sets never expire, there are no timers, missing cards are
   reachable by trading (never by paying), and rewards are small.
 
-## Next: player/team social drops, then broadcast cards
+## Built: live stream cards, then player/team social drops (2026-10-24)
 
-Social drops are the business case made concrete: players and teams handing
-out their own cards on their own channels, because growing their audience is
-part of their pay. They rank just behind sets and perks because they need a
-new mechanic (a shareable drop link with its own labeled card type), while
-sets and perks only reuse what exists.
+Both are ways of *getting* a card beyond the ballpark, so they share one
+mechanism, a **drop**: a link (the QR on a stream's overlay, or a social post)
+that opens the same face-down card and reveal as a token at the gate.
 
-Both reuse the scan-and-reveal flow above: a drop or broadcast is just another
-way to hand a fan a claim link.
+**Live streams came first** (changed 2026-10-24; the earlier draft had social
+first). Streams are the most direct way to extend presence value to fans who
+can't get tickets: "you were watching, live" is the online version of "you were
+there," and it only works because a stream card can be claimed only while the
+game is live.
 
-Broadcast cards come right after, because they're the same mechanic with a
-different source: a code shown on a stream instead of a social post. Building
-social drops first makes broadcast nearly free, and together they give fans
-who can't get tickets a real way in.
+**Social drops second.** They carry the business case: players and teams
+handing out their own cards on their own channels, because audience growth is
+part of their pay. Built on the same drop mechanism, they cost little extra.
+
+What's in the demo: two stream drops (one live, one ended) and two social drops
+(a player's and a team's), each card labeled with where it came from; two new
+sets ("Watched Live", "Following Along"); and a drop console standing in for
+the stream producer's go-live control and a player's post.
+
+## Next
+
+The drop mechanism opens a cheap path into the Later list: **card drops as
+bits** ("everyone in section 104 just earned the Dancing Ump card") are a drop
+announced from the field instead of a stream or a post. The demo could show
+one without solving the ballpark operations behind it.
 
 ## Later, and why
 
@@ -127,8 +139,5 @@ who can't get tickets a real way in.
 
 - If the goal shifts from "demonstrate the idea" to "prepare a pilot," real
   operations effort dominates, and the order of the Later items changes.
-- If social drops turn out to be the strongest part of the story with
-  readers or stakeholders, they move to Now, since they carry the business
-  case.
 - If families prove to be the largest share of attendees, the family
   collection moves up despite its effort.

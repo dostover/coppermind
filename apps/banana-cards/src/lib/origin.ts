@@ -28,3 +28,9 @@ export function giftLinkFor(origin: string, token: string): string {
 export function redeemLinkFor(origin: string, code: string): string {
   return `${origin}/redeem?code=${encodeURIComponent(code)}`;
 }
+
+// Where a stream overlay QR or a social post links: the drop's claim page
+// (see src/app/drop/[token]/page.tsx).
+export function dropLinkFor(origin: string, token: string): string {
+  return `${origin}/drop/${encodeURIComponent(token)}`;
+}

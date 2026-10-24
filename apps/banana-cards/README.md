@@ -33,6 +33,20 @@ buttons on the home page to switch between fans with one click.
    what you got, then your progress in its set and the first-card Pass It On
    bonus.
 
+## Demo script: beyond the ballpark (live streams and social drops)
+
+1. Open the **drop console** from the home page (or go to `/drops`).
+2. **Live stream:** "Bananas vs Firefighters" is live. Open its link in a
+   private window (the QR is what viewers would scan off the broadcast), type a
+   name, and reveal the card: it's labeled "Watched live on the Banana Ball stream". Back in the console, click **End stream** and open the link
+   again: it now says stream cards can only be claimed while the game is on.
+3. **Social drop:** open Static's "Dugout selfie" post link. The card is
+   labeled "From Static's drop". Opening it a second time says it's one per
+   fan.
+4. In **My collection**, the "Watched Live" and "Following Along" sets track
+   these cards. The 9/12 stream has already ended, so its card (Zesty has one)
+   can only be traded for.
+
 ## Demo script: bringing a new fan in
 
 1. Sign in as **Sluggo** and open **Trade with a fan**.
