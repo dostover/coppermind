@@ -23,6 +23,7 @@ import {
   fansRepo,
   tradesRepo,
   setsRepo,
+  dropsRepo,
   ensureSystemTemplates,
   type CardTemplateRow,
 } from "../src/lib/db";
@@ -33,10 +34,12 @@ const rawDb = new Database(path.join(dataDir, "banana-cards.sqlite"));
 
 console.log("Wiping existing data...");
 rawDb.exec(`
+  DELETE FROM drop_claims;
   DELETE FROM gifts;
   DELETE FROM trade_items;
   DELETE FROM trades;
   DELETE FROM card_instances;
+  DELETE FROM drops;
   DELETE FROM redemption_codes;
   DELETE FROM card_set_items;
   DELETE FROM card_sets;
@@ -87,6 +90,10 @@ const ART: Record<string, string> = {
   "Dancing Umpire": "dancing-umpire",
   "Banana Nanas": "banana-nanas",
   "Breakdancing First-Base Coach": "breakdancing-coach",
+  "Watched Live: Bananas vs Firefighters": "stream-firefighters",
+  "Watched Live: Bananas vs Party Animals": "stream-party-animals",
+  "Static's Dugout Selfie": "static-selfie",
+  "Pink Out Night": "pink-out",
 };
 function art(title: string): string | undefined {
   return ART[title] ? `/cards/${ART[title]}.svg` : undefined;
@@ -458,6 +465,96 @@ for (const { code, template } of codes) {
   });
 }
 
+console.log("Seeding stream and social drop cards...");
+// Beyond the ballpark (see claude/card-value-model.md): cards for fans who
+// watch a game live on a stream, and cards players and teams drop on their
+// own social channels. They're only ever handed out through a drop (no
+// redemption code), and each is labeled with where it came from.
+const streamFirefightersTemplateId = randomUUID();
+const streamPartyAnimalsTemplateId = randomUUID();
+const staticSelfieTemplateId = randomUUID();
+const pinkOutTemplateId = randomUUID();
+const dropTemplates: { id: string; type: CardTemplateRow["type"]; title: string; description: string; playerName?: string; eventId?: string }[] = [
+  {
+    id: streamFirefightersTemplateId,
+    type: "moment",
+    title: "Watched Live: Bananas vs Firefighters",
+    description: "For everyone who tuned in while it happened. Only claimable during the live stream.",
+    eventId: upcomingEventId,
+  },
+  {
+    id: streamPartyAnimalsTemplateId,
+    type: "moment",
+    title: "Watched Live: Bananas vs Party Animals",
+    description: "For everyone watching the 9/12 game live, wherever they were.",
+    eventId: completedEventId,
+  },
+  {
+    id: staticSelfieTemplateId,
+    type: "roster",
+    title: "Static's Dugout Selfie",
+    description: "Posted by Static before first pitch, for everyone following along.",
+    playerName: "Static",
+  },
+  {
+    id: pinkOutTemplateId,
+    type: "moment",
+    title: "Pink Out Night",
+    description: "Dropped by the Party Animals for everyone who wore pink, in the stands or at home.",
+  },
+];
+for (const t of dropTemplates) {
+  cardTemplatesRepo.create({ ...t, imagePath: art(t.title), createdAt: now });
+}
+
+const inDays = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+const streamFirefightersDrop = randomUUID();
+const streamPartyAnimalsDrop = randomUUID();
+const staticSelfieDrop = randomUUID();
+const pinkOutDrop = randomUUID();
+dropsRepo.create({
+  id: randomUUID(),
+  token: streamFirefightersDrop,
+  kind: "stream",
+  title: "Bananas vs Firefighters",
+  sourceName: "Banana Ball stream",
+  templateId: streamFirefightersTemplateId,
+  eventId: upcomingEventId,
+  isLive: true, // "live now" in the demo - end it from the drop console
+  createdAt: now,
+});
+dropsRepo.create({
+  id: randomUUID(),
+  token: streamPartyAnimalsDrop,
+  kind: "stream",
+  title: "Bananas vs Party Animals · 9/12",
+  sourceName: "Banana Ball stream",
+  templateId: streamPartyAnimalsTemplateId,
+  eventId: completedEventId,
+  isLive: true, // ended below, once a demo fan has claimed it during the "game"
+  createdAt: now,
+});
+dropsRepo.create({
+  id: randomUUID(),
+  token: staticSelfieDrop,
+  kind: "social",
+  title: "Dugout selfie",
+  sourceName: "Static",
+  templateId: staticSelfieTemplateId,
+  closesAt: inDays(7),
+  createdAt: now,
+});
+dropsRepo.create({
+  id: randomUUID(),
+  token: pinkOutDrop,
+  kind: "social",
+  title: "Pink Out Night",
+  sourceName: "Party Animals",
+  templateId: pinkOutTemplateId,
+  closesAt: inDays(7),
+  createdAt: now,
+});
+
 console.log("Seeding sets...");
 // Completion value (see claude/card-value-model.md): themed groups of cards
 // that unlock a small, real perk when a fan holds one of each. Every card in
@@ -512,6 +609,20 @@ const sets: {
     perkTitle: "Try on a prop",
     perkDescription: "A photo wearing the Home Run Cape or the Yellow Tux at the merch stand.",
     templateIds: [...specialItems.map((i) => i.id), tradeOnlyTemplateId],
+  },
+  {
+    title: "Watched Live",
+    description: "Cards for watching Banana Ball live, wherever you are.",
+    perkTitle: "Your name in the fan shoutout",
+    perkDescription: "Your name scrolls across the screen during a future live stream.",
+    templateIds: [streamFirefightersTemplateId, streamPartyAnimalsTemplateId],
+  },
+  {
+    title: "Following Along",
+    description: "Cards dropped by players and teams on their own channels.",
+    perkTitle: "A shoutout from a player",
+    perkDescription: "A player thanks you by name in a post on their channel.",
+    templateIds: [staticSelfieTemplateId, pinkOutTemplateId],
   },
 ];
 sets.forEach((set, i) =>
@@ -637,11 +748,19 @@ tradesRepo.create({
   ],
 });
 
+console.log("Seeding drop claims (Zesty watched 9/12 live; Sluggo follows Static)...");
+// Through the real claim path: Zesty grabs the 9/12 stream card while that
+// stream is live, then it ends - so the card exists in circulation (to
+// trade for) but can no longer be claimed. Sluggo claims Static's open drop.
+dropsRepo.claim({ token: streamPartyAnimalsDrop, fanId: zesty.id, newInstanceId: randomUUID(), now });
+dropsRepo.setLive(streamPartyAnimalsDrop, false);
+dropsRepo.claim({ token: staticSelfieDrop, fanId: sluggo.id, newInstanceId: randomUUID(), now });
+
 console.log("\nDemo personas ready - request a sign-in code for any of these at /sign-in:");
 console.log("  peelmaster@example.com   Peel Master Flex   11 cards, broad mixed collection, 1 set complete");
 console.log("  rookienanas@example.com  Rookie Nanas       2 cards, brand-new fan");
-console.log("  sluggo@example.com       Sluggo             4 cards, 1 confirmed trade, 1 pending trade to confirm");
-console.log("  zesty@example.com        Zesty              3 cards, 1 pending trade awaiting Sluggo");
+console.log("  sluggo@example.com       Sluggo             5 cards, 1 confirmed trade, 1 pending trade to confirm, 1 social drop");
+console.log("  zesty@example.com        Zesty              4 cards, 1 pending trade awaiting Sluggo, 1 stream card");
 console.log(
   "\nEach persona also holds one Pass It On card (every fan's first redemption grants one) - " +
     "show it from /trade and open the link in a private window to try the new-fan side."

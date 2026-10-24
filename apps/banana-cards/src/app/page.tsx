@@ -39,7 +39,8 @@ export default async function Home() {
           <DemoPersonaSwitcher />
           <p className="dev-hint">
             Demo: <Link href="/tokens">print or scan demo tokens</Link> to try claiming a card the way a fan
-            would at the gate.
+            would at the gate, or open the <Link href="/drops">drop console</Link> to run a live stream or a
+            player&apos;s social drop.
           </p>
         </>
       )}

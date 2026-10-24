@@ -7,13 +7,15 @@ import { CardArt } from "./CardArt";
 type SortKey = "newest" | "oldest" | "title" | "type";
 type ViaFilter = "all" | OwnedCardView["acquired_via"];
 
-const VIA_ORDER: OwnedCardView["acquired_via"][] = ["redemption", "trade", "gift", "welcome"];
+const VIA_ORDER: OwnedCardView["acquired_via"][] = ["redemption", "stream", "social", "trade", "gift", "welcome"];
 
 const VIA_LABELS: Record<OwnedCardView["acquired_via"], { filter: string; stat: string }> = {
   redemption: { filter: "Redeemed", stat: "redeemed" },
   trade: { filter: "Traded", stat: "traded" },
   gift: { filter: "Gifts", stat: "gifted to you" },
   welcome: { filter: "Welcome", stat: "welcome" },
+  stream: { filter: "Watched live", stat: "watched live" },
+  social: { filter: "Social drops", stat: "from social drops" },
 };
 
 // Fixed display order for the card taxonomy (card_templates.type) - filter
@@ -154,6 +156,7 @@ export function CollectionBoard({ cards }: { cards: OwnedCardView[] }) {
               <h2>{card.title}</h2>
               {card.player_name && <p className="card-tile-player">{card.player_name}</p>}
               {card.gifted_by && <p className="card-tile-gift">A gift from {card.gifted_by}</p>}
+              {card.source_label && <p className="card-tile-source">{card.source_label}</p>}
               {card.description && <p>{card.description}</p>}
               {card.stats && (
                 <p className="card-tile-stats">

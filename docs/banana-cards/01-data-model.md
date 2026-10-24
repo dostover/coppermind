@@ -170,9 +170,10 @@ A specific fan's specific owned card. This is what moves in a trade.
 | id | TEXT (uuid) | primary key |
 | template_id | TEXT (uuid) | FK → `card_templates.id` |
 | owner_fan_id | TEXT (uuid) | FK → `fans.id` — single owner, always exactly one |
-| acquired_via | TEXT | `redemption` \| `trade` \| `gift` \| `welcome` (see "Growth loops" below) |
+| acquired_via | TEXT | `redemption` \| `trade` \| `gift` \| `welcome` (see "Growth loops" below) \| `stream` \| `social` (see "Drops" below) |
 | redemption_code_id | TEXT (uuid) | nullable FK → `redemption_codes.id`, set if acquired via redemption |
 | pass_on | INTEGER | `1` for a pass-it-on card still waiting to be given away; `0` otherwise |
+| drop_id | TEXT (uuid) | nullable FK → `drops.id`; the stream or social drop a card came from. Unlike `acquired_via`, it stays with the card after a trade, so the card's origin label is always honest |
 | created_at | TEXT (ISO) | when this instance was first created (redeemed) |
 | updated_at | TEXT (ISO) | bumped whenever `owner_fan_id` changes via trade |
 
@@ -265,6 +266,43 @@ screen's hint on the other fan's cards ("For your set: The Tour" / "Finishes
 your set: …"). There are no deadlines, completion percentages across fans, or
 rarity anywhere in it, per the fan-first guardrails. The seeded perks are
 example content.
+
+### `drops` / `drop_claims`
+Getting a card beyond the ballpark (see "Beyond the ballpark" in
+`card-value-model.md`). A drop hands one card to every fan who claims it
+through a link, `/drop/<token>`: the QR on a live stream's overlay, or a post on
+a player's or team's own social channel. It ends in the same face-down card and
+reveal as a token (`CardReveal`).
+
+| `drops` column | type | notes |
+|---|---|---|
+| id | TEXT (uuid) | primary key |
+| token | TEXT | unique; what the link carries |
+| kind | TEXT | `stream` \| `social` |
+| title | TEXT | e.g. "Bananas vs Firefighters" / "Dugout selfie" |
+| source_name | TEXT | who's behind it: "Banana Ball stream", "Static", "Party Animals" |
+| template_id | TEXT (uuid) | FK → `card_templates.id`; the card it hands out |
+| event_id | TEXT (uuid) | nullable FK → `events.id`; the game a stream is showing |
+| is_live | INTEGER | streams only: claimable only while `1` |
+| closes_at | TEXT (ISO) | social only: a plain end date (no countdowns or quantity limits) |
+| created_at | TEXT (ISO) | |
+
+`drop_claims` (`drop_id`, `fan_id`, `card_instance_id`, `claimed_at`, primary
+key `drop_id` + `fan_id`) enforces one card per fan per drop.
+
+`dropsRepo.claim()` checks the drop is open (a live stream, or a social drop
+before its end date), records the claim and mints the card with
+`acquired_via` = the drop's kind and `drop_id` set, in one transaction.
+`POST /api/drops/[token]/claim` returns the same shape as a token redemption
+(card, `setProgress`) plus `sourceLabel` ("Watched live on the Banana Ball stream" / "From Static's drop"), which also shows on the card in the
+collection (`OwnedCardView.source_label`). `GET /api/drops/[token]` describes a
+drop without revealing its card.
+
+A dev-only drop console, `/drops`, stands in for the people behind drops: the
+stream producer (start and end the live window via
+`POST /api/drops/[token]/live`, see the overlay QR) and players and teams (the
+post with its link). Both the page and the go-live route are off in production
+builds, since real drops need team, player and staff accounts.
 
 ## Growth loops (demo)
 
@@ -390,6 +428,13 @@ at `/sign-in` with the email `seed.ts` logs; since no email service is wired
 up yet, `request-code` echoes the one-time code back as `devCode` instead of
 sending it (see `redemption_codes`/two-phase-login notes above), so there's
 nothing further to configure to demo with them.
+
+Four drops are seeded: a live stream of Bananas vs Firefighters (live, so it
+can be claimed straight away), the 9/12 Bananas vs Party Animals stream (Zesty
+claimed it while it was live, then it ended, so its card exists only by trade),
+Static's dugout-selfie drop (Sluggo claimed it) and the Party Animals' Pink Out
+Night drop. Their cards make up two more sets, "Watched Live" and "Following
+Along".
 
 Six sets are seeded (one night at Grayson, bits and characters, the tour's
 stadiums, the league's teams, the roster, the props), and Peel Master Flex

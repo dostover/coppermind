@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { redemptionCodesRepo, cardTemplatesRepo, parseCardStats, setsRepo } from "@/lib/db";
+import { redemptionCodesRepo, setsRepo } from "@/lib/db";
+import { cardForReveal, setStepsForNewCard } from "@/lib/reveal";
 import { getFanFromRequest } from "@/lib/authSession";
 
 export async function POST(req: NextRequest) {
@@ -50,34 +51,14 @@ export async function POST(req: NextRequest) {
   }
 
   const { instance, passOnInstance } = result;
-  const template = cardTemplatesRepo.getById(instance.template_id);
 
   return NextResponse.json({
-    card: {
-      instanceId: instance.id,
-      title: template?.title ?? "Unknown card",
-      description: template?.description ?? "",
-      type: template?.type ?? null,
-      imagePath: template?.image_path ?? null,
-      perk: template?.perk ?? null,
-      stats: parseCardStats(template?.stats ?? null),
-    },
+    card: cardForReveal(instance.id, instance.template_id),
     // Set only on a fan's first redemption: the bonus card they're meant to
     // give to someone new (see giftsRepo in src/lib/db.ts).
     passOnCard: passOnInstance ? { instanceId: passOnInstance.id } : null,
     // Every set this card belongs to, with the fan's progress after
-    // redeeming it. newlyCompleted is true only when this card was the last
-    // one missing - the moment the set's perk unlocks.
-    setProgress: setsRepo
-      .listProgressForFan(fan.id)
-      .filter((set) => set.items.some((item) => item.templateId === instance.template_id))
-      .map((set) => ({
-        title: set.title,
-        owned: set.owned,
-        total: set.total,
-        complete: set.complete,
-        newlyCompleted: set.complete && !alreadyOwned,
-        perkTitle: set.perk.title,
-      })),
+    // redeeming it (see src/lib/reveal.ts).
+    setProgress: setStepsForNewCard(fan.id, instance.template_id, alreadyOwned),
   });
 }

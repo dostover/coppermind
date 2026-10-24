@@ -1,7 +1,7 @@
 # Banana Cards — Value Model Framework
 
 > Copy of `claude/card-value-model.md` from the Banana Cards Claude project,
-> as of 2026-10-22.
+> as of 2026-10-24.
 
 **North star:** every card should make a fan's night better or bring a new fan
 in. Anything that does neither doesn't ship. (Added 2026-10-20 to make the two
@@ -190,8 +190,11 @@ Today the cards sit *next to* the entertainment. They should be *part of* it.
 - **Same-night moment cards:** because cards are digital, a card for tonight's
   wildest play can exist before fans leave the parking lot.
 - **Phone rule (hard constraint):** the app never needs attention during a bit.
-  Codes stay claimable for a generous window after the game (exact length TBD), and
-  there are no push notifications during a game.
+  Tokens handed out in person stay claimable for a generous window after the game
+  (exact length TBD), and there are no push notifications during a game. Live
+  stream codes are the one exception (see section 5): they only work while the game
+  is streaming live, because "you were watching live" is what that card means, and a
+  fan already watching on a screen loses nothing to a ten-second scan.
 
 ### 3. Fans in the cards
 The Bananas put fans in the show; the cards should too.
@@ -222,17 +225,41 @@ Trading is the built-in way one fan brings in another — design for it on purpo
   concourse, so a fan whose friends aren't on the app yet still has someone to
   trade with — and a story to tell about it.
 
-### 5. Fans who can't get tickets
+### 5. Beyond the ballpark: live streams and social drops (BUILT in demo, 2026-10-24)
 Banana Ball tickets are very hard to get. If the best cards required attendance,
 the system would reward the lucky few and leave most of the fan base on the outside
-— the opposite of Fans First.
+— the opposite of Fans First. So the Fan First experience extends past the gate,
+first to games streamed online, then to players' and teams' own social channels.
 
-- **Broadcast channel as a real path, not a consolation prize:** codes during
-  streams and broadcasts give their own clearly labeled broadcast cards and sets.
-  Attendance cards still mean "you were there"; broadcast cards mean "you were
-  watching" — both are honest, neither is "lesser."
-- **Remote fans can trade:** since trades require fans to be together, not at the
-  venue, remote fans trade with each other at watch parties, school, home.
+There are three ways to get a card, and each one is labeled honestly with where it
+came from. The label stays with the card for good, even after it's traded:
+
+| Where | How a fan gets it | What the card means | Label on the card |
+|---|---|---|---|
+| At the game | Scan the token handed out at the gate | "You were there" | (the card's own game and story) |
+| Watching a live stream | Scan the QR on screen during the broadcast | "You were watching, live" | "Watched live on the Banana Ball stream" |
+| Following a player or team | Open the drop they post on their own channel | "You were following" | "From Static's drop" |
+
+None of these is a consolation prize: each has its own cards and its own sets
+("Watched Live", "Following Along") with their own perks, so a fan who never gets a
+ticket still has complete things to collect and finish.
+
+- **Live streams come first, and they're live only.** A stream card can only be
+  claimed while the game is actually streaming. When the stream ends, its code stops
+  working. "You were watching live" is the online version of "you had to be there,"
+  and real time is what keeps it meaningful. (Replays and on-demand viewing are out
+  of scope for now.)
+- **Player and team social drops.** A player or team posts a drop on their own
+  channel; it stays open until a plain end date they set. Guardrails: no countdown
+  timers, no "only 100 left," no follow-to-win or engagement-bait mechanics, never
+  paid. It also serves the business case (see `product-brief.md`): audience growth is
+  part of players' and teams' pay, so their channels become a way into Banana Ball.
+- **One card per fan per drop.** A stream or social drop gives each fan one copy;
+  more copies only arrive by trading.
+- **Online gets fans in; in person keeps them.** Stream and social cards are easy to
+  claim anywhere, but trading still happens face to face. Remote fans trade with each
+  other at watch parties, school or home (trades require fans to be together, not to
+  be at the venue).
 - **Tour sets reward following the tour,** not only attending a stop.
 
 ### 6. Families and kids
@@ -271,7 +298,9 @@ Alongside "no marketplace grammar":
 ### Open questions (to resolve while building)
 - Consent process for fan moment cards (who asks, when, how a parent OKs it)
 - How long codes stay claimable after a game
-- Whether broadcast codes are allowed under the teams' streaming/broadcast deals
+- Whether stream codes are allowed under the teams' streaming/broadcast deals
+- How players and teams create their own drops (accounts, approval, how many)
+- Whether a drop should ever be made for replays or on-demand viewing
 - Pass It On: should a fan earn more than one over time (e.g. one per season),
   or is one per fan the right amount?
 - Quick join: how a name-only fan later adds an email to keep their cards (see

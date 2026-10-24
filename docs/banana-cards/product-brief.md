@@ -1,7 +1,7 @@
 # Banana Cards — Product Brief
 
 > Copy of `claude/product-brief.md` from the Banana Cards Claude project,
-> as of 2026-10-22.
+> as of 2026-10-24.
 
 Why Banana Cards exists, who it's for, and how we'd know it's working. The
 *how* lives in `card-value-model.md` (product decisions) and
@@ -36,7 +36,7 @@ hasn't reached yet.
 | Group | What they want | What Banana Cards gives them |
 |---|---|---|
 | Fans at a game | A keepsake of a night they loved | A card tied to that game, and people to trade with on the concourse |
-| Fans who can't get tickets | A way in, without being second-class | Their own clearly labeled cards (broadcast, social) and trading anywhere fans meet |
+| Fans who can't get tickets | A way in, without being second-class | Their own clearly labeled cards from live streams and from players' and teams' social drops, with their own sets, and trading anywhere fans meet |
 | Families and kids | Something to do together | A family collection; trading on a parent's phone |
 | Brand-new fans | A low-effort first step | A Pass It On card from a friend; joining with just a name |
 | Players and teams | A bigger following (it's part of their pay) | Their own cards to drop on their social channels |
@@ -74,8 +74,9 @@ metrics are still to be picked. Candidates:
 
 **Fan base growth**
 - New fans per Pass It On card given
-- Social and broadcast drop claims that become active collectors (made a trade
-  or redeemed at a game)
+- Live stream and social drop claims that become active collectors (made a
+  trade or redeemed at a game)
+- Share of live stream viewers who claim the stream's card
 - Follower growth on players' and teams' channels around drops
 - First-time attendees who arrived already holding cards
 

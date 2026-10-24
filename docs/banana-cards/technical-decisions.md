@@ -1,7 +1,7 @@
 # Banana Cards — Technical & Architecture Decisions
 
 > Copy of `claude/technical-decisions.md` from the Banana Cards Claude project,
-> as of 2026-10-20.
+> as of 2026-10-24.
 
 Engineering-facing decisions, separate from `card-value-model.md` (the
 fan-facing product philosophy that drives them). See
@@ -69,8 +69,20 @@ passes. They get the same session token as email sign-in, so everything
 downstream treats them identically. The trade-off: a quick-join account has
 no email, so it can't be recovered or used on another device yet.
 
+## DECISION (demo): drops for live streams and social posts (2026-10-24)
+
+Stream and social cards are handed out through one mechanism, a drop: a link
+(the QR on a stream's overlay, or a player's or team's post) that ends in the
+same reveal as a token. A stream drop works only while it's marked live; a
+social drop until its end date. In the demo, a dev-only drop console stands in
+for the stream producer's go-live switch and a player's post; it's turned off
+in production because there are no team, player or staff accounts yet.
+
 ## Before real fans (deferred from the demo phase)
 
+- Accounts and tools for the people behind drops: stream producers (going live
+  should follow the actual stream, not a manual switch) and players and teams
+  (creating a drop, setting its end date, posting it)
 - Pick an email-sending service and replace the `devCode` echo with real
   delivery (and make sure `devCode` can never be returned in production)
 - Let a quick-join fan add an email later so they can keep their cards on a
