@@ -23,6 +23,7 @@ export type RevealResult = {
     imagePath: string | null;
     perk: string | null;
     stats: Record<string, string | number> | null;
+    keepsake?: boolean;
   };
   setProgress: {
     title: string;
@@ -105,7 +106,11 @@ export function CardReveal({
           {card && (
             <>
               <CardArt src={card.imagePath} variant="reveal" />
-              {card.type && <span className="card-tile-type">{TYPE_LABELS[card.type] ?? card.type}</span>}
+              {card.keepsake ? (
+                <span className="card-tile-type card-tile-keepsake">Keepsake</span>
+              ) : (
+                card.type && <span className="card-tile-type">{TYPE_LABELS[card.type] ?? card.type}</span>
+              )}
               <h2 className="reveal-title">{card.title}</h2>
               {result?.sourceLabel && <p className="card-tile-source">{result.sourceLabel}</p>}
               {card.description && <p className="reveal-description">{card.description}</p>}
@@ -135,6 +140,12 @@ export function CardReveal({
       {result && (
         <div className="reveal-after" role="status">
           <p className="redeemed-card-title">It&apos;s yours: {result.card.title}</p>
+          {result.card.keepsake && (
+            <p className="keepsake-note">
+              A keepsake: you earned this one by being there, so it stays with you. Keepsakes can&apos;t be
+              traded.
+            </p>
+          )}
           {result.setProgress.length > 0 && (
             <ul className="redeem-set-progress">
               {result.setProgress.map((set) => (

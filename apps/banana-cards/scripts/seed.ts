@@ -94,6 +94,7 @@ const ART: Record<string, string> = {
   "Watched Live: Bananas vs Party Animals": "stream-party-animals",
   "Static's Dugout Selfie": "static-selfie",
   "Pink Out Night": "pink-out",
+  "Ringmaster's Signed Hat": "signed-hat",
 };
 function art(title: string): string | undefined {
   return ART[title] ? `/cards/${ART[title]}.svg` : undefined;
@@ -465,6 +466,37 @@ for (const { code, template } of codes) {
   });
 }
 
+console.log("Seeding a keepsake (moment card)...");
+// A keepsake, per the pool/moment decision in claude/card-value-model.md: a
+// card that exists because of something its owner did, handed out by a
+// specific code, and never tradeable. Here: Ringmaster signs autographs after
+// the game, and the code is tucked in his hat for whoever stuck around.
+// A fictional player, like every player in this seed.
+const signedHatTemplateId = randomUUID();
+cardTemplatesRepo.create({
+  id: signedHatTemplateId,
+  type: "roster",
+  title: "Ringmaster's Signed Hat",
+  description:
+    "You stuck around after the game for Ringmaster's autograph, and the code was tucked in his hat.",
+  playerName: "Ringmaster",
+  eventId: completedEventId,
+  imagePath: art("Ringmaster's Signed Hat"),
+  keepsake: true,
+  createdAt: now,
+});
+const keepsakeCodes = ["BB-HAT-001", "BB-HAT-002"];
+for (const code of keepsakeCodes) {
+  redemptionCodesRepo.issue({
+    id: randomUUID(),
+    code,
+    templateId: signedHatTemplateId,
+    eventId: completedEventId,
+    issuedVia: "staff",
+    createdAt: now,
+  });
+}
+
 console.log("Seeding stream and social drop cards...");
 // Beyond the ballpark (see claude/card-value-model.md): cards for fans who
 // watch a game live on a stream, and cards players and teams drop on their
@@ -631,6 +663,7 @@ sets.forEach((set, i) =>
 
 console.log("\nSeeded. Unredeemed codes to try at /redeem:");
 for (const { code } of codes) console.log(`  ${code}`);
+for (const code of keepsakeCodes) console.log(`  ${code}   (keepsake: Ringmaster's Signed Hat)`);
 console.log(
   `\n(trade_only template "${tradeOnlyTemplateId}" and the Rally Kazoo, Tutu of Triumph, and ` +
     `Breakdancing First-Base Coach templates were seeded with no code - not directly redeemable, by design)`
@@ -696,6 +729,10 @@ grantCard(peelMasterFlex, milestoneTemplateId);
 // away without first playing through a redemption or trade.
 grantCard(peelMasterFlex, momentTemplateId);
 grantCard(peelMasterFlex, characterTemplateId);
+// Peel stuck around for Ringmaster's autograph at 9/12, so his Keepsakes
+// shelf has something on it - and another fan looking him up to trade won't
+// see it.
+grantCard(peelMasterFlex, signedHatTemplateId);
 
 // Rookie Nanas: a brand-new fan with just a couple of starter cards - the
 // realistic common case, not a collector's account.
@@ -757,7 +794,7 @@ dropsRepo.setLive(streamPartyAnimalsDrop, false);
 dropsRepo.claim({ token: staticSelfieDrop, fanId: sluggo.id, newInstanceId: randomUUID(), now });
 
 console.log("\nDemo personas ready - request a sign-in code for any of these at /sign-in:");
-console.log("  peelmaster@example.com   Peel Master Flex   11 cards, broad mixed collection, 1 set complete");
+console.log("  peelmaster@example.com   Peel Master Flex   11 cards + 1 keepsake, broad mixed collection, 1 set complete");
 console.log("  rookienanas@example.com  Rookie Nanas       2 cards, brand-new fan");
 console.log("  sluggo@example.com       Sluggo             5 cards, 1 confirmed trade, 1 pending trade to confirm, 1 social drop");
 console.log("  zesty@example.com        Zesty              4 cards, 1 pending trade awaiting Sluggo, 1 stream card");

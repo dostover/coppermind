@@ -979,3 +979,29 @@ body {
 .social-post-author {
   font-weight: 700;
 }
+
+/* Keepsakes (moment cards): earned by being there, never traded. A
+   different chip and border from tradeable cards, so the difference reads at
+   a glance. */
+.keepsakes {
+  margin-top: 1.5rem;
+}
+
+.keepsakes-intro {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.card-tile-keepsake-tile {
+  border: 2px solid var(--foreground);
+}
+
+.card-tile-type.card-tile-keepsake {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.keepsake-note {
+  font-size: 0.9rem;
+  color: var(--muted);
+}

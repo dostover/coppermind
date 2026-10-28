@@ -119,6 +119,7 @@ codes get issued against it, not by the schema).
 | player_name | TEXT | nullable — only meaningful for `roster` cards |
 | stats | TEXT | nullable JSON-encoded object, added via a guarded `ALTER TABLE` after the table first shipped (same pattern as `fans.email`) |
 | perk | TEXT | nullable; what owning this card unlocks (access value), e.g. "A 30-second clip of the full strike-three routine". Guarded `ALTER TABLE` |
+| keepsake | INTEGER (0/1) | 1 = a keepsake ("moment card" in the pool/moment decision in `card-value-model.md`): earned by something its owner did, handed out by a code for this one card, and never tradeable. Keepsakes sit on their own shelf in the collection and are never part of a set. Guarded `ALTER TABLE`, default 0 |
 | created_at | TEXT (ISO) | |
 
 `trade_only` templates are never attached to a redemption code directly issued
@@ -387,13 +388,13 @@ scan without any backend change, since both resolve to the same fan id.
 
 - `GET /api/trades/lookup/[fanId]` — resolves one already-known fan id (from
   the code exchange above) into their display name and their trade-eligible
-  cards (their collection minus anything already tied up in another pending
-  trade). Deliberately not a searchable directory — you can only look up a
+  cards (their collection minus pass-it-on cards, keepsakes, and anything
+  already tied up in another pending trade). Deliberately not a searchable directory — you can only look up a
   fan whose id you already have, which is what keeps this from becoming a
   browsable "who has what" listing.
 - `POST /api/trades` — the proposer offers one of their own cards and
   requests one of the other fan's (both already validated as owned and
-  trade-eligible), creating a `pending` trade via `tradesRepo.create()` with
+  trade-eligible; a keepsake on either side is refused), creating a `pending` trade via `tradesRepo.create()` with
   both `trade_items` rows set. Nothing moves yet.
 - `POST /api/trades/[id]/confirm` — only the recipient (`fan_b`) can call
   this. The proposer already committed to the terms by building them after

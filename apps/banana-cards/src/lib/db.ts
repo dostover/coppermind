@@ -284,6 +284,18 @@ if (!cardTemplateColumns.some((c) => c.name === "perk")) {
   db.exec(`ALTER TABLE card_templates ADD COLUMN perk TEXT`);
 }
 
+// card_templates.keepsake: a "moment card" in the sense of
+// claude/card-value-model.md's pool/moment decision (not to be confused with
+// the 'moment' card *type*, which is about what a card depicts). A keepsake
+// exists because of something its owner did - stuck around for an autograph,
+// say - and is handed out by a specific code for that one card. It can't be
+// traded: presence value stays with the fan who was there. Every other card
+// is tradeable. Keepsakes live on their own shelf in the collection and are
+// never part of a set, so every set can still be finished by trading.
+if (!cardTemplateColumns.some((c) => c.name === "keepsake")) {
+  db.exec(`ALTER TABLE card_templates ADD COLUMN keepsake INTEGER NOT NULL DEFAULT 0`);
+}
+
 // Sets: the "completion value" from claude/card-value-model.md. A set is a
 // themed group of card templates (a tour's stadiums, the league's teams, one
 // night's moments); a fan completes it by owning at least one card of each.
@@ -622,6 +634,7 @@ export interface CardTemplateRow {
   player_name: string | null;
   stats: string | null;
   perk: string | null;
+  keepsake: 0 | 1;
   created_at: string;
 }
 
@@ -636,12 +649,13 @@ export const cardTemplatesRepo = {
     playerName?: string;
     stats?: Record<string, string | number>;
     perk?: string;
+    keepsake?: boolean;
     createdAt: string;
   }): void {
     db.prepare(
       `INSERT INTO card_templates
-         (id, type, title, description, image_path, event_id, player_name, stats, perk, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, type, title, description, image_path, event_id, player_name, stats, perk, keepsake, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       input.id,
       input.type,
@@ -652,6 +666,7 @@ export const cardTemplatesRepo = {
       input.playerName ?? null,
       input.stats ? JSON.stringify(input.stats) : null,
       input.perk ?? null,
+      input.keepsake ? 1 : 0,
       input.createdAt
     );
   },
@@ -891,6 +906,7 @@ export const cardInstancesRepo = {
            ct.player_name AS player_name,
            ct.stats AS stats,
            ct.perk AS perk,
+           ct.keepsake AS keepsake,
            ci.acquired_via AS acquired_via,
            ci.pass_on AS pass_on,
            giver.display_name AS gifted_by,
@@ -906,9 +922,10 @@ export const cardInstancesRepo = {
          WHERE ci.owner_fan_id = ?
          ORDER BY ci.updated_at DESC`
       )
-      .all(fanId) as (Omit<OwnedCardView, "stats" | "pass_on" | "source_label"> & {
+      .all(fanId) as (Omit<OwnedCardView, "stats" | "pass_on" | "keepsake" | "source_label"> & {
       stats: string | null;
       pass_on: 0 | 1;
+      keepsake: 0 | 1;
       drop_kind: DropRow["kind"] | null;
       drop_source: string | null;
     })[];
@@ -916,18 +933,25 @@ export const cardInstancesRepo = {
       ...row,
       stats: parseCardStats(row.stats),
       pass_on: row.pass_on === 1,
+      keepsake: row.keepsake === 1,
       source_label: drop_kind && drop_source ? dropSourceLabel(drop_kind, drop_source) : null,
     }));
   },
 
   // What this fan can put into a trade right now: everything they own except
-  // pass-it-on cards (those can only be given, never traded) and anything
-  // already tied up in another pending trade.
+  // pass-it-on cards (those can only be given, never traded), keepsakes
+  // (they stay with the fan who earned them), and anything already tied up
+  // in another pending trade.
   listTradeable(fanId: string): OwnedCardView[] {
     const pendingIds = tradesRepo.pendingCardInstanceIds(fanId);
     return cardInstancesRepo
       .listByOwnerWithTemplate(fanId)
-      .filter((card) => !card.pass_on && !pendingIds.has(card.instance_id));
+      .filter((card) => !card.pass_on && !card.keepsake && !pendingIds.has(card.instance_id));
+  },
+
+  // True if this card instance is a keepsake (see card_templates.keepsake).
+  isKeepsake(instance: CardInstanceRow): boolean {
+    return cardTemplatesRepo.getById(instance.template_id)?.keepsake === 1;
   },
 
   // The starter card a brand-new fan gets when they join from someone's
@@ -956,6 +980,9 @@ export interface OwnedCardView {
   acquired_via: AcquiredVia;
   // True for a pass-it-on card still waiting to be given to someone new.
   pass_on: boolean;
+  // True for a keepsake (moment card): earned by something this fan did, and
+  // never tradeable.
+  keepsake: boolean;
   // Display name of the fan who passed this card on, for a card received as a
   // gift; null otherwise.
   gifted_by: string | null;
