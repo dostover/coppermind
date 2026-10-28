@@ -33,6 +33,20 @@ buttons on the home page to switch between fans with one click.
    what you got, then your progress in its set and the first-card Pass It On
    bonus.
 
+## Demo script: a keepsake (a card you can't trade)
+
+Most cards come from general codes and can be traded. A keepsake comes from a
+code for one specific card, because of something the fan did, and it stays
+with them. (See the pool/moment decision in `docs/banana-cards/card-value-model.md`.)
+
+1. Sign in as **Peel Master Flex** and open **My collection**. At the top is
+   the **Keepsakes** shelf: Ringmaster's Signed Hat, from sticking around for
+   his autograph after the 9/12 game. Below it are the cards he can trade.
+2. Switch to **Rookie Nanas**, open **Trade with a fan**, and look up Peel's
+   code. The signed hat isn't among his cards to trade for.
+3. Still as Rookie Nanas, redeem `BB-HAT-001` (or scan it from `/tokens`). The
+   reveal labels it a keepsake and says it can't be traded.
+
 ## Demo script: beyond the ballpark (live streams and social drops)
 
 1. Open the **drop console** from the home page (or go to `/drops`).

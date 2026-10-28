@@ -1,7 +1,7 @@
 # Banana Cards — Value Model Framework
 
 > Copy of `claude/card-value-model.md` from the Banana Cards Claude project,
-> as of 2026-10-24.
+> as of 2026-10-28.
 
 **North star:** every card should make a fan's night better or bring a new fan
 in. Anything that does neither doesn't ship. (Added 2026-10-20 to make the two
@@ -23,15 +23,25 @@ Traditional cards: value = scarcity (print run size) + resale price + "will this
 appreciate." Banana Cards: value = what you experienced to get it + who you shared
 it with. Scarcity can still exist but is trivia, not the headline.
 
+**Principle (2026-10-28): scarcity is never the measure; we don't police the
+market.** Anything that can be traded can be priced somewhere else, and codes
+will sometimes leave the game they were meant for. We accept both. The goal
+isn't to stop a third-party market from forming; it's that the product never
+creates or rewards scarcity. If cards start selling for real prices, treat it
+as a signal that scarcity crept into the design (an uneven pool, a card too
+hard to get), and fix the design, not the fans.
+
 ## Value dimensions (replacing scarcity as primary driver)
 1. **Presence value** — tied to a specific game/stunt/bit you were physically there
    for. Modeled on Disney park-exclusive pins: value is "you had to be there," not
-   "only 500 made."
+   "only 500 made." Lives in **moment cards**, which can't be traded, so presence
+   stays with the fan who was there (see "DECISION: pool cards and moment cards").
 2. **Character/story value** — built around bits and personalities (the tux, the
    dancing umpire, Banana Baby) rather than player stats.
 3. **Trading value** — some cards exist only to be traded, never bought or earned
    solo (Disney lanyard-trading model). Value is in the social ritual of the trade,
-   not resale price. This is what keeps trading "social, not financial."
+   not resale price. This is what keeps trading "social, not financial." Lives in
+   **pool cards**.
 4. **Completion/set value** — themed sets tied to a season, road-trip stop, or promo
    night; payoff is finishing the story, not owning the rarest single piece.
    (Built in the demo, 2026-10-22: six sets with progress and a missing-card
@@ -114,15 +124,22 @@ physical touch doesn't read as disposable even though it's functionally spent.
 Reputational flag (restated): a fully digital collectible, redeemed once and traded
 only through an app, is exactly the shape of product people associate with
 NFT/crypto sports-collectible platforms. Positioning should address this head-on
-("no blockchain, no resale, no dollar value, ever") rather than leave fans to
-assume it.
+rather than leave fans to assume it, without promising what we can't control
+(see the scarcity principle above). Working line: "No blockchain. We never sell
+cards for chances, and nothing in the app has a dollar value."
 
 ## DECISION: presence check for redemption (v1)
 
-**v1:** staff/kiosk-distributed codes only. The code is only ever handed out in
-person by staff or a physical kiosk at the venue — the code itself is the presence
-proof, no extra tech, no permissions prompts. Simplest to build, matches "start
-simple, add sophistication later."
+**v1:** codes are given out at the game, in whatever form fits — printed in the
+game program, on a seat, with a concession receipt, handed over by a staffer, or
+by a player as part of a bit. (The gate hand-off used in earlier drafts is one
+example, not the mechanism.) The code itself is the presence proof: no extra
+tech, no permissions prompts. Simplest to build, matches "start simple, add
+sophistication later."
+
+Codes that leave the game (a program taken home, an unscanned code given away)
+are accepted, per the scarcity principle. A code given away is still a fan
+bringing someone in.
 
 **Future option (deliberately deferred, not discarded):** geolocation-verified
 redemption, for a case where codes need to be distributable ahead of time (e.g.
@@ -133,9 +150,81 @@ hardcoding "no check needed" assumptions.
 ## DECISION: ownership model
 
 Strictly single-owner. Every card belongs to exactly one fan's collection at a
-time and moves via trade. No shared/collective ownership for v1 — simpler data
-model, and it's what trading actually requires (you can't meaningfully trade
-something everyone already has).
+time. Pool cards move via trade; moment cards stay with the fan who earned them
+(see below). No shared/collective ownership for v1 — simpler data model, and
+it's what trading actually requires (you can't meaningfully trade something
+everyone already has). (A family sharing one account, per section 6, is still
+one owner: the account.)
+
+## DECISION: pool cards and moment cards (2026-10-28)
+
+Every code is one of two kinds, and the kind decides whether the card it gives
+can be traded. Either kind can come from any channel: at the game, on a live
+stream, or in a player's or team's post.
+
+| | Pool cards | Moment cards |
+|---|---|---|
+| From | A general code | A specific code |
+| What you get | A random card from a pool; every card equally likely | One particular card |
+| Tradeable | Yes | No: it stays with the fan who earned it |
+| Where its value comes from | Trading, sets, characters and story | Presence: something you did or were there for |
+| Example | A roster or stadium card from the team's season pool | Jesse's card, from the code in his hat, because you stuck around for his autograph |
+
+**Why.** Presence only means something if it stays with the person who was
+there; when presence cards could be traded, "you were there" ended up with
+people who weren't (H1 in `product-brief.md`). Splitting the two keeps
+presence where it belongs and leaves everything else free to trade. Moment
+cards can be genuinely scarce (Jesse signs thirty hats), but since they never
+move in the app, that scarcity never becomes trading value: scarce like a
+signed ball, not like a chase card. Pass It On cards were already this kind of
+special, stays-put card.
+
+### Pools
+- **The card is drawn when the code is scanned, not when it's printed.** A
+  general code points to a pool, not a card. Nobody can flip through programs
+  looking for a good one, every channel gives the same odds, and a print run
+  only needs unique codes.
+- **Equal odds, always.** No weights, no tiers, no "rare" labels, no shiny
+  variants, and fans can see every card in a pool. The reveal's suspense comes
+  from *which* card you get, never from how rare it is (H2). Equal supply won't
+  mean equal desire — everyone may want the Dancing Ump — and that's the
+  healthy kind of value: it gets fans asking each other.
+- **Scope: per team per season, starting around 24 cards,** with a few
+  tour-stop cards rotated in. Rough sizing with equal odds: a 20-card pool takes
+  about 72 pulls to finish alone and a 30-card pool about 120, while a section
+  of 50 fans each pulling once from 30 cards turns up about 24 different ones.
+  So a pool this size is too big to finish alone and easy to finish by trading,
+  which is the behavior we want. Pools that grow much larger make duplicates
+  scarce, and trading runs on duplicates.
+- **Built to scale.** A pool is made of series (below), so it can grow past the
+  starting size without changing anything else, and a code can draw from a
+  team's whole pool or from one series (a themed night, say).
+
+### Two ways teams and players make cards
+- **Organized series:** a planned run across many players in one style — for
+  example, every player gets an anime-style card. Series go into pools, are
+  tradeable, and form sets.
+- **Self-designed moment cards:** a player or team designs a card for a moment
+  and gives out specific codes for it — in a hat, after a bit on the stream, in
+  a post. Not tradeable. Guardrail: neither the card nor how it's promoted ever
+  says how few exist.
+
+### Every channel can give both
+- **At the game:** pool codes in programs, on seats, with receipts; moment codes
+  from players, bits and fan moments (section 3).
+- **Live streams:** a pool code on screen while the game is live, plus moment
+  codes for things that happen on the stream. Streams are a substantial part of
+  Banana Ball's fan base growth, so remote fans need both: cards to trade and
+  keepsakes of their own.
+- **Social drops:** the player or team chooses per drop.
+
+### Sets and keepsakes
+- **Sets contain pool cards only,** so every set can be finished by trading,
+  including by fans who never get a ticket.
+- **Moment cards live on a Keepsakes shelf** in the collection, with their own
+  light groupings but no completion pressure.
+- **Small extra, not core:** a "games I've been to" list on a fan's profile,
+  filled in automatically from codes redeemed at games.
 
 ## DECISION: trade mechanism (v1)
 
@@ -146,8 +235,8 @@ only learn one gesture across the whole product. This satisfies the "must be
 physically together" requirement from the redemption-token decision above.
 
 Note: the requirement is that the two fans are together, **not** that they are at
-the ballpark. A trade works anywhere two fans meet — a school lunch table, a watch
-party, a living room. (This matters for fans who can't get tickets; see below.)
+the ballpark. A trade works anywhere two fans meet — a watch party, a backyard,
+a living room. (This matters for fans who can't get tickets; see below.)
 
 **Future option (deferred):** tap-to-trade (NFC) or geofence-based trading, as a
 slicker version of the same underlying "you must both be here, now" requirement.
@@ -171,10 +260,12 @@ actually leads with. Each subsection closes a specific gap.
 ### 1. A fan's night with Banana Cards
 The decisions above describe mechanisms; this is what a fan actually lives through.
 
-- **At the gate:** a player, character or staffer hands over the token as part of a
-  bit — a moment, not a receipt.
+- **At the game:** a code arrives in the program, on the seat, or from a player,
+  character or staffer as part of a bit — a moment, not a receipt.
 - **Before first pitch / between innings:** scan, short card reveal, phone back in
   the pocket. Under a minute.
+- **After the game:** a player signing autographs, or a character doing a bit,
+  hands out moment codes for their own card.
 - **During the show:** the app asks for nothing. If a card drop is announced from
   the field ("everyone in section 104 just earned the Dancing Ump card"), it's
   claimed later, not right then.
@@ -201,14 +292,17 @@ The Bananas put fans in the show; the cards should too.
 
 - **Fan moment cards:** the night's Banana Baby, the fan whose foul-ball catch
   recorded an out, the dance-off winner. The featured fan gets the original, and
-  fans who were there can collect it.
+  fans who were there can collect it. All are moment cards: not tradeable.
 - **Crowd cards:** cards for a section, a row, or the whole crowd at a tour stop
   ("I was in the stands in Fargo").
 - **Requires consent:** a fan only appears on a card with their (or a parent's)
-  explicit OK.
+  explicit OK. When the featured fan is under 13, the original goes into their
+  family's (adult) account.
 
 ### 4. Growth loops (fan base building)
 Trading is the built-in way one fan brings in another — design for it on purpose.
+Every new account, from either loop, starts with the year-of-birth question in
+section 6.
 
 - **First trade needs no install (BUILT in demo):** a fan's trade QR is a link
   any phone camera can open. Someone without an account types just a name (no
@@ -220,7 +314,9 @@ Trading is the built-in way one fan brings in another — design for it on purpo
   the new person scans, types a name, and the card becomes theirs, marked as a
   gift from that fan. Only someone who hasn't redeemed a code yet can receive
   one, so it always brings in a new fan. This solves the cold-start problem:
-  every new fan arrives holding a reason to recruit another.
+  every new fan arrives holding a reason to recruit another. If the person
+  receiving it is under 13, a grown-up with them scans the same QR and the card
+  joins that family's account.
 - **Trade ambassadors:** players and characters available to trade on the
   concourse, so a fan whose friends aren't on the app yet still has someone to
   trade with — and a story to tell about it.
@@ -231,18 +327,23 @@ the system would reward the lucky few and leave most of the fan base on the outs
 — the opposite of Fans First. So the Fan First experience extends past the gate,
 first to games streamed online, then to players' and teams' own social channels.
 
-There are three ways to get a card, and each one is labeled honestly with where it
-came from. The label stays with the card for good, even after it's traded:
+There are three places to get a card, and each can give both pool cards and
+moment cards (see "DECISION: pool cards and moment cards"). Every card is labeled
+honestly with where it came from, and the label stays with it for good, even
+after a pool card is traded:
 
 | Where | How a fan gets it | What the card means | Label on the card |
 |---|---|---|---|
-| At the game | Scan the token handed out at the gate | "You were there" | (the card's own game and story) |
+| At the game | Scan a code from the game (program, seat, staffer, player) | "You were there" | (the card's own game and story) |
 | Watching a live stream | Scan the QR on screen during the broadcast | "You were watching, live" | "Watched live on the Banana Ball stream" |
 | Following a player or team | Open the drop they post on their own channel | "You were following" | "From Static's drop" |
 
-None of these is a consolation prize: each has its own cards and its own sets
-("Watched Live", "Following Along") with their own perks, so a fan who never gets a
-ticket still has complete things to collect and finish.
+None of these is a consolation prize. Pool codes from streams and drops draw from
+the same tradeable pools as codes at the game, so every set can be finished by a
+fan who never gets a ticket, and stream and drop moment cards give remote fans
+keepsakes of their own. (Changed 2026-10-28: the demo's "Watched Live" and
+"Following Along" sets were built from drop cards; under the pool/moment split,
+sets hold pool cards only, so those two need redefining.)
 
 - **Live streams come first, and they're live only.** A stream card can only be
   claimed while the game is actually streaming. When the stream ends, its code stops
@@ -254,26 +355,52 @@ ticket still has complete things to collect and finish.
   timers, no "only 100 left," no follow-to-win or engagement-bait mechanics, never
   paid. It also serves the business case (see `product-brief.md`): audience growth is
   part of players' and teams' pay, so their channels become a way into Banana Ball.
-- **One card per fan per drop.** A stream or social drop gives each fan one copy;
-  more copies only arrive by trading.
+- **One code per fan per drop.** A pool drop gives each fan one pull; more copies
+  of a pool card only arrive by trading. A moment drop gives each fan its card
+  once, and it stays with them.
 - **Online gets fans in; in person keeps them.** Stream and social cards are easy to
   claim anywhere, but trading still happens face to face. Remote fans trade with each
-  other at watch parties, school or home (trades require fans to be together, not to
-  be at the venue).
+  other at watch parties or at home (trades require fans to be together, not to be
+  at the venue).
 - **Tour sets reward following the tour,** not only attending a stop.
 
-### 6. Families and kids
+### 6. Families and kids — DECISION: accounts are 13+ (2026-10-28)
 Families are a core Banana Ball audience, and the brand's nonprofit is literally
-"Bringing Families Together." The current design (personal phone, email sign-in)
-doesn't fit a 9-year-old.
+"Bringing Families Together." But building accounts for children means
+verifiable parental consent and a separate kid-profile system — the hardest and
+riskiest part of the product, and not something this stage needs to prove.
 
-- **Family collection:** one parent account with kid profiles under it. Scanning
-  and trading happen on the parent's phone; the kid picks the cards.
-- **No email or personal data collected from kids.** US law (COPPA) restricts
-  collecting data from children under 13, so the parent account is the only one
-  with sign-in details.
+**Decision:** every account belongs to someone 13 or older. Kids take part
+through a grown-up's account, which the family shares as its collection.
+
+- **Neutral age question first.** Every new account (email sign-up, quick join
+  from a trade or Pass It On QR, a new fan redeeming a token or drop) starts
+  with "What year were you born?" — no pre-filled year, no hint about a minimum
+  age, nothing collected before it's answered.
+- **Under 13: hand it to a grown-up.** The app shows a friendly screen ("Ask a
+  grown-up to scan this to keep your card"), creates no account and collects
+  nothing, not even a name. The same QR still works when the grown-up scans it,
+  so the card isn't lost.
+- **A shared family collection.** One adult account is the family's collection.
+  The kid holds the phone for the reveal and picks what to trade; the grown-up
+  scans and confirms. This also means a parent is part of every trade a kid
+  makes, so kids never trade with strangers on their own.
+- **Adult-run in tone and marketing (hard constraint).** A 13+ rule only holds
+  if the product doesn't look aimed at children. Copy is written to the
+  grown-up; no kid-targeted drops; no "share with your classmates"; no school
+  settings in growth or trading examples. Family-friendly, adult-run.
+- **Deferred, not discarded:** kid profiles under a parent account (with
+  verifiable parental consent), if families turn out to be a large share of
+  users. Keep the data model open to adding profiles under an account later.
 - **Bananas Foster tie-in (idea):** a "Bringing Families Together" set, or a share
   of any specialty-pack proceeds going to the foundation.
+
+Why 13+ over kid profiles now: it removes parental-consent flows and children's
+data from the build entirely, settles the stranger-trading question, and keeps
+what families actually do together (the parent's phone, the kid choosing).
+What it gives up: a kid's own "my collection," and the kid-to-kid growth loop —
+which was the loop creating the legal problem. (See H8 in `product-brief.md`.
+Not legal advice; a lawyer should review the age screen before launch.)
 
 ### 7. Between tours
 Most fans see a team about once a year. The collection should stay alive in
@@ -294,6 +421,8 @@ Alongside "no marketplace grammar":
 - **Nobody misses the show without a phone:** cards add to the night; they are
   never required to enjoy the game.
 - **Collect the minimum fan data needed,** and never sell or share it.
+- **Accounts are 13+,** and the product stays adult-run in tone and marketing
+  (section 6).
 
 ### Open questions (to resolve while building)
 - Consent process for fan moment cards (who asks, when, how a parent OKs it)
@@ -305,6 +434,15 @@ Alongside "no marketplace grammar":
   or is one per fan the right amount?
 - Quick join: how a name-only fan later adds an email to keep their cards (see
   technical-decisions.md, "Before real fans")
+- Age question: whether to store the birth year or only an "over 13" flag
+  (minimum data says the flag)
+- Pool size: start around 24 per team per season and tune from real trade rates
+- How trade-only cards (value dimension 3) fit the pool/moment split
+- Card story: proposed to show the card's origin and how *you* got it, never
+  the full chain of past owners or a trade count (which would turn provenance
+  into pedigree)
+- Tools for players and teams to design moment cards and create series
+  (likeness approval, art, how many codes)
 
 ---
 

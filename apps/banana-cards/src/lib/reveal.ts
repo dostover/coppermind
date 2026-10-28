@@ -13,6 +13,7 @@ export interface RevealCard {
   imagePath: string | null;
   perk: string | null;
   stats: Record<string, string | number> | null;
+  keepsake: boolean;
 }
 
 export function cardForReveal(instanceId: string, templateId: string): RevealCard {
@@ -25,6 +26,7 @@ export function cardForReveal(instanceId: string, templateId: string): RevealCar
     imagePath: template?.image_path ?? null,
     perk: template?.perk ?? null,
     stats: parseCardStats(template?.stats ?? null),
+    keepsake: template?.keepsake === 1,
   };
 }
 

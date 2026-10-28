@@ -63,6 +63,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Keepsakes (moment cards) stay with the fan who earned them - see the
+  // pool/moment decision in claude/card-value-model.md. The trade screen
+  // never offers them; this is the server-side guarantee.
+  if (cardInstancesRepo.isKeepsake(offerCard) || cardInstancesRepo.isKeepsake(requestCard)) {
+    return NextResponse.json(
+      { error: "Keepsakes stay with the fan who earned them, so they can't be traded." },
+      { status: 400 }
+    );
+  }
+
   if (
     tradesRepo.isCardInPendingTrade(offerCardInstanceId) ||
     tradesRepo.isCardInPendingTrade(requestCardInstanceId)
