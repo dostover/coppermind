@@ -1,0 +1,35 @@
+{
+  "v": 4,
+  "createdOnFiles": { "v": 1, "at": "2026-10-28T23:26:00Z" },
+  "lists": "css",
+  "title": "Banana Cards",
+  "cover": "cover",
+  "order": [
+    "cover",
+    "opportunity",
+    "inversion",
+    "values",
+    "shape",
+    "twokinds",
+    "trading",
+    "beyond",
+    "growth",
+    "demo",
+    "decisions",
+    "assumptions",
+    "guardrails",
+    "measures",
+    "next"
+  ],
+  "sections": {
+    "why": { "description": "Why Banana Cards: the opportunity and the core idea", "start": "cover" },
+    "how": { "description": "How it works: codes, two kinds of cards, trading, reach and growth", "start": "shape" },
+    "show": { "description": "The working demo", "start": "demo" },
+    "judgment": { "description": "Decisions, assumptions, guardrails, measures and what’s next", "start": "decisions" }
+  },
+  "faces": {
+    "oswald": { "family": "Oswald", "href": "https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap" },
+    "nunito-sans": { "family": "Nunito Sans", "href": "https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" }
+  },
+  "designSystems": []
+}

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banana Cards — presentation</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap">
+<style>
+body{margin:0;background:#E9E3D3;font-family:'Nunito Sans',Arial,sans-serif;color:#2A3550}
+main{max-width:1280px;margin:0 auto;padding:32px 16px 64px}
+.frame{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:12px;box-shadow:0 8px 24px rgba(20,30,50,.25);container-type:inline-size}
+.slide{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;transform:scale(calc(100cqw / 1920px))}
+.slide>section{position:relative;box-sizing:border-box;width:1920px;height:1080px}
+.slide *{margin:0;box-sizing:border-box}
+.slide ul,.slide ol{padding-left:1.2em}
+.slide table{width:100%;border-collapse:collapse} .slide th,.slide td{padding:18px 24px;border-bottom:1px solid rgba(128,128,128,.35);vertical-align:top}
+.notes{font-size:16px;line-height:1.5;margin:12px 4px 40px;color:#3D4660}
+x-icon,x-connector{display:inline-block}
+x-connector{border-top:4px solid currentColor}
+</style></head><body><main>
+<h1 style="font-family:Oswald,Arial,sans-serif;text-transform:uppercase;color:#1F3A68">Banana Cards — presentation</h1>
+<p>All 15 slides with speaker notes. The editable deck lives in Claude; this copy is for reading in the repo.</p>
+<div class="frame"><div class="slide"><section id="cover" data-transition="fade" style="background:#1F3A68;color:#FBF6E9;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;justify-content:center;gap:32px">
+<img src="art/dancing-umpire.png" alt="Card art: the Dancing Umpire" style="position:absolute;left:1180px;top:150px;width:520px;height:355px;object-fit:cover;border:12px solid #FBF6E9;border-radius:20px;box-shadow:0 24px 60px rgba(10,20,40,0.45);transform:rotate(-8deg)">
+<img src="art/yellow-tux.png" alt="Card art: the Yellow Tux" style="position:absolute;left:1260px;top:420px;width:520px;height:355px;object-fit:cover;border:12px solid #FBF6E9;border-radius:20px;box-shadow:0 24px 60px rgba(10,20,40,0.45);transform:rotate(6deg)">
+<img src="art/signed-hat.png" alt="Card art: Ringmaster’s Signed Hat" style="position:absolute;left:1120px;top:600px;width:440px;height:300px;object-fit:cover;border:12px solid #F5C518;border-radius:20px;box-shadow:0 24px 60px rgba(10,20,40,0.45);transform:rotate(-3deg)">
+<p style="font-size:28px;font-weight:800;letter-spacing:4px;text-transform:uppercase;color:#F5C518;width:900px">A product thought experiment</p>
+<h1 style="font-family:Oswald, Arial, sans-serif;font-size:200px;font-weight:700;line-height:1;color:#FBF6E9;text-transform:uppercase;width:960px">Banana Cards</h1>
+<p style="font-size:44px;line-height:1.3;color:#D9E1EE;width:900px">Trading cards the Banana Ball way: value from being there, not from scarcity.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1400px;font-size:24px;color:#AFC0DA">Concept to working demo · Not affiliated with the Savannah Bananas, Fans First Entertainment or the Banana Ball Championship League</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 1 notes.</b> Open with the one-line idea: Banana Ball rewrote baseball around fans; Banana Cards does the same for trading cards. This is a thought experiment, built end to end: the opportunity, the value model, the decisions and tradeoffs, and a working demo. Say up front that it isn’t affiliated with the team or league.</p><div class="frame"><div class="slide"><section id="opportunity" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">The opportunity</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">Cards are where Banana Ball hasn’t arrived yet</h2>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:48px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:40px;font-weight:600;color:#1F3A68;text-transform:uppercase">What Banana Ball changed</h3>
+<ul style="font-size:32px;line-height:1.5;color:#2A3550">
+<li>A two-hour game</li>
+<li>Fans catch foul balls for outs</li>
+<li>Players dance; the crowd is part of the show</li>
+</ul>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;background:#1F3A68;border-radius:20px;padding:48px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:40px;font-weight:600;color:#F5C518;text-transform:uppercase">What its cards still are</h3>
+<ul style="font-size:32px;line-height:1.5;color:#FBF6E9">
+<li>Ordinary baseball cards, new stats</li>
+<li>Value from scarcity and chase cards</li>
+<li>Resale as the reason to care</li>
+</ul>
+</div>
+</div>
+<p style="font-size:40px;line-height:1.35;color:#1F3A68;font-weight:700">Bring the Banana Ball ethos to trading cards. It’s a gap the brand’s philosophy hasn’t reached, more than a broken problem.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 2</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 2 notes.</b> Banana Ball turned baseball’s conventions upside down to put fans first. Trading cards are one of the few places it hasn’t done that: today’s cards run on the same value logic as any baseball card. Be honest that this isn’t fixing something broken; it’s extending a philosophy to a place it hasn’t reached.</p><div class="frame"><div class="slide"><section id="inversion" data-transition="fade" style="background:#F5C518;color:#1F3A68;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;justify-content:center;gap:56px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#1F3A68">The core inversion</p>
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:32px;font-weight:700;color:#4A3F10;text-transform:uppercase;letter-spacing:2px">Traditional cards</p>
+<p style="font-family:Oswald, Arial, sans-serif;font-size:64px;font-weight:500;line-height:1.15;color:#4A3F10">Value = scarcity + resale + “will it appreciate?”</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:32px;font-weight:700;color:#1F3A68;text-transform:uppercase;letter-spacing:2px">Banana Cards</p>
+<p style="font-family:Oswald, Arial, sans-serif;font-size:88px;font-weight:700;line-height:1.1;color:#1F3A68">Value = what you experienced + who you shared it with</p>
+</div>
+<p style="font-size:36px;line-height:1.35;color:#1F3A68;width:1500px">Scarcity can exist. It’s never the measure, and the product never creates or rewards it.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#4A3F10">Banana Cards · 3</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 3 notes.</b> This is the whole thesis on one slide. Traditional value is scarcity, resale and speculation. Banana Cards inverts it: value is the experience of getting the card and the people you shared it with. Note the principle: we don’t try to police a resale market, because anything tradeable can be priced somewhere. We make sure the product never manufactures scarcity. If cards start selling for real money, that’s a signal the design let scarcity creep in.</p><div class="frame"><div class="slide"><section id="values" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">Five sources of value</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">What makes a card worth having</h2>
+</div>
+<div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:24px">
+<div style="display:flex;flex-direction:column;gap:16px;background:#1F3A68;border-radius:20px;padding:36px">
+<p style="font-family:Oswald, Arial, sans-serif;font-size:56px;font-weight:700;color:#F5C518">1</p>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:34px;font-weight:600;color:#FBF6E9;text-transform:uppercase">Presence</h3>
+<p style="font-size:26px;line-height:1.4;color:#D9E1EE">You had to be there. Lives in keepsakes.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:36px">
+<p style="font-family:Oswald, Arial, sans-serif;font-size:56px;font-weight:700;color:#B8322A">2</p>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:34px;font-weight:600;color:#1F3A68;text-transform:uppercase">Story</h3>
+<p style="font-size:26px;line-height:1.4;color:#2A3550">Characters and bits, more than stats: the tux, the dancing umpire.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:36px">
+<p style="font-family:Oswald, Arial, sans-serif;font-size:56px;font-weight:700;color:#B8322A">3</p>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:34px;font-weight:600;color:#1F3A68;text-transform:uppercase">Trading</h3>
+<p style="font-size:26px;line-height:1.4;color:#2A3550">The social ritual of the swap, in person, never a price.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:36px">
+<p style="font-family:Oswald, Arial, sans-serif;font-size:56px;font-weight:700;color:#B8322A">4</p>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:34px;font-weight:600;color:#1F3A68;text-transform:uppercase">Completion</h3>
+<p style="font-size:26px;line-height:1.4;color:#2A3550">Themed sets: the payoff is finishing the story.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:36px">
+<p style="font-family:Oswald, Arial, sans-serif;font-size:56px;font-weight:700;color:#B8322A">5</p>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:34px;font-weight:600;color:#1F3A68;text-transform:uppercase">Access</h3>
+<p style="font-size:26px;line-height:1.4;color:#2A3550">Small, real perks: a shoutout, a clip, a photo op.</p>
+</div>
+</div>
+<p style="font-size:32px;line-height:1.4;color:#2A3550">None of the five depends on a card being rare. All five are built into the demo.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 4</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 4 notes.</b> These five replace scarcity as the reason a card matters. Presence is first and is the one the design protects most carefully; it lives in keepsakes, which we’ll see in a minute. Sets and perks are the answer to the between-tours problem: most fans see a team about once a year, and these give the collection a reason to be opened in between.</p><div class="frame"><div class="slide"><section id="shape" data-transition="fade" style="background:#1F3A68;color:#FBF6E9;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#F5C518">How it works</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#FBF6E9;text-transform:uppercase">A cheap code out there, a rich card on your phone</h2>
+</div>
+<div style="display:flex;align-items:center;gap:20px">
+<div style="flex:1;display:flex;flex-direction:column;gap:14px;background:#294A80;border-radius:20px;padding:36px">
+<p style="font-size:24px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#F5C518">1 · Get a code</p>
+<p style="font-size:26px;line-height:1.4;color:#FBF6E9">In the program, on a seat, from a player, on the stream, in a post</p>
+</div>
+<x-connector style="width:56px;height:2px;color:#F5C518;border-width:4px"></x-connector>
+<div style="flex:1;display:flex;flex-direction:column;gap:14px;background:#294A80;border-radius:20px;padding:36px">
+<p style="font-size:24px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#F5C518">2 · Scan it</p>
+<p style="font-size:26px;line-height:1.4;color:#FBF6E9">Any phone camera. No app; a new fan joins with just a name</p>
+</div>
+<x-connector style="width:56px;height:2px;color:#F5C518;border-width:4px"></x-connector>
+<div style="flex:1;display:flex;flex-direction:column;gap:14px;background:#294A80;border-radius:20px;padding:36px">
+<p style="font-size:24px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#F5C518">3 · Tap to reveal</p>
+<p style="font-size:26px;line-height:1.4;color:#FBF6E9">The card waits face down. Flip it to see what you got</p>
+</div>
+<x-connector style="width:56px;height:2px;color:#F5C518;border-width:4px"></x-connector>
+<div style="flex:1;display:flex;flex-direction:column;gap:14px;background:#294A80;border-radius:20px;padding:36px">
+<p style="font-size:24px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#F5C518">4 · Collect</p>
+<p style="font-size:26px;line-height:1.4;color:#FBF6E9">Set progress right away; finished sets unlock perks</p>
+</div>
+</div>
+<div style="display:flex;gap:48px">
+<p style="flex:1;font-size:32px;line-height:1.4;color:#D9E1EE"><b style="color:#FBF6E9">One gesture for everything.</b> Redeeming, trading and passing a card on all start with a scan.</p>
+<p style="flex:1;font-size:32px;line-height:1.4;color:#D9E1EE"><b style="color:#FBF6E9">Breakeven by design.</b> The physical side is a cheap, single-use code; the rich card costs nothing to copy.</p>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#AFC0DA">Banana Cards · 5</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 5 notes.</b> Getting the card is the core experience: every fan does it first, and plenty will never trade. So it’s fast: under a minute, before first pitch or between innings, then the phone goes back in the pocket. The app never needs attention during a bit, and codes stay claimable after the game. The code was originally imagined as a token handed out at the gate, but it can live anywhere: a program, a seat, a player’s hat, a stream overlay.</p><div class="frame"><div class="slide"><section id="twokinds" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">Two kinds of cards</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">How you earned it decides whether you can trade it</h2>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:36px">
+<img src="art/static.png" alt="Card art: Static, a pool card" style="width:300px;height:205px;object-fit:cover;border-radius:12px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:44px;font-weight:600;color:#1F3A68;text-transform:uppercase">Pool cards</h3>
+<p style="font-size:26px;line-height:1.4;color:#2A3550"><b>From a general code:</b> a random card from a visible pool, every card equally likely.</p>
+<p style="font-size:26px;line-height:1.4;color:#2A3550"><b>Tradeable.</b> Value from sets, story and the swap.</p>
+</div>
+</div>
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#1F3A68;border-radius:20px;padding:36px">
+<img src="art/signed-hat.png" alt="Card art: Ringmaster’s Signed Hat, a keepsake" style="width:300px;height:205px;object-fit:cover;border-radius:12px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:44px;font-weight:600;color:#F5C518;text-transform:uppercase">Keepsakes</h3>
+<p style="font-size:26px;line-height:1.4;color:#FBF6E9"><b>From a specific code:</b> one card, because of something you did.</p>
+<p style="font-size:26px;line-height:1.4;color:#FBF6E9"><b>Never traded.</b> Presence stays with the fan who was there.</p>
+</div>
+</div>
+</div>
+<p style="font-size:32px;line-height:1.4;color:#2A3550">Pools start around <b>24 cards per team per season</b>: too big to finish alone, easy to finish by trading with your section. No tiers, no “rare” labels.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 6</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 6 notes.</b> This came out of auditing my own assumptions. If a “you were there” card can be traded, presence ends up with people who weren’t there. And a reveal needs surprise, but surprise usually brings rarity back. The answer: two kinds of cards. Pool cards come from general codes, drawn when you scan from a visible pool with equal odds, and they trade freely. Keepsakes come from a specific code, like the one in a player’s hat when you stay for an autograph, and they never move. A keepsake can be scarce, but because it never trades, scarcity never becomes its value: scarce like a signed ball, not like a chase card. Rough math: a 24-card pool takes about 90 pulls to finish alone; a section of 50 fans turns up most of it.</p><div class="frame"><div class="slide"><section id="trading" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">Trading</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">Social, not financial, by design</h2>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:32px">
+<div style="display:flex;flex-direction:column;gap:20px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:44px">
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:64px;height:64px"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:40px;font-weight:600;color:#1F3A68;text-transform:uppercase">In person only</h3>
+<p style="font-size:28px;line-height:1.4;color:#2A3550">Both fans scan and both confirm. It works anywhere two fans meet, not only at the ballpark.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:20px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:44px">
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:64px;height:64px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:40px;font-weight:600;color:#1F3A68;text-transform:uppercase">No marketplace grammar</h3>
+<p style="font-size:28px;line-height:1.4;color:#2A3550">No prices, no rarity counts, no browsable list of strangers’ cards.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:20px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:44px">
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:64px;height:64px"><circle cx="12" cy="12" r="10"/><polyline points="16 9 10.5 15 8 12.5"/></svg>
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:40px;font-weight:600;color:#1F3A68;text-transform:uppercase">Sets give the reason</h3>
+<p style="font-size:28px;line-height:1.4;color:#2A3550">“Finishes your set” on a friend’s card tells you what to ask for.</p>
+</div>
+</div>
+<p style="font-size:32px;line-height:1.4;color:#2A3550">A digital trade screen drifts toward looking like a shop. That’s the product’s biggest risk, so every trade screen is designed against it.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 7</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 7 notes.</b> Choosing a single-use code over a physical card moved all the weight of “social, not financial” onto the trade screen. Two hard constraints follow. First, trades require two fans to be physically together: a mutual QR scan, the same gesture as redeeming. Together, not necessarily at the ballpark, which matters for fans without tickets. Second, no marketplace grammar: if the UI reads like a shop, the premise dies in the UI whatever is true underneath. Sets supply a reason to trade that’s about the collection, never about value.</p><div class="frame"><div class="slide"><section id="beyond" style="background:#1F3A68;color:#FBF6E9;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#F5C518">Beyond the ballpark</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#FBF6E9;text-transform:uppercase">No ticket doesn’t mean second-class</h2>
+</div>
+<table style="font-family:'Nunito Sans', Arial, sans-serif;font-size:28px;color:#FBF6E9">
+<tr style="background:#294A80"><th style="width:24%;padding:20px 28px;text-align:left">Where</th><th style="width:44%;text-align:left">How a fan gets a card</th><th style="width:32%;text-align:left">The label it keeps for good</th></tr>
+<tr><td>At the game</td><td>A code in the program, on a seat, from a player</td><td>The game and its story</td></tr>
+<tr><td>On a live stream</td><td>Scan the QR on screen, only while the game is live</td><td>“Watched live on the Banana Ball stream”</td></tr>
+<tr><td>Following a player or team</td><td>Open a drop they post on their own channel</td><td>“From Static’s drop”</td></tr>
+</table>
+<p style="font-size:32px;line-height:1.4;color:#D9E1EE">Every channel gives <b style="color:#F5C518">pool cards to trade</b> and <b style="color:#F5C518">keepsakes of their own</b>. Remote fans trade face to face too: at watch parties, at home, anywhere they meet.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#AFC0DA">Banana Cards · 8</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 8 notes.</b> Banana Ball tickets are very hard to get. If the best cards required attendance, the product would reward the lucky few, the opposite of Fans First. Streamed games are a big part of how the fan base grows, so streams carry both kinds of card. Stream cards are live-only: “you were watching live” is the online version of “you had to be there.” Social drops have a plain end date and no countdowns, no “only 100 left,” no follow-to-win. Every card is honest about where it came from, and that label stays with it after a trade.</p><div class="frame"><div class="slide"><section id="growth" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">Fan base growth</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">Every fan arrives with a reason to bring another</h2>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:36px">
+<img src="art/pass-it-on.png" alt="Card art: the Pass It On card" style="width:260px;height:177px;object-fit:cover;border-radius:12px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:40px;font-weight:600;color:#1F3A68;text-transform:uppercase">Pass It On</h3>
+<p style="font-size:26px;line-height:1.4;color:#2A3550">Your first card comes with one to give away. Only a brand-new fan can receive it.</p>
+</div>
+</div>
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:36px">
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:96px;height:96px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:40px;font-weight:600;color:#1F3A68;text-transform:uppercase">No-install first trade</h3>
+<p style="font-size:26px;line-height:1.4;color:#2A3550">A trade QR opens in any phone camera. A newcomer types a name and trades on the spot.</p>
+</div>
+</div>
+</div>
+<div style="display:flex;gap:24px;align-items:center;background:#1F3A68;border-radius:20px;padding:32px 40px">
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#F5C518;width:56px;height:56px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+<p style="flex:1;font-size:28px;line-height:1.4;color:#FBF6E9"><b style="color:#F5C518">Players and teams as channels.</b> They post their own drops and grow their own following, along with Banana Ball’s.</p>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 9</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 9 notes.</b> Banana Cards doesn’t need to make money; specialty items are priced to break even. Its return is fan base growth. Two loops are built: Pass It On solves cold start, since every new fan arrives holding a reason to recruit another; and the no-install first trade means the person next to you can join in seconds. The business case for social drops rests on an assumption I flagged: that player and team pay includes bonuses tied to audience growth. It still needs a source.</p><div class="frame"><div class="slide"><section id="demo" data-transition="fade" style="background:#F5C518;color:#1F3A68;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:grid;grid-template-columns:600px 1fr;gap:96px;align-items:center">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#1F3A68">Live walkthrough</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:200px;font-weight:700;line-height:1;color:#1F3A68;text-transform:uppercase">Demo</h2>
+<p style="font-size:32px;line-height:1.4;color:#3D3510">Two phones, two fans, about five minutes.</p>
+</div>
+<ol style="font-size:34px;line-height:1.5;color:#1F3A68">
+<li><b>Get a card:</b> scan a code, tap to reveal, see set progress</li>
+<li><b>Keepsake:</b> Ringmaster’s Signed Hat stays with you</li>
+<li><b>Trade in person:</b> scan a friend’s QR; “finishes your set”</li>
+<li><b>Bring someone new:</b> Pass It On to a fan who joins with a name</li>
+<li><b>Watch live:</b> claim a stream card, then end the stream</li>
+</ol>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#3D3510">Banana Cards · 10</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 10 notes.</b> Demo setup: run npm run seed first so codes and personas are fresh. Path: (1) As a new fan, scan a token from the demo token sheet, tap to reveal, note set progress and the Pass It On bonus. (2) Sign in as Peel Master Flex: the Keepsakes shelf shows Ringmaster’s Signed Hat. (3) As Rookie Nanas, look up Peel’s code: the hat isn’t offered; his First Home Run shows “For your set.” Propose and confirm. (4) As Sluggo, show the Pass It On QR; claim it in a private window with just a name. (5) In the drop console, claim the live stream card, end the stream, and show the code no longer works. Keep a recorded backup in case the live demo fails.</p><div class="frame"><div class="slide"><section id="decisions" data-transition="fade" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:44px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">Decisions and tradeoffs</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">Four calls, and what each one cost</h2>
+</div>
+<table style="font-family:'Nunito Sans', Arial, sans-serif;font-size:26px;color:#2A3550">
+<tr style="background:#1F3A68"><th style="width:18%;padding:18px 24px;text-align:left;color:#FBF6E9">Decision</th><th style="width:22%;text-align:left;color:#FBF6E9">The obvious choice</th><th style="width:31%;text-align:left;color:#FBF6E9">What I chose</th><th style="width:29%;text-align:left;color:#FBF6E9">What it cost</th></tr>
+<tr><td><b>What the fan holds</b></td><td>A printed card</td><td>A single-use code; the card is digital</td><td>A physical keepsake; risks reading as an NFT</td></tr>
+<tr style="background:#F3EAD2"><td><b>Where presence lives</b></td><td>On every card</td><td>Keepsakes never trade; pool cards trade freely</td><td>A traded card no longer proves you were there</td></tr>
+<tr><td><b>Kids</b></td><td>Kid profiles, parental consent</td><td>13+ accounts; families share an adult account</td><td>A kid’s own “my collection”</td></tr>
+<tr style="background:#F3EAD2"><td><b>Resale markets</b></td><td>Try to stop them</td><td>Never create scarcity; real prices are a diagnostic</td><td>No control over what happens off-platform</td></tr>
+</table>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 11</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 11 notes.</b> Each row is a place where the obvious answer would have undercut the thesis. A printed card fails breakeven across six teams and leaves remote fans out, so the physical touch became a cheap code, and positioning has to address the NFT association head-on. Presence moved into keepsakes so trading can’t dilute it. The kids decision came from noticing that quick join, which asks only for a name, conflicted with COPPA; rather than build parental consent now, accounts are 13+ with a neutral year-of-birth question, and families share a grown-up’s account, which also means a parent is part of every kid’s trade. Finally, I stopped trying to prevent a market: anything tradeable can be priced somewhere, so the goal is that the product never manufactures scarcity. Not legal advice; the age screen needs a lawyer’s review before real fans.</p><div class="frame"><div class="slide"><section id="assumptions" style="background:#1F3A68;color:#FBF6E9;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:44px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#F5C518">Assumptions</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#FBF6E9;text-transform:uppercase">I audited my own assumptions</h2>
+<p style="font-size:30px;line-height:1.4;color:#D9E1EE">5 stated up front, 14 surfaced on review, each marked accepted, mitigated or open.</p>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;background:#294A80;border-radius:20px;padding:40px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:38px;font-weight:600;color:#F5C518;text-transform:uppercase">Resolved by design</h3>
+<p style="font-size:27px;line-height:1.4;color:#FBF6E9"><b>Presence survives trading?</b> Now it lives in keepsakes.</p>
+<p style="font-size:27px;line-height:1.4;color:#FBF6E9"><b>Suspense without rarity?</b> Equal odds from a visible pool.</p>
+<p style="font-size:27px;line-height:1.4;color:#FBF6E9"><b>Quick joiners are adults?</b> Accounts are 13+.</p>
+<p style="font-size:27px;line-height:1.4;color:#FBF6E9"><b>The UI stops a market?</b> Accepted: we don’t police it.</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;background:#FBF6E9;border-radius:20px;padding:40px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:38px;font-weight:600;color:#B8322A;text-transform:uppercase">Still open</h3>
+<p style="font-size:27px;line-height:1.4;color:#2A3550"><b>Remote fans have someone to trade with.</b></p>
+<p style="font-size:27px;line-height:1.4;color:#2A3550"><b>A digital card feels like a keepsake,</b> and outlasts its service.</p>
+<p style="font-size:27px;line-height:1.4;color:#2A3550"><b>More fans is good</b> while tickets are scarce.</p>
+<p style="font-size:27px;line-height:1.4;color:#2A3550"><b>Player pay tracks audience growth.</b> Needs a source.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#AFC0DA">Banana Cards · 12</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 12 notes.</b> As a thought experiment, this is built on assumptions rather than research, so I made them explicit. The left column shows four that changed the design: the pool and keepsake split, equal-odds pools, the 13+ decision, and dropping the idea of policing a market. The right column is what I’d test or source next. A ticketless fan with no local fans can collect but never trade. A physical card outlives its maker; a digital one doesn’t. Growth without seats could grow frustration unless the payoff is streams, merch or new markets. And the social-drop business case rests on player pay being tied to audience growth, which I haven’t sourced.</p><div class="frame"><div class="slide"><section id="guardrails" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">Guardrails</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">Hard constraints on every decision</h2>
+</div>
+<div style="display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;gap:28px;align-items:center"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:48px;height:48px"><polyline points="20 6 9 17 4 12"/></svg><p style="flex:1;font-size:34px;line-height:1.35;color:#2A3550"><b style="color:#1F3A68">No marketplace grammar:</b> no prices, rarity counts or browsable inventories</p></div>
+<div style="display:flex;gap:28px;align-items:center"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:48px;height:48px"><polyline points="20 6 9 17 4 12"/></svg><p style="flex:1;font-size:34px;line-height:1.35;color:#2A3550"><b style="color:#1F3A68">No manipulative design:</b> no streaks, daily-login rewards or fake urgency</p></div>
+<div style="display:flex;gap:28px;align-items:center"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:48px;height:48px"><polyline points="20 6 9 17 4 12"/></svg><p style="flex:1;font-size:34px;line-height:1.35;color:#2A3550"><b style="color:#1F3A68">No paid randomness:</b> if anything ever costs money, you see exactly what’s in it</p></div>
+<div style="display:flex;gap:28px;align-items:center"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:48px;height:48px"><polyline points="20 6 9 17 4 12"/></svg><p style="flex:1;font-size:34px;line-height:1.35;color:#2A3550"><b style="color:#1F3A68">Nobody misses the show:</b> no notifications during a game; claim cards later</p></div>
+<div style="display:flex;gap:28px;align-items:center"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:#B8322A;width:48px;height:48px"><polyline points="20 6 9 17 4 12"/></svg><p style="flex:1;font-size:34px;line-height:1.35;color:#2A3550"><b style="color:#1F3A68">Minimum fan data:</b> never sold or shared; accounts are 13+</p></div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 13</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 13 notes.</b> These aren’t nice-to-haves; they sit alongside the value model as constraints any future feature has to pass. They’re why sets never expire, why there are no countdown timers on drops, and why the phone rule exists: the app never needs attention during a bit.</p><div class="frame"><div class="slide"><section id="measures" style="background:#FBF6E9;color:#2A3550;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#B8322A">How we’d know it’s working</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#1F3A68;text-transform:uppercase">Better nights, and more fans</h2>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:32px">
+<div style="display:flex;flex-direction:column;gap:20px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:40px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:38px;font-weight:600;color:#1F3A68;text-transform:uppercase">Fan base growth</h3>
+<ul style="font-size:27px;line-height:1.45;color:#2A3550">
+<li>New fans per Pass It On card</li>
+<li>Stream and drop claims that become collectors</li>
+<li>First-timers who arrive holding cards</li>
+</ul>
+</div>
+<div style="display:flex;flex-direction:column;gap:20px;background:#FFFDF6;border:2px solid #E6DCC0;border-radius:20px;padding:40px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:38px;font-weight:600;color:#1F3A68;text-transform:uppercase">Fan experience</h3>
+<ul style="font-size:27px;line-height:1.45;color:#2A3550">
+<li>Share of fans at a game who claim a card</li>
+<li>Collectors who trade at least once</li>
+<li>Collectors who return between tours</li>
+</ul>
+</div>
+<div style="display:flex;flex-direction:column;gap:20px;background:#1F3A68;border-radius:20px;padding:40px">
+<h3 style="font-family:Oswald, Arial, sans-serif;font-size:38px;font-weight:600;color:#F5C518;text-transform:uppercase">Signals of harm</h3>
+<ul style="font-size:27px;line-height:1.45;color:#FBF6E9">
+<li>App use during the show (should be near zero)</li>
+<li>Real resale prices: scarcity crept in</li>
+<li>Complaints from families or first-timers</li>
+</ul>
+</div>
+</div>
+<p style="font-size:30px;line-height:1.4;color:#2A3550">Caution: while an account costs only a name, one person can inflate growth counts. The metrics need that guard before they mean much.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#5E6880">Banana Cards · 14</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 14 notes.</b> Banana Ball’s north star is fan experience, so Banana Cards is judged on two things together: does it make the night better, and does it grow the fan base. Exact metrics are still to be picked; these are candidates. The harm signals matter as much as the growth ones. Real resale prices aren’t something to police; they tell us where the design let scarcity in.</p><div class="frame"><div class="slide"><section id="next" data-transition="fade" style="background:#1F3A68;color:#FBF6E9;font-family:'Nunito Sans', Arial, sans-serif;padding:128px 128px 160px;display:grid;grid-template-columns:1fr 600px;gap:80px;align-items:center">
+<div style="display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#F5C518">What’s next</p>
+<h2 style="font-family:Oswald, Arial, sans-serif;font-size:72px;font-weight:600;line-height:1.1;color:#FBF6E9;text-transform:uppercase">Build, then test the thesis</h2>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<h3 style="font-size:30px;font-weight:800;color:#F5C518;text-transform:uppercase;letter-spacing:2px">Build</h3>
+<ul style="font-size:30px;line-height:1.45;color:#FBF6E9">
+<li>Pool draws at scan time, built from series</li>
+<li>The 13+ age question on every sign-up</li>
+<li>Card drops announced from the field, as bits</li>
+</ul>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<h3 style="font-size:30px;font-weight:800;color:#F5C518;text-transform:uppercase;letter-spacing:2px">Validate</h3>
+<ul style="font-size:30px;line-height:1.45;color:#FBF6E9">
+<li>Talk to fans: does the story beat the rarity?</li>
+<li>Source the player-pay assumption</li>
+</ul>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:28px">
+<img src="art/grayson-stadium.png" alt="Card art: Grayson Stadium" style="width:600px;height:409px;object-fit:cover;border:12px solid #FBF6E9;border-radius:20px;transform:rotate(3deg)">
+<p style="font-family:Oswald, Arial, sans-serif;font-size:44px;font-weight:600;line-height:1.2;color:#F5C518;text-transform:uppercase">Fans first. Entertain always. Even in your pocket.</p>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:600px;font-size:24px;color:#AFC0DA">Banana Cards · 15</p>
+
+</section>
+</div></div>
+<p class="notes"><b>Slide 15 notes.</b> Close on what’s next. In the demo: general codes should draw from pools at scan time, the drop-based sets get redefined as pool series, and the age question gets built. Card drops as bits are the cheapest path into making cards part of the show, since they reuse the drop mechanism. Outside the code: the core thesis, that fans value the story of getting a card over its rarity, is accepted, not validated. Fan conversations are the first real test, along with sourcing the player-pay claim. Then open it up for questions.</p>
+</main></body></html>
