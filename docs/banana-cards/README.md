@@ -16,6 +16,8 @@ requirements, architecture, and design notes land as the project takes shape.
   (API-first, auth, demo-phase shortcuts) and the "before real fans" list.
 - [01-data-model.md](01-data-model.md) — entities and relationships for the
   card/redemption/trade system, grounded in the value-model decisions above.
+- [presentation/](presentation/) — the Banana Cards presentation: 15 slides
+  with speaker notes, readable in a browser from `presentation.html`.
 
 All but the data model are copies of docs kept in the Banana Cards Claude
 project (`claude/<same name>`), where they're usually edited first.
