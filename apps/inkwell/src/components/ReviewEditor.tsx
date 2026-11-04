@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { GRID_ROWS } from "@/lib/ai/gridConstants";
 import type { SourceRegion, TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { extractErrorMessage } from "@/lib/fetchError";
+import { withoutCrossedOut } from "@/lib/crossedOut";
 
 // How many extra lines of context to show above and below the focused line
 // in the pop-out zoom's close-up (see verticalCrop() and popoutVisible
@@ -235,6 +236,10 @@ export function ReviewEditor({
   // whatever segment textarea currently has focus, cleared on blur. See
   // src/lib/ai/gridOverlay.ts for how sourceRegion is derived.
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  // Segments the AI marked crossed out that the writer has since un-struck
+  // with the "keep" toggle - remembered so the toggle stays on them (as
+  // "strike", to undo) instead of disappearing once they read as normal text.
+  const [unstruckIds, setUnstruckIds] = useState<Set<string>>(new Set());
   function handleSegmentFocus(segmentId: string) {
     setActiveSegmentId(segmentId);
   }
@@ -418,6 +423,36 @@ export function ReviewEditor({
           : p
       )
     );
+    setSavedMessage(null);
+  }
+
+  // The AI can misjudge what's crossed out, and crossed-out text is left out
+  // of the note on save - so every struck segment gets a toggle to bring it
+  // back as normal text (and to undo that).
+  function toggleCrossedOut(pageId: string, segmentId: string) {
+    const current = pageStates
+      .find((p) => p.id === pageId)
+      ?.segments.find((s) => s.id === segmentId);
+    if (!current) return;
+    const nowCrossedOut = !current.crossedOut;
+    setPageStates((prev) =>
+      prev.map((p) =>
+        p.id === pageId
+          ? {
+              ...p,
+              segments: p.segments.map((s) =>
+                s.id === segmentId ? { ...s, crossedOut: nowCrossedOut } : s
+              ),
+            }
+          : p
+      )
+    );
+    setUnstruckIds((prev) => {
+      const next = new Set(prev);
+      if (nowCrossedOut) next.delete(segmentId);
+      else next.add(segmentId);
+      return next;
+    });
     setSavedMessage(null);
   }
 
@@ -607,6 +642,7 @@ export function ReviewEditor({
                 // split/merge can create and delete segments the AI never
                 // produced (see the PATCH handler's comment).
                 startsNewBlock: s.startsNewBlock,
+                crossedOut: s.crossedOut,
               })),
             })),
           folderId,
@@ -614,6 +650,10 @@ export function ReviewEditor({
         }),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res, "Save failed."));
+      // The server just left crossed-out text out of the saved note - drop it
+      // here too, so the screen matches what was saved without a reload.
+      setPageStates((prev) => prev.map((p) => ({ ...p, segments: withoutCrossedOut(p.segments) })));
+      setUnstruckIds(new Set());
       setSavedMessage(
         changedCount > 0
           ? `Saved - ${changedCount} correction${changedCount === 1 ? "" : "s"} recorded.`
@@ -756,54 +796,70 @@ export function ReviewEditor({
     return segments.map((segment) => {
       const titleParts = [
         segment.crossedOut
-          ? "Crossed out in the original - kept here, delete if you don't want it"
+          ? "Crossed out in the original - left out of the note when you save"
           : null,
         segment.reviewRequired ? "Needs review - AI wasn't confident here" : null,
       ].filter(Boolean);
+      const showToggle = segment.crossedOut || unstruckIds.has(segment.id);
       return (
-        <textarea
-          key={segment.id}
-          ref={(el) => {
-            if (el) {
-              textareaRefs.current.set(segment.id, el);
-              autoGrow(el);
-            } else {
-              textareaRefs.current.delete(segment.id);
-            }
-          }}
-          rows={1}
-          className={[
-            "segment-input",
-            segment.reviewRequired ? "flagged" : "",
-            segment.crossedOut ? "crossed-out" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          title={titleParts.length ? titleParts.join(" — ") : undefined}
-          value={segment.text}
-          onChange={(e) => {
-            updateSegment(pageId, segment.id, e.target.value);
-            autoGrow(e.currentTarget);
-          }}
-          onFocus={() => handleSegmentFocus(segment.id)}
-          onBlur={handleSegmentBlur}
-          onDoubleClick={() => handleSegmentDoubleClick(segment.id)}
-          onKeyDown={(e) => {
-            // Enter always splits (never inserts a literal newline into a
-            // segment's text - these are meant to be single flowing lines,
-            // see the <textarea>-not-<input> comment above). Backspace only
-            // triggers a merge when the cursor is collapsed at position 0 -
-            // anything else (a selection, or the cursor mid-text) is left to
-            // the textarea's own default editing behavior.
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleSplitSegment(pageId, segment.id, e.currentTarget.selectionStart, e.currentTarget.selectionEnd);
-            } else if (e.key === "Backspace" && e.currentTarget.selectionStart === 0 && e.currentTarget.selectionEnd === 0) {
-              e.preventDefault();
-              handleMergeSegmentBackward(pageId, segment.id);
-            }
-          }}
-        />
+        <Fragment key={segment.id}>
+          <textarea
+            ref={(el) => {
+              if (el) {
+                textareaRefs.current.set(segment.id, el);
+                autoGrow(el);
+              } else {
+                textareaRefs.current.delete(segment.id);
+              }
+            }}
+            rows={1}
+            className={[
+              "segment-input",
+              segment.reviewRequired ? "flagged" : "",
+              segment.crossedOut ? "crossed-out" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            title={titleParts.length ? titleParts.join(" — ") : undefined}
+            value={segment.text}
+            onChange={(e) => {
+              updateSegment(pageId, segment.id, e.target.value);
+              autoGrow(e.currentTarget);
+            }}
+            onFocus={() => handleSegmentFocus(segment.id)}
+            onBlur={handleSegmentBlur}
+            onDoubleClick={() => handleSegmentDoubleClick(segment.id)}
+            onKeyDown={(e) => {
+              // Enter always splits (never inserts a literal newline into a
+              // segment's text - these are meant to be single flowing lines,
+              // see the <textarea>-not-<input> comment above). Backspace only
+              // triggers a merge when the cursor is collapsed at position 0 -
+              // anything else (a selection, or the cursor mid-text) is left to
+              // the textarea's own default editing behavior.
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSplitSegment(pageId, segment.id, e.currentTarget.selectionStart, e.currentTarget.selectionEnd);
+              } else if (e.key === "Backspace" && e.currentTarget.selectionStart === 0 && e.currentTarget.selectionEnd === 0) {
+                e.preventDefault();
+                handleMergeSegmentBackward(pageId, segment.id);
+              }
+            }}
+          />
+          {showToggle && (
+            <button
+              type="button"
+              className="strike-toggle"
+              onClick={() => toggleCrossedOut(pageId, segment.id)}
+              title={
+                segment.crossedOut
+                  ? "Not crossed out - keep this text in the note"
+                  : "Crossed out after all - leave this text out of the note"
+              }
+            >
+              {segment.crossedOut ? "keep" : "strike"}
+            </button>
+          )}
+        </Fragment>
       );
     });
   }
@@ -1159,10 +1215,9 @@ export function ReviewEditor({
           )}
           {crossedOutCount > 0 && (
             <p className="muted">
-              <span className="crossed-out-sample">abc</span> {crossedOutCount} word
-              {crossedOutCount === 1 ? "" : "s"} shown with a strikethrough were crossed out in the
-              original - kept for reference, but feel free to delete them if you don&apos;t want them
-              in the note.
+              <span className="crossed-out-sample">abc</span> {crossedOutCount} crossed-out{" "}
+              {crossedOutCount === 1 ? "bit" : "bits"} of handwriting will be left out of the note
+              when you save. If the AI got one wrong, click <strong>keep</strong> next to it.
             </p>
           )}
 

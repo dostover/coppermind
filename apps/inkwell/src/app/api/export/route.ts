@@ -8,13 +8,14 @@ import {
   handwritingProfileRepo,
   notesRepo,
 } from "@/lib/db";
+import { withoutCrossedOut, visibleText } from "@/lib/crossedOut";
 
 // Data export (FR-1.x / AC-18), scoped to what this walking skeleton
 // actually has - no folders/tags/accounts yet (see
 // claude/08-walking-skeleton-scope.md), so this is just "everything about
 // your notes" rather than a full account export. Bundles:
 //   - notes.json: every note's transcription (both the AI's original output
-//     and your corrected version), status, and dates, plus the handwriting
+//     and your corrected version, minus crossed-out text), status, and dates, plus the handwriting
 //     profile/examples the learning loop has built up.
 //   - images/: every original photo still on disk, so a full copy of both
 //     the source and the transcription exists outside the app's own
@@ -36,12 +37,12 @@ export async function GET() {
         pageNumber: p.page_number,
         imageFile: p.image_path ? path.basename(p.image_path) : null,
         status: p.status,
-        segmentsCurrent: p.segmentsCurrent,
+        segmentsCurrent: withoutCrossedOut(p.segmentsCurrent),
         segmentsOriginalAi: p.segmentsAi,
       })),
       createdAt: note.created_at,
       updatedAt: note.updated_at,
-      transcription: note.segmentsCurrent.map((s) => s.text).join("\n\n"),
+      transcription: visibleText(note.segmentsCurrent, "\n\n"),
     })),
     handwritingProfile: profile,
     handwritingExamples: examples,

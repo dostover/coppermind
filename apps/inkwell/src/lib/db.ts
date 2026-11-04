@@ -643,7 +643,7 @@ export const notesRepo = {
     // deferred; this just confirms notes are durably saved and retrievable.
     const q = query.toLowerCase();
     return notes.filter((n) => {
-      const haystack = [n.title ?? "", ...n.segmentsCurrent.map((s) => s.text)]
+      const haystack = [n.title ?? "", ...n.segmentsCurrent.filter((s) => !s.crossedOut).map((s) => s.text)]
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
