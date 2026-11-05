@@ -1423,3 +1423,26 @@ main {
     flex-basis: 100%;
   }
 }
+
+/* "keep"/"strike" toggle beside a crossed-out segment on the review screen
+   (ReviewEditor.tsx's toggleCrossedOut) - small and quiet so it doesn't
+   compete with the text, but a real button so it's keyboard reachable. */
+.flow .strike-toggle {
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.15rem 0.4rem;
+  margin: 0 0.25rem;
+  border: 1px solid var(--flag-border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.flow .strike-toggle:hover,
+.flow .strike-toggle:focus-visible {
+  color: inherit;
+  background: var(--surface-alt);
+}

@@ -7,6 +7,7 @@ import {
 } from "@/lib/handwritingProfile";
 import { isStructureType, type StructureType, type TranscriptSegment } from "@/lib/ai/types";
 import { enqueueIndexNote } from "@/lib/jobs";
+import { withoutCrossedOut } from "@/lib/crossedOut";
 
 export async function GET(
   _req: NextRequest,
@@ -35,7 +36,15 @@ interface PatchBody {
   // and is deleted by omission - see the per-segment loop below for both.
   pages: {
     pageId: string;
-    segments: { id: string; text: string; structureType?: StructureType; startsNewBlock?: boolean }[];
+    segments: {
+      id: string;
+      text: string;
+      structureType?: StructureType;
+      startsNewBlock?: boolean;
+      // The review screen's "keep"/"strike" toggle. Optional for the same
+      // older-client reason as the fields above.
+      crossedOut?: boolean;
+    }[];
   }[];
   // Both optional and independently applied: omitting a field leaves that
   // note property untouched, so callers that only save segments/title (if
@@ -97,6 +106,9 @@ function validatePatchBody(raw: unknown): { error: string } | { body: PatchBody 
       }
       if (s.startsNewBlock !== undefined && typeof s.startsNewBlock !== "boolean") {
         return { error: "startsNewBlock must be a boolean." };
+      }
+      if (s.crossedOut !== undefined && typeof s.crossedOut !== "boolean") {
+        return { error: "crossedOut must be a boolean." };
       }
     }
   }
@@ -207,6 +219,7 @@ export async function PATCH(
         // an edited text value already does. Only an old client that never
         // sends a field at all falls through this far.
         const base = previous ?? original;
+        const crossedOut = edited.crossedOut ?? base.crossedOut;
         const changedFromOriginalAi = edited.text !== original.text;
         const changedThisSave = edited.text !== base.text;
         updatedSegments.push({
@@ -214,13 +227,16 @@ export async function PATCH(
           text: edited.text,
           structureType: edited.structureType ?? base.structureType,
           startsNewBlock: edited.startsNewBlock ?? base.startsNewBlock,
+          crossedOut,
           // The flag clears the moment the user edits that span away from
           // the AI's original guess (Phase 3 UX §5); an untouched flagged
           // span stays flagged post-save (FR-5.4).
           reviewRequired: changedFromOriginalAi ? false : original.reviewRequired,
         });
 
-        if (changedThisSave && changedFromOriginalAi) {
+        // Crossed-out text is dropped from the saved note just below, so an
+        // edit to it isn't a correction worth learning from (or an AI call).
+        if (changedThisSave && changedFromOriginalAi && !crossedOut) {
           const evaluation = await provider.evaluateHandwritingCorrection({
             aiText: original.text,
             correctedText: edited.text,
@@ -264,12 +280,18 @@ export async function PATCH(
           text: edited.text,
           structureType: edited.structureType ?? base.structureType,
           startsNewBlock: edited.startsNewBlock ?? base.startsNewBlock,
+          crossedOut: edited.crossedOut ?? base.crossedOut,
         });
       }
     }
 
-    if (updatedSegments.length > 0) {
-      notePagesRepo.setSegments(page.id, updatedSegments, now);
+    // Crossed-out text stays on the review screen (struck through, with a
+    // "keep" toggle) until this save, then is left out of the saved note
+    // entirely - segments_ai still has it. See lib/crossedOut.ts. Checked
+    // against what was sent, not what's kept, so a page whose every segment
+    // was crossed out is still saved (as empty) rather than skipped.
+    if (pageBody.segments.length > 0) {
+      notePagesRepo.setSegments(page.id, withoutCrossedOut(updatedSegments), now);
     }
   }
 

@@ -10,6 +10,7 @@ import { isGoogleConnected } from "@/lib/google/oauth";
 import { AskAnswer } from "@/components/AskAnswer";
 import { looksLikeQuestion, queryTerms, searchNotes, type MatchKind } from "@/lib/search";
 import { SEMANTIC_SEARCH_CONFIGURED } from "@/lib/embeddings";
+import { visibleText } from "@/lib/crossedOut";
 
 // Search-result highlighting: centers the snippet window on the first match
 // (rather than always cutting from character 0) so a hit is actually visible
@@ -195,7 +196,7 @@ export default async function LibraryPage({
 
       {isTrash
         ? notes.map((note) => {
-            const bodyText = note.segmentsCurrent.map((s) => s.text).join(" ");
+            const bodyText = visibleText(note.segmentsCurrent);
             return (
               <div key={note.id} className="note-card card trash-card">
                 <strong>{note.title ?? "Untitled note"}</strong>
@@ -209,7 +210,7 @@ export default async function LibraryPage({
             );
           })
         : notes.map((note) => {
-            const bodyText = note.segmentsCurrent.map((s) => s.text).join(" ");
+            const bodyText = visibleText(note.segmentsCurrent);
             const flaggedCount = note.segmentsCurrent.filter((s) => s.reviewRequired).length;
             const noteFolder = note.folder_id ? folders.find((f) => f.id === note.folder_id) : null;
             return (

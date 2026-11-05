@@ -1,6 +1,7 @@
 import { notesRepo, type Note } from "@/lib/db";
 import type { TranscriptSegment } from "@/lib/ai/types";
 import { getValidAccessToken } from "./oauth";
+import { withoutCrossedOut } from "@/lib/crossedOut";
 
 // Exports a note to a Google Doc via the Docs API - the "Export/backup to
 // Google Docs" feature. Deliberately separate from the existing zip export
@@ -38,7 +39,7 @@ async function docsFetch<T>(path: string, accessToken: string, init?: RequestIni
   return (await res.json()) as T;
 }
 
-type StyleKind = "heading" | "bold" | "underline" | "strikethrough";
+type StyleKind = "heading" | "bold" | "underline";
 
 interface StyleRange {
   startIndex: number;
@@ -52,10 +53,9 @@ interface StyleRange {
 // non-overlapping style requests - see the "why one insertText" note in
 // exportNoteToGoogleDoc.
 //
-// What's kept: the text and line breaks exactly as transcribed, crossed-out
-// text (strikethrough - matching the review screen's own choice to show
-// crossed-out text rather than deleting it), and bold/underline emphasis
-// from the handwriting. What's deliberately NOT applied (2026-09-30): the
+// What's kept: the text and line breaks exactly as transcribed, and
+// bold/underline emphasis from the handwriting. Crossed-out text is left out
+// (2026-11-03, see lib/crossedOut.ts) - it only appears on the review screen. What's deliberately NOT applied (2026-09-30): the
 // AI's per-line structureType. Handwritten notes carry their own markers in
 // the text ("1.", "-", "†", "#"), so adding Docs heading styles or
 // bullet/numbered-list formatting on top duplicated them ("1. 1. ...") and
@@ -102,13 +102,12 @@ function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
 
     if (multiPage) pushStyled(`Page ${page.page_number}`, "heading");
 
-    for (const line of groupIntoLines(page.segmentsCurrent)) {
+    for (const line of groupIntoLines(withoutCrossedOut(page.segmentsCurrent))) {
       line.forEach((segment, i) => {
         if (i > 0) text += " ";
         const segStart = text.length;
         text += segment.text;
         const segEnd = text.length;
-        if (segment.crossedOut) styles.push({ startIndex: segStart, endIndex: segEnd, kind: "strikethrough" });
         if (segment.emphasis === "bold_or_heavy") styles.push({ startIndex: segStart, endIndex: segEnd, kind: "bold" });
         if (segment.emphasis === "underline") styles.push({ startIndex: segStart, endIndex: segEnd, kind: "underline" });
       });
@@ -132,8 +131,6 @@ function stylesToRequests(styles: StyleRange[], baseIndex: number): Record<strin
         return { updateTextStyle: { range, textStyle: { bold: true }, fields: "bold" } };
       case "underline":
         return { updateTextStyle: { range, textStyle: { underline: true }, fields: "underline" } };
-      case "strikethrough":
-        return { updateTextStyle: { range, textStyle: { strikethrough: true }, fields: "strikethrough" } };
     }
   });
 }

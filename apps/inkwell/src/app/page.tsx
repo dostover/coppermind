@@ -103,8 +103,8 @@ export default async function HomePage() {
           <li>
             <span className="home-tip-sample crossed-out-sample">scribble</span>
             <span>
-              Crossed-out handwriting is kept with a strikethrough rather than dropped - delete it
-              yourself if you don&apos;t want it in the note.
+              Crossed-out handwriting shows with a strikethrough while you review, then is left out
+              of the note when you save. Click &ldquo;keep&rdquo; on any the AI misjudged.
             </span>
           </li>
           <li>

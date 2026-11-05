@@ -1,5 +1,6 @@
 import { notesRepo, searchIndexRepo, type IndexedChunkRow, type Note } from "./db";
 import { STOPWORDS, cosine, getEmbeddingProvider } from "./embeddings";
+import { visibleText } from "@/lib/crossedOut";
 
 // Hybrid search over the Library (02-architecture.md §7, FR-10.1-10.6): three
 // independent retrievers, fused by Reciprocal Rank Fusion (RRF) so no single
@@ -169,7 +170,7 @@ export async function searchNotes(query: string, folderId?: string | null): Prom
     if (!note || note.deleted_at) continue;
     hits.push({
       note,
-      snippet: e.snippet ?? note.segmentsCurrent.map((s) => s.text).join(" "),
+      snippet: e.snippet ?? visibleText(note.segmentsCurrent),
       matchedBy: (["exact", "keyword", "meaning"] as MatchKind[]).filter((k) => e.matchedBy.has(k)),
       score: e.score,
     });
