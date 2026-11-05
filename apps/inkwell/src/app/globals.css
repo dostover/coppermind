@@ -1446,3 +1446,69 @@ main {
   color: inherit;
   background: var(--surface-alt);
 }
+
+/* Upload filmstrip thumbnails + capture time (2026-11-05) - enough to check
+   the page order at a glance before uploading. */
+.page-filmstrip-thumb {
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.page-filmstrip-thumb-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.page-filmstrip-taken {
+  display: block;
+  font-size: 0.78rem;
+}
+
+.upload-order-note {
+  margin: 0 0 0.75rem;
+}
+
+/* Review screen: "Page N of M" with move up/down for the whole page (photo
+   and text together). */
+.note-page-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.6rem;
+}
+
+.note-page-header .note-page-label {
+  margin: 0;
+}
+
+.page-move-button {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.page-move-button:hover:not(:disabled),
+.page-move-button:focus-visible {
+  color: inherit;
+  background: var(--surface-alt);
+}
+
+.page-move-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

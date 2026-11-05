@@ -526,6 +526,16 @@ export const notesRepo = {
     ).run(placeholderTitle, updatedAt, id);
   },
 
+  // Page reordering (POST /api/notes/[id]/pages/reorder): the placeholder
+  // title always comes from page 1, so when a different page becomes page 1
+  // the title follows it - but only while it's still the automatic one
+  // (title_source 'ai'). A title the user typed is never touched.
+  replacePlaceholderTitle(id: string, placeholderTitle: string, updatedAt: string): void {
+    db.prepare(
+      `UPDATE notes SET title = ?, updated_at = ? WHERE id = ? AND title_source = 'ai'`
+    ).run(placeholderTitle, updatedAt, id);
+  },
+
   // Recomputes notes.status from its pages' current states (see
   // computeAggregateStatus above) and writes it if changed. Called after
   // every page-level state transition (enqueue/transcribed/error) so the
@@ -714,6 +724,22 @@ export const notePagesRepo = {
       updatedAt,
       id
     );
+  },
+
+  // Renumbers a note's pages to match pageIds' order (the caller has
+  // checked it lists every page exactly once). A page's photo and text are
+  // one row, so they always move together. Two passes because of the
+  // UNIQUE (note_id, page_number) constraint: park every page on a negative
+  // number first, then assign the final 1..N.
+  reorder(noteId: string, pageIds: string[], updatedAt: string): void {
+    const setNumber = db.prepare(
+      `UPDATE note_pages SET page_number = ?, updated_at = ? WHERE id = ? AND note_id = ?`
+    );
+    db.transaction(() => {
+      pageIds.forEach((id, i) => setNumber.run(-(i + 1), updatedAt, id, noteId));
+      pageIds.forEach((id, i) => setNumber.run(i + 1, updatedAt, id, noteId));
+      db.prepare(`UPDATE notes SET updated_at = ? WHERE id = ?`).run(updatedAt, noteId);
+    })();
   },
 
   // Called on Save (PATCH /api/notes/[id]) with this page's corrected

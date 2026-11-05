@@ -216,6 +216,13 @@ export function ReviewEditor({
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle ?? "");
+  // The automatic title currently on offer (null once it's the user's own).
+  // State rather than initialTitle alone because reordering pages can swap
+  // in a new automatic title from the new page 1.
+  const [aiTitle, setAiTitle] = useState<string | null>(
+    initialTitleSource === "ai" ? (initialTitle ?? "") : null
+  );
+  const [reorderingPages, setReorderingPages] = useState(false);
   const [exportingToGoogle, setExportingToGoogle] = useState(false);
   const [googleDocUrl, setGoogleDocUrl] = useState(initialGoogleDocUrl);
   const [googleExportError, setGoogleExportError] = useState<string | null>(null);
@@ -313,7 +320,7 @@ export function ReviewEditor({
   // what's on screen - the instant the user types something different, this
   // goes false immediately (same "the flag clears the moment you edit"
   // feedback the transcription segments already give), well before Save.
-  const titleIsAiSuggested = initialTitleSource === "ai" && title.trim() === (initialTitle ?? "").trim();
+  const titleIsAiSuggested = aiTitle !== null && title.trim() === aiTitle.trim();
 
   // Segments render as <textarea> rather than <input> so long text can wrap
   // onto multiple visual lines instead of forcing horizontal scrolling. The
@@ -667,6 +674,46 @@ export function ReviewEditor({
     }
   }
 
+  // Moves a whole page - photo and text together - one place earlier or
+  // later (2026-11-05), for photos that were uploaded out of order. Saved
+  // right away via its own route; the page objects themselves move, so any
+  // unsaved text edits on them come along untouched.
+  async function handleMovePage(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= pageStates.length) return;
+    const nextOrder = [...pageStates];
+    [nextOrder[index], nextOrder[target]] = [nextOrder[target], nextOrder[index]];
+
+    setReorderingPages(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/pages/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageIds: nextOrder.map((p) => p.id) }),
+      });
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Couldn't move that page."));
+      const data: { title: string | null; titleSource: "ai" | "user" } = await res.json();
+      const order = new Map(nextOrder.map((p, i) => [p.id, i]));
+      setPageStates((prev) =>
+        [...prev]
+          .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+          .map((p, i) => ({ ...p, pageNumber: i + 1 }))
+      );
+      // The automatic title follows the new page 1 - unless the user has
+      // already typed over it here.
+      if (data.titleSource === "ai" && data.title && titleIsAiSuggested) {
+        setTitle(data.title);
+        setAiTitle(data.title);
+      }
+      router.refresh();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Couldn't move that page.");
+    } finally {
+      setReorderingPages(false);
+    }
+  }
+
   async function handleRetryPage(pageId: string) {
     setRetryingPageIds((prev) => new Set(prev).add(pageId));
     setErrorMessage(null);
@@ -892,16 +939,46 @@ export function ReviewEditor({
         </div>
       )}
 
-      {pageStates.map((page) => {
+      {pageStates.map((page, pageIndex) => {
         const lines = toLines(page.segments);
         const isRetrying = retryingPageIds.has(page.id);
         const activeRegion = page.segments.find((s) => s.id === activeSegmentId)?.sourceRegion;
         return (
           <div key={page.id} className="note-page-block">
             {pageStates.length > 1 && (
-              <p className="muted note-page-label">
-                Page {page.pageNumber} of {pageStates.length}
-              </p>
+              <div className="note-page-header">
+                <p className="muted note-page-label">
+                  Page {pageIndex + 1} of {pageStates.length}
+                </p>
+                <button
+                  type="button"
+                  className="page-move-button"
+                  onClick={() => handleMovePage(pageIndex, -1)}
+                  disabled={pageIndex === 0 || anyPageWorking || reorderingPages}
+                  title={
+                    anyPageWorking
+                      ? "Pages can be moved once every page has finished processing"
+                      : "Move this page (photo and text) earlier"
+                  }
+                  aria-label={`Move page ${pageIndex + 1} earlier`}
+                >
+                  ↑ Move up
+                </button>
+                <button
+                  type="button"
+                  className="page-move-button"
+                  onClick={() => handleMovePage(pageIndex, 1)}
+                  disabled={pageIndex === pageStates.length - 1 || anyPageWorking || reorderingPages}
+                  title={
+                    anyPageWorking
+                      ? "Pages can be moved once every page has finished processing"
+                      : "Move this page (photo and text) later"
+                  }
+                  aria-label={`Move page ${pageIndex + 1} later`}
+                >
+                  ↓ Move down
+                </button>
+              </div>
             )}
 
             <div className="note-page-columns">
