@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { extractErrorMessage } from "@/lib/fetchError";
+import { formatTakenAt, orderBatch, readCaptureTime, type BatchOrder } from "@/lib/photoOrder";
 
 // Multi-page notes (FR-2.3/FR-2.4): the user can select several page images
 // (or a PDF, whose own pages are expanded server-side - see
@@ -13,10 +14,28 @@ import { extractErrorMessage } from "@/lib/fetchError";
 // gesture - lighter to build and just as effective for "put page 3 before
 // page 2," which is the actual need (03-ux-screens.md's full
 // filmstrip-with-drag is the fuller version of this same interaction).
+//
+// Each pick is put in a sensible starting order (2026-11-05) - by when each
+// photo was taken, or by file name - since "select all" in a folder hands
+// files over in whatever order the OS chooses. See lib/photoOrder.ts. Each
+// pick is ordered on its own and appended, so adding more files never
+// reshuffles an order the user has already adjusted by hand.
+interface PickedItem {
+  key: string;
+  file: File;
+  takenAt: number | null;
+  thumbUrl: string | null;
+}
+
+let nextItemKey = 0;
+
 export function UploadForm() {
   const router = useRouter();
   const inputId = useId();
-  const [files, setFiles] = useState<File[]>([]);
+  const [items, setItems] = useState<PickedItem[]>([]);
+  const [readingFiles, setReadingFiles] = useState(false);
+  const [lastOrder, setLastOrder] = useState<{ order: BatchOrder; count: number } | null>(null);
+  const thumbUrlsRef = useRef<Set<string>>(new Set());
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -31,17 +50,43 @@ export function UploadForm() {
   // already-emptied list and silently contributing nothing. Converting to
   // a plain array immediately, before the reset, fixes it regardless of
   // when React actually processes the state update.
-  function addFiles(newFiles: File[]) {
+  async function addFiles(newFiles: File[]) {
     if (newFiles.length === 0) return;
-    setFiles((prev) => [...prev, ...newFiles]);
+    setReadingFiles(true);
+    const picked = await Promise.all(
+      newFiles.map(async (file): Promise<PickedItem> => {
+        const thumbUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+        if (thumbUrl) thumbUrlsRef.current.add(thumbUrl);
+        return { key: `item-${nextItemKey++}`, file, takenAt: await readCaptureTime(file), thumbUrl };
+      })
+    );
+    const { items: ordered, order } = orderBatch(picked);
+    setItems((prev) => [...prev, ...ordered]);
+    setLastOrder(ordered.length > 1 ? { order, count: ordered.length } : null);
+    setReadingFiles(false);
   }
 
+  // Thumbnails are object URLs - released when an item is removed, and all
+  // at once when leaving the page.
+  useEffect(() => {
+    const urls = thumbUrlsRef.current;
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
+
   function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    const removed = items[index];
+    if (removed?.thumbUrl) {
+      URL.revokeObjectURL(removed.thumbUrl);
+      thumbUrlsRef.current.delete(removed.thumbUrl);
+    }
+    setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
   function moveFile(index: number, direction: -1 | 1) {
-    setFiles((prev) => {
+    setItems((prev) => {
       const next = [...prev];
       const target = index + direction;
       if (target < 0 || target >= next.length) return prev;
@@ -52,12 +97,12 @@ export function UploadForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (files.length === 0) return;
+    if (items.length === 0) return;
     setStatus("uploading");
     setError(null);
 
     const formData = new FormData();
-    for (const file of files) formData.append("images", file);
+    for (const { file } of items) formData.append("images", file);
 
     try {
       const res = await fetch("/api/notes/upload", { method: "POST", body: formData });
@@ -91,13 +136,23 @@ export function UploadForm() {
         capture="environment"
         multiple
         onChange={(e) => {
-          addFiles(Array.from(e.target.files ?? []));
+          void addFiles(Array.from(e.target.files ?? []));
           e.target.value = ""; // allow picking the same file again / adding more right after
         }}
         style={{ margin: "0.75rem 0" }}
       />
 
-      {files.length > 0 && (
+      {lastOrder && (
+        <p className="muted upload-order-note" role="status">
+          {lastOrder.order === "taken"
+            ? `Sorted the ${lastOrder.count} files you picked by when each photo was taken.`
+            : `Sorted the ${lastOrder.count} files you picked by file name, since they don't all record when they were taken.`}{" "}
+          Check the order below and use ↑ ↓ to fix anything - you can also reorder pages after
+          they&apos;re transcribed.
+        </p>
+      )}
+
+      {items.length > 0 && (
         <ul className="page-filmstrip">
           {/* Labeled by position among picked items, not a final page
               number: a PDF here contributes all of its own pages, in order,
@@ -105,12 +160,27 @@ export function UploadForm() {
               different page number than its position in this list suggests.
               Reordering/removing still operates on whole items (a PDF moves
               or drops as one unit, its internal page order intact). */}
-          {files.map((file, i) => (
-            <li key={`${file.name}-${i}`} className="page-filmstrip-item">
-              <span className="muted">
+          {items.map(({ key, file, takenAt, thumbUrl }, i) => (
+            <li key={key} className="page-filmstrip-item">
+              <span className="muted page-filmstrip-position">
                 {file.type === "application/pdf" ? "PDF" : `Item ${i + 1}`}
               </span>
-              <span className="page-filmstrip-name">{file.name}</span>
+              {thumbUrl ? (
+                // A local object URL for a file not yet uploaded - nothing for
+                // next/image to optimize.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="page-filmstrip-thumb" src={thumbUrl} alt="" />
+              ) : (
+                <span className="page-filmstrip-thumb page-filmstrip-thumb-empty" aria-hidden="true">
+                  {file.type === "application/pdf" ? "PDF" : ""}
+                </span>
+              )}
+              <span className="page-filmstrip-name">
+                {file.name}
+                {takenAt !== null && (
+                  <span className="muted page-filmstrip-taken">Taken {formatTakenAt(takenAt)}</span>
+                )}
+              </span>
               <button
                 type="button"
                 className="button secondary"
@@ -124,7 +194,7 @@ export function UploadForm() {
                 type="button"
                 className="button secondary"
                 onClick={() => moveFile(i, 1)}
-                disabled={i === files.length - 1}
+                disabled={i === items.length - 1}
                 aria-label={`Move ${file.name} later`}
               >
                 ↓
@@ -142,11 +212,15 @@ export function UploadForm() {
         </ul>
       )}
 
-      <button className="button" type="submit" disabled={files.length === 0 || status === "uploading"}>
+      <button
+        className="button"
+        type="submit"
+        disabled={items.length === 0 || readingFiles || status === "uploading"}
+      >
         {status === "uploading"
           ? "Uploading..."
-          : files.length > 1
-            ? `Upload ${files.length} items as one note`
+          : items.length > 1
+            ? `Upload ${items.length} items as one note`
             : "Upload & Transcribe"}
       </button>
       {status === "error" && (
