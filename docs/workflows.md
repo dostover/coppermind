@@ -67,13 +67,3 @@ unfairness, exploits, input, saves, story safety), asking how to fix each with a
 recommended option, applying the answers, and updating the spec's Open risks —
 see the `pixel-party-dungeon-risk-review` skill. Game risks live in the spec;
 `risks.md` stays for team and business risks.
-
-## Kid-led game design, with a coach
-
-How Pixel Party Dungeon was made: a young designer drives every decision on
-their own game idea while a parent coaches the practices behind agentic
-software development and product management — context, ontology, surfacing
-human and agentic assumptions, risks and trade-offs, demos, user interviews,
-synthesizing feedback, backlog grooming and planning. Each phase ends with a
-short coach's note naming the practice used — see the `kid-led-game-design`
-skill.

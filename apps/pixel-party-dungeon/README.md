@@ -80,7 +80,11 @@ design is a 10-level campaign.
 
 ![The camp screen between levels, with treasure maps and the ready check](screenshots/camp.png)
 
-## Design spec
+## Design spec and notes
+
+[Design notes](../../docs/pixel-party-dungeon/README.md) explain the why behind
+every decision, and a [case study](../../docs/pixel-party-dungeon/case-study.md)
+covers how the project was run and coached.
 
 The full game design (10-level campaign, online play, AI Studio build target,
 build phases and open risks) lives in the Claude doc
