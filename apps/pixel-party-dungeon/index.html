@@ -1,0 +1,2162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Pixel Party Dungeon</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Layout: the lobby is a camp page of player cards; play is one 16:9 stage with the HUD laid over the canvas. Single dark cave look by choice. */
+:root{
+  --cave:#100c18; --rock:#1c1628; --rock-2:#281f39; --line:#3d3156; --mist:#aaa2bf; --bone:#f4ecd8;
+  --lantern:#f5b544; --lantern-deep:#b97a18; --moss:#86c46a; --ember:#ea6340; --frost:#82d2f0; --gold:#ffd75e;
+  --f-display:'Silkscreen', ui-monospace, Menlo, monospace;
+  --f-body:'Pixelify Sans', ui-rounded, 'Trebuchet MS', system-ui, sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--cave);color:var(--bone);font-family:var(--f-body);font-size:16px;line-height:1.4;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--lantern);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- Lobby ---------- */
+#lobby{max-width:1080px;margin:0 auto;padding-block:28px 48px;display:grid;gap:24px}
+.mast{display:grid;gap:6px}
+.mast h1{font-family:var(--f-display);font-weight:700;font-size:clamp(28px,5.4vw,56px);line-height:1;margin:0;letter-spacing:.02em;
+  color:var(--lantern);text-shadow:0 4px 0 #5a3a10, 0 0 28px rgba(245,181,68,.35);text-wrap:balance}
+.mast p{margin:0;color:var(--mist);max-width:62ch}
+.mast .kicker{font-family:var(--f-display);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--moss)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,470px),1fr));gap:16px}
+.card{background:var(--rock);border:2px solid var(--line);border-radius:4px;padding:16px;display:grid;gap:12px;min-width:0;position:relative}
+.card[data-on="1"]{border-color:var(--pc,var(--line));box-shadow:0 0 0 2px #000 inset}
+.card h2{margin:0;font-family:var(--f-display);font-size:15px;letter-spacing:.08em;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 .tag{color:var(--pc,var(--lantern))}
+.rm{background:none;border:1px solid var(--line);border-radius:3px;padding:2px 8px;font-size:13px;color:var(--mist)}
+.rm:hover{color:var(--bone);border-color:var(--mist)}
+.row{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
+.preview{width:96px;height:128px;background:radial-gradient(circle at 50% 70%, #3a2c18 0%, var(--rock-2) 60%);border:1px solid var(--line);border-radius:3px;image-rendering:pixelated}
+.fields{display:grid;gap:8px;min-width:0}
+label.f{display:grid;gap:3px;font-size:13px;color:var(--mist)}
+input[type=text],select{background:var(--cave);border:1px solid var(--line);border-radius:3px;padding:7px 9px;width:100%;min-width:0}
+input[type=text]:focus,select:focus{border-color:var(--lantern)}
+.err{color:var(--ember);font-size:13px;min-height:1em}
+.classes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cls{background:var(--cave);border:1px solid var(--line);border-radius:3px;padding:6px 4px;display:grid;justify-items:center;gap:2px;font-size:12px;text-align:center}
+.cls canvas{width:36px;height:48px;image-rendering:pixelated}
+.cls b{font-family:var(--f-display);font-size:9.5px;letter-spacing:.02em;font-weight:400}
+.cls span{color:var(--mist);font-size:11px}
+.cls[aria-pressed="true"]{border-color:var(--lantern);background:#2b2112}
+.trick{font-size:13px;color:var(--mist);margin:0}
+.trick b{color:var(--bone);font-weight:600}
+.swatches{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.swatches .lbl{font-size:12px;color:var(--mist);width:48px}
+.sw{width:22px;height:22px;border-radius:3px;border:2px solid #000;padding:0}
+.sw[aria-pressed="true"]{outline:2px solid var(--bone);outline-offset:1px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.stat{background:var(--cave);border:1px solid var(--line);border-radius:3px;padding:6px;text-align:center;font-variant-numeric:tabular-nums}
+.stat small{display:block;font-size:11px;color:var(--mist)}
+.stat strong{font-family:var(--f-display);font-size:18px;font-weight:400}
+.stat em{display:block;font-style:normal;font-size:11px;color:var(--mist)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{background:var(--rock-2);border:1px solid var(--line);border-radius:3px;padding:7px 12px;font-size:14px}
+.btn:hover{border-color:var(--mist)}
+.btn.big{font-family:var(--f-display);font-size:18px;padding:12px 22px;background:var(--lantern);color:#2a1a05;border:none;box-shadow:0 4px 0 var(--lantern-deep)}
+.btn.big:hover{filter:brightness(1.08)}
+.btn.big:active{transform:translateY(2px);box-shadow:0 2px 0 var(--lantern-deep)}
+.add{border:2px dashed var(--line);background:none;border-radius:4px;min-height:160px;color:var(--mist);font-family:var(--f-display);font-size:14px}
+.add:hover{color:var(--bone);border-color:var(--mist)}
+.settings{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:end;background:var(--rock);border:2px solid var(--line);border-radius:4px;padding:16px}
+.settings label.f{min-width:150px}
+.go{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.go p{margin:0;color:var(--mist);font-size:14px;max-width:52ch}
+.saves{background:var(--rock);border:2px solid var(--line);border-left:6px solid var(--lantern);border-radius:4px;padding:14px 16px;display:grid;gap:8px}
+.saves h3{margin:0;font-family:var(--f-display);font-size:13px;letter-spacing:.08em;color:var(--lantern)}
+.saves .muted{margin:0;color:var(--mist);font-size:14px}
+.savelist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.savelist li{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;background:var(--cave);border:1px solid var(--line);border-radius:3px;padding:10px 12px}
+.savelist li>div{min-width:0}
+.savelist b{display:block}
+.savelist small{color:var(--mist);font-size:13px}
+.sb{display:flex;gap:8px}
+.btn.big.sm2{font-size:14px;padding:8px 14px}
+.btn.warn{border-color:var(--ember);color:var(--ember)}
+.ib.saved{color:var(--moss)}
+.keys{background:var(--rock);border:2px solid var(--line);border-radius:4px;padding:16px;display:grid;gap:10px}
+.keys h3{margin:0;font-family:var(--f-display);font-size:13px;letter-spacing:.08em;color:var(--lantern)}
+.keys .tbl{overflow-x:auto}
+.keys table{border-collapse:collapse;font-size:14px;min-width:520px}
+.keys th,.keys td{padding:4px 10px;text-align:left;border-bottom:1px solid var(--line)}
+.keys th{color:var(--mist);font-weight:400}
+kbd{font-family:var(--f-display);font-size:11px;background:var(--cave);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:1px 5px}
+
+/* ---------- Play stage ---------- */
+#play{height:100%;display:flex;align-items:center;justify-content:center;padding-block:8px}
+#stage{position:relative;width:min(100%, calc((100dvh - 16px) * 16 / 9));aspect-ratio:16/9;max-width:100%;container-type:inline-size;background:#05030a;overflow:hidden;border-radius:4px;user-select:none}
+#game{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+.hud{position:absolute;pointer-events:none;font-size:clamp(10px,1.55cqw,22px)}
+.hud *{pointer-events:auto}
+
+/* Dice tray */
+#dice{left:50%;top:1.2cqw;transform:translateX(-50%);display:grid;justify-items:center;gap:.2em;transition:opacity .25s;text-align:center;width:46cqw}
+#dice[data-show="0"]{opacity:0}
+#dice .die{position:relative;width:6.4cqw;height:6.4cqw;min-width:44px;min-height:44px;cursor:pointer}
+#dice .die svg{width:100%;height:100%;filter:drop-shadow(0 .3cqw 0 rgba(0,0,0,.6))}
+#dice .die .poly{fill:#f4ecd8;stroke:#1a1222;stroke-width:4}
+#dice .die .facet{fill:none;stroke:#c9bfa6;stroke-width:2}
+#dice .die .num{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:2.3cqw;color:#1a1222;font-variant-numeric:tabular-nums}
+#dice .die .sides{position:absolute;left:0;right:0;bottom:-.1em;text-align:center;font-family:var(--f-display);font-size:.65em;color:var(--mist)}
+#dice[data-phase="spin"] .die{animation:shake .12s linear infinite}
+#dice[data-phase="show"] .die{animation:land .35s ease-out}
+#dice[data-res="crit"] .poly{fill:var(--gold)}
+#dice[data-res="fumble"] .poly{fill:#9aa0b5}
+#dice[data-res="hit"] .poly{fill:#bfe6a6}
+#dice[data-res="miss"] .poly{fill:#e3b3a6}
+#dice[data-kind="heal"] .poly{fill:#ffe7a6}
+@keyframes shake{0%{transform:rotate(-12deg) translateY(-2px)}50%{transform:rotate(12deg) translateY(2px)}100%{transform:rotate(-12deg)}}
+@keyframes land{0%{transform:scale(1.5)}60%{transform:scale(.92)}100%{transform:scale(1)}}
+.dl{font-family:var(--f-body);font-weight:600;background:rgba(10,7,16,.78);padding:.15em .6em;border-radius:3px;font-size:1em;max-width:100%}
+.dr{font-family:var(--f-display);font-size:1.5em;line-height:1;text-shadow:0 .12em 0 #000;min-height:1em}
+.dr.hit{color:#a6ef8a}.dr.miss{color:#ff9b82}.dr.crit{color:var(--gold)}.dr.fumble{color:#c7cbe0}.dr.heal{color:var(--lantern)}
+.dp{font-family:var(--f-display);font-size:.9em;color:#2a1a05;background:var(--lantern);padding:.25em .7em;border-radius:3px;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.06)}}
+
+/* Turn strip */
+#turns{right:1.2cqw;top:4.6cqw;display:flex;flex-direction:column;align-items:flex-end;gap:.25em;transition:opacity .2s}
+#turns[data-show="0"]{opacity:0}
+#turns::before{content:"Turn order";font-family:var(--f-display);font-size:.6em;color:var(--mist);letter-spacing:.06em}
+.tk{display:flex;align-items:center;gap:.35em;background:rgba(10,7,16,.8);border:2px solid #000;border-radius:3px;padding:.1em .45em .1em .2em;min-width:7em;font-size:.72em;line-height:1.15;opacity:.75}
+.tk.now{border-color:var(--lantern);opacity:1;transform:translateX(-.4em)}
+.tk.enemy{color:#ffb0a0}
+.tk.out{opacity:.35;text-decoration:line-through}
+.tk canvas{width:1.6em;height:2.1em;image-rendering:pixelated}
+.tk .ei{width:1.6em;height:1.6em;border-radius:2px;display:grid;place-items:center;font-family:var(--f-display);color:#1a1222}
+
+/* Banner + toasts */
+#banner{left:0;right:0;top:36%;text-align:center;pointer-events:none;transition:opacity .3s}
+#banner[data-show="0"]{opacity:0}
+#banner .b1{font-family:var(--f-display);font-weight:700;font-size:4.6cqw;color:var(--lantern);text-shadow:0 .35cqw 0 #3d2306,0 0 2cqw rgba(0,0,0,.8);line-height:1.05}
+#banner .b2{font-size:1.2em;max-width:60ch;margin:.4em auto 0;background:rgba(10,7,16,.78);padding:.3em .8em;border-radius:3px;display:inline-block}
+#toasts{left:1.2cqw;top:1.2cqw;display:grid;gap:.25em;max-width:28cqw}
+.toast{background:rgba(10,7,16,.82);border-left:.3em solid var(--lantern);padding:.25em .55em;border-radius:2px;font-size:.85em;animation:tin .25s ease-out}
+@keyframes tin{from{transform:translateX(-1em);opacity:0}}
+#topright{right:1.2cqw;top:1.2cqw;display:flex;gap:.3em}
+.ib{background:rgba(10,7,16,.8);border:1px solid var(--line);border-radius:3px;padding:.25em .55em;font-family:var(--f-display);font-size:.7em}
+
+/* Action menu */
+#actions{left:50%;transform:translateX(-50%);bottom:12.6cqw;display:grid;justify-items:center;gap:.3em;width:96cqw}
+#actions[hidden]{display:none}
+.am{display:flex;flex-wrap:wrap;justify-content:center;gap:.3em}
+.ab{background:rgba(20,14,30,.92);border:2px solid #000;border-radius:3px;padding:.3em .65em;font-weight:600;font-size:.95em;box-shadow:0 .2em 0 #000}
+.ab.sel{background:var(--lantern);color:#2a1a05}
+.ab.off{opacity:.42}
+.ah{font-size:.78em;background:rgba(10,7,16,.8);padding:.15em .6em;border-radius:3px;color:var(--mist)}
+.ah b{color:var(--bone)}
+
+/* Party bar */
+#party{left:.8cqw;right:.8cqw;bottom:.8cqw;display:grid;grid-template-columns:repeat(4,1fr);gap:.6cqw}
+.pc{background:rgba(14,10,22,.88);border:2px solid #000;border-top:.3em solid var(--pc);border-radius:3px;padding:.35em .5em;display:grid;grid-template-columns:auto 1fr;gap:.1em .5em;align-items:center;min-width:0}
+.pc.turn{box-shadow:0 0 0 2px var(--lantern)}
+.pc canvas{grid-row:span 3;width:2.2em;height:2.9em;image-rendering:pixelated}
+.pc .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95em;min-width:0}
+.pc .nm small{font-weight:400;color:var(--mist);font-size:.78em;margin-left:.3em}
+.hp{height:.65em;background:#2a1f2c;border:1px solid #000;border-radius:2px;position:relative;overflow:hidden}
+.hp i{position:absolute;inset:0 auto 0 0;background:linear-gradient(#ff7a6a,#d6453b)}
+.hp span{position:absolute;inset:0;display:grid;place-items:center;font-size:.6em;font-family:var(--f-display);line-height:1;color:#fff;text-shadow:0 1px 0 #000}
+.inv{display:flex;gap:.35em;font-size:.78em;align-items:center;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.inv .it{display:flex;gap:.15em;align-items:center;padding:0 .2em;border-radius:2px;border:1px solid transparent}
+.inv .it.sel{border-color:var(--lantern)}
+.inv svg{width:1em;height:1em}
+.inv .g{color:var(--gold)}
+.gbtn{display:flex;align-items:center;gap:.15em;background:none;border:1px solid var(--line);border-radius:2px;padding:0 .3em;margin-left:auto;font-size:.95em;color:var(--mist);flex-shrink:0}
+.gbtn.on{border-color:var(--lantern);color:var(--bone)}
+.gbtn i{width:1em;height:1em;border:1px solid var(--rc);background:#0b0812 center/80% no-repeat;image-rendering:pixelated;display:inline-block}
+.gbtn span{margin-left:.2em;font-size:.85em}
+.gbtn em{font-style:normal;font-family:var(--f-display);font-size:.65em;background:var(--moss);color:#0b1a06;padding:0 .25em;border-radius:2px;animation:pulse 1s ease-in-out infinite}
+.pc{position:relative}
+.gp{position:absolute;bottom:calc(100% + .45em);left:0;width:max(100%,22em);max-height:36cqw;overflow:auto;background:rgba(14,10,22,.97);border:2px solid #000;outline:2px solid var(--pc);border-radius:3px;padding:.5em .6em;display:grid;gap:.2em;font-size:.82em;z-index:5}
+.pc.right .gp{left:auto;right:0}
+.gp h4{margin:0 0 .2em;font-family:var(--f-display);font-size:.85em;display:flex;justify-content:space-between;gap:.5em;color:var(--pc)}
+.gp h4 span{color:var(--mist);font-family:var(--f-body);font-weight:400}
+.gp .sec{font-size:.7em;color:var(--mist);font-family:var(--f-display);letter-spacing:.06em;margin-top:.3em}
+.gp .empty{font-size:.8em;color:var(--mist);padding:.1em .3em}
+.gr{display:grid;grid-template-columns:1.9em 1fr;gap:.45em;align-items:center;background:none;border:1px solid transparent;border-radius:2px;padding:.12em .3em;text-align:left;width:100%;min-width:0}
+.gr.sel{border-color:var(--lantern);background:#2b2112}
+.gr img,.gr .ph{width:1.9em;height:1.9em;image-rendering:pixelated;border:2px solid var(--rc);border-radius:2px;background:#0b0812;padding:.15em}
+.gr .gt{min-width:0}
+.gr b{display:block;font-weight:600;color:var(--rc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gr b:only-child{color:var(--mist);font-weight:400}
+.gr small{display:block;color:var(--mist);font-size:.8em;line-height:1.2}
+.gd{font-size:.85em;border-top:1px solid var(--line);padding-top:.35em;margin-top:.2em;line-height:1.3}
+.gk{display:block;margin-top:.2em;color:var(--lantern)}
+.gk2{font-size:.72em;color:var(--mist)}
+.st{font-family:var(--f-display);font-size:.62em;padding:.05em .35em;border-radius:2px}
+.st.down{background:var(--ember);color:#1a0b05}.st.ko{background:#6d6a86;color:#fff}.st.stable{background:var(--frost);color:#06202a}
+
+/* Dialogue + overlays */
+#dialogue{left:8cqw;right:8cqw;bottom:13cqw;background:rgba(14,10,22,.96);border:3px solid #000;outline:2px solid var(--lantern);border-radius:3px;padding:.8em 1em;display:grid;gap:.5em;font-size:1.15em}
+#dialogue[hidden]{display:none}
+#dialogue .who{font-family:var(--f-display);color:var(--lantern);font-size:.85em}
+#dialogue .line{margin:0}
+#dialogue .ch{display:grid;gap:.3em}
+#dialogue .ch button{text-align:left;background:var(--rock-2);border:2px solid #000;border-radius:3px;padding:.3em .6em}
+#dialogue .ch button.sel{background:var(--lantern);color:#2a1a05}
+#dialogue .ch button em{font-style:normal;font-family:var(--f-display);font-size:.7em;margin-right:.4em;color:var(--frost)}
+#dialogue .ch button.sel em{color:#2a1a05}
+#dialogue .hint{font-size:.75em;color:var(--mist)}
+#overlay{inset:0;background:rgba(6,4,12,.82);display:grid;place-items:center;padding:3cqw}
+#overlay[hidden]{display:none}
+.panel{background:var(--rock);border:3px solid #000;outline:2px solid var(--line);border-radius:4px;padding:1.2em 1.5em;max-width:66cqw;display:grid;gap:.7em;text-align:center;font-size:1.05em;max-height:100%;overflow:auto}
+.panel h2{margin:0;font-family:var(--f-display);color:var(--lantern);font-size:2em;line-height:1.05;text-wrap:balance}
+.panel h3{margin:0;font-family:var(--f-display);font-size:.9em;letter-spacing:.1em;color:var(--moss);text-transform:uppercase}
+.panel p{margin:0}
+.panel .vname{font-family:var(--f-display);font-size:1.5em;color:var(--bone)}
+.panel .muted{color:var(--mist);font-size:.85em}
+.panel .btns{justify-content:center}
+.panel .btn{font-size:.95em}
+.panel .btn.big{font-size:1.1em}
+.panel.wide{max-width:88cqw;width:88cqw;text-align:left}
+.panel.wide>h2,.panel.wide>h3,.panel.wide>p{text-align:center}
+.shop{display:grid;gap:.5em;background:var(--cave);border:2px solid var(--line);border-radius:3px;padding:.7em .8em;font-size:.9em}
+.shop h3{text-align:left}
+.shop .muted{font-size:.85em}
+.chips,.rars{display:flex;flex-wrap:wrap;gap:.35em}
+.chip{background:var(--rock-2);border:2px solid #000;border-left:.35em solid var(--pc);border-radius:3px;padding:.2em .6em;font-size:.9em}
+.chip.on{background:#2b2112;border-color:var(--lantern)}
+.shopsel{display:flex;flex-wrap:wrap;gap:.5em}
+.shopsel label.f{flex:1 1 12em;min-width:0}
+.rb{display:grid;background:var(--rock-2);border:2px solid #000;border-top:.3em solid var(--rc);border-radius:3px;padding:.2em .7em;color:var(--rc);font-weight:600;font-size:.9em;text-align:left}
+.rb small{color:var(--mist);font-weight:400}
+.rb.on{background:#2b2112;border-color:var(--lantern);border-top-color:var(--rc)}
+.prev{display:grid;grid-template-columns:2.4em 1fr;gap:.6em;align-items:center;border:2px solid var(--rc);border-radius:3px;padding:.35em .5em}
+.prev img{width:2.4em;height:2.4em;image-rendering:pixelated}
+.prev b{display:block;color:var(--rc)}
+.prev small{color:var(--mist)}
+.pool{display:grid;gap:.25em}
+.prow{display:flex;flex-wrap:wrap;align-items:center;gap:.45em;font-variant-numeric:tabular-nums}
+.prow span{min-width:6em;font-weight:600}
+.prow small{color:var(--mist);min-width:5em}
+.prow b{min-width:3em;text-align:center}
+.btn.sm{padding:.1em .5em;font-size:.85em}
+.btn.buy{background:var(--moss);color:#0b1a06;border-color:#000;font-weight:700}
+.btn[disabled]{opacity:.5;cursor:not-allowed;background:var(--rock-2);color:var(--mist)}
+.lbl2{font-size:.85em;color:var(--mist);align-self:center;margin-right:.2em}
+.ready{display:grid;gap:.4em;justify-items:center;text-align:center;border-top:2px solid var(--line);padding-top:.6em}
+.chip.rdy{font-size:1em;padding:.35em .8em}
+.chip.rdy.on{background:var(--moss);color:#0b1a06;border-color:#000}
+.rb[disabled]{opacity:.45;cursor:not-allowed}
+.maps{margin:0;padding-left:1.1em;font-size:.85em;display:grid;gap:.15em}
+.maps b{color:var(--rc)}
+.spin{width:2.4em;height:2.4em;margin:0 auto;border:.35em solid var(--line);border-top-color:var(--lantern);border-radius:50%;animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.sumgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(9em,1fr));gap:.5em;text-align:left}
+.sumgrid div{background:var(--cave);border:1px solid var(--line);border-left:.3em solid var(--pc);padding:.35em .55em;border-radius:2px;font-size:.85em}
+.sumgrid b{display:block}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:520px){.row{grid-template-columns:1fr}.preview{width:72px;height:96px}.classes{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<main id="lobby">
+  <header class="mast">
+    <span class="kicker">Lanternfall · the Underhollow</span>
+    <h1>Pixel Party Dungeon</h1>
+    <p>Build your party, then dive into the glowing caves. Platform in real time, fight in turns, and roll the big dice. One screen, 1–4 players on keyboard or controllers.</p>
+  </header>
+  <section class="saves" id="saves" aria-label="Saved adventures" hidden></section>
+  <section class="cards" id="cards" aria-label="Players"></section>
+  <section class="settings" aria-label="Party settings">
+    <label class="f" for="diff">Difficulty
+      <select id="diff"><option value="easy">Easy</option><option value="normal" selected>Normal</option><option value="hard">Hard</option></select></label>
+    <label class="f" for="timer">Turn timer
+      <select id="timer"><option value="30">30 seconds</option><option value="60" selected>60 seconds</option><option value="90">90 seconds</option><option value="0">Off</option></select></label>
+    <label class="f" for="ff">Friendly fire
+      <select id="ff"><option value="0" selected>Off</option><option value="1">On</option></select></label>
+  </section>
+  <div class="go">
+    <button class="btn big" id="startBtn" type="button">Start adventure</button>
+    <p id="startNote">Claude writes a new villain for each adventure. This prototype has 3 levels; the last one ends with a lieutenant fight.</p>
+  </div>
+  <section class="keys" aria-label="Controls">
+    <h3>Controls</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Action</th><th>Keyboard 1</th><th>Keyboard 2</th><th>Controller</th></tr></thead>
+      <tbody>
+        <tr><td>Move · climb</td><td><kbd>A</kbd><kbd>D</kbd> · <kbd>W</kbd><kbd>S</kbd></td><td>Arrow keys</td><td>Stick or D-pad</td></tr>
+        <tr><td>Jump (down + jump drops through)</td><td><kbd>Space</kbd></td><td><kbd>Right Shift</kbd> or <kbd>/</kbd></td><td>A</td></tr>
+        <tr><td>Act: talk, open, pick up, class trick · roll dice · confirm</td><td><kbd>E</kbd></td><td><kbd>.</kbd> or <kbd>Enter</kbd></td><td>X</td></tr>
+        <tr><td>Use item (down + item switches) · next battle action</td><td><kbd>Q</kbd></td><td><kbd>,</kbd></td><td>Y</td></tr>
+        <tr><td>Throw what you carry · end your battle turn</td><td><kbd>F</kbd></td><td><kbd>;</kbd></td><td>B</td></tr>
+        <tr><td>Open your gear (the game keeps going)</td><td><kbd>R</kbd></td><td><kbd>'</kbd></td><td>View / Back</td></tr>
+        <tr><td>Pause</td><td colspan="2"><kbd>Esc</kbd></td><td>Start</td></tr>
+      </tbody>
+    </table></div>
+    <p class="trick">Best on a computer. Two players can share one keyboard (WASD and the arrow keys). For 3 or 4 players, use controllers.</p>
+    <p class="trick" id="pads" aria-live="polite">No controllers found yet. Plug one in and press any button on it.</p>
+  </section>
+</main>
+
+<section id="play" hidden>
+  <div id="stage">
+    <canvas id="game" width="480" height="270" aria-label="Game screen"></canvas>
+    <div class="hud" id="toasts" aria-live="polite"></div>
+    <div class="hud" id="topright"><span class="ib saved" id="saveInd" hidden>Saved</span><button class="ib" id="muteBtn" type="button">Sound on</button><button class="ib" id="pauseBtn" type="button">Pause</button></div>
+    <div class="hud" id="turns" data-show="0"></div>
+    <div class="hud" id="dice" data-show="0" aria-live="polite">
+      <div class="dl" id="dLabel"></div>
+      <div class="die" id="die" title="Roll">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><polygon class="poly" points="50,4 92,27 92,73 50,96 8,73 8,27"/><polyline class="facet" points="50,4 26,62 74,62 50,4"/><polyline class="facet" points="8,27 26,62 8,73"/><polyline class="facet" points="92,27 74,62 92,73"/><polyline class="facet" points="26,62 50,96 74,62"/></svg>
+        <div class="num" id="dNum">20</div>
+      </div>
+      <div class="dr" id="dRes"></div>
+      <div class="dp" id="dPrompt" hidden></div>
+    </div>
+    <div class="hud" id="banner" data-show="0"><div class="b1" id="b1"></div><div class="b2" id="b2" hidden></div></div>
+    <div class="hud" id="actions" hidden><div class="am" id="amenu"></div><div class="ah" id="ahint"></div></div>
+    <div class="hud" id="dialogue" hidden></div>
+    <div class="hud" id="party"></div>
+    <div class="hud" id="overlay" hidden></div>
+  </div>
+</section>
+
+<script>
+'use strict';
+/* =========================================================================
+   Pixel Party Dungeon — prototype (spec phases 1–3 + Claude-written story)
+   ========================================================================= */
+const T = 16, VW = 480, VH = 270, RW = 10, RH = 8, GW = 4, GH = 4;
+const MW = GW * RW + 2, MH = GH * RH + 2;
+const E = 0, ROCK = 1, BED = 2, PLAT = 3, LAD = 4, SPIKE = 5, WATER = 6, CRACK = 7;
+const $ = s => document.querySelector(s);
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const sgn = v => v < 0 ? -1 : v > 0 ? 1 : 0;
+function rollN(n, d) { let s = 0; for (let i = 0; i < n; i++) s += 1 + rnd(d); return s; }
+function statBonus(t) { return t <= 5 ? -1 : t <= 9 ? 0 : t <= 12 ? 1 : t <= 15 ? 2 : 3; }
+const fmtB = b => (b >= 0 ? '+' : '') + b;
+function hash(x, y, k = 0) { let h = (x * 374761393 + y * 668265263 + k * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; h ^= h >>> 16; return ((h >>> 0) % 10000) / 10000; }
+
+/* ---------------- Classes, enemies, difficulty ---------------- */
+const CLASSES = {
+  shield: { name: 'Shieldbearer', role: 'Tank', hp: 14, ac: 15, rec: { might: 3, agi: 0, wits: -1, heart: 1 },
+    attack: { name: 'Sword', range: 1.7, stat: 'might', dmg: [1, 8] },
+    ability: { name: 'Shield Slam', range: 1.7, stat: 'might', dmg: [1, 4], cd: 2, kind: 'slam' },
+    trick: 'Act next to a cracked wall to bash it. Shield Slam knocks foes flying.' },
+  shadow: { name: 'Shadowstep', role: 'Sneaky', hp: 10, ac: 13, rec: { might: 0, agi: 3, wits: 1, heart: 0 },
+    attack: { name: 'Dagger', range: 1.7, stat: 'agi', dmg: [1, 6], sneak: true },
+    ability: { name: 'Dagger Toss', range: 6, stat: 'agi', dmg: [1, 4], cd: 1, kind: 'ranged' },
+    trick: 'Double jump. Act throws a dagger. +1d6 when a friend is next to the target.' },
+  spark: { name: 'Sparkcaster', role: 'Magic', hp: 8, ac: 11, rec: { might: -1, agi: 1, wits: 3, heart: 0 },
+    attack: { name: 'Fire Spark', range: 7, stat: 'wits', dmg: [1, 6], kind: 'fire' },
+    ability: { name: 'Frost Ray', range: 6, stat: 'wits', dmg: [1, 4], cd: 2, kind: 'frost' },
+    trick: 'Act shoots a spark that sets wood and barrels on fire. Frost Ray freezes a foe for a turn.' },
+  lantern: { name: 'Lanternkeeper', role: 'Healer', hp: 11, ac: 13, rec: { might: 0, agi: 0, wits: 1, heart: 3 },
+    attack: { name: 'Lantern Bonk', range: 1.7, stat: 'heart', dmg: [1, 4] },
+    ability: { name: 'Warm Light', range: 5, stat: 'heart', dmg: [1, 8], cd: 2, kind: 'heal' },
+    trick: 'Brightest light. Act heals nearby friends (3 times per level). Warm Light can lift a downed friend.' }
+};
+const CLASS_KEYS = ['shield', 'shadow', 'spark', 'lantern'];
+const KITS = { shield: ['sword', 'shield', 'chain'], shadow: ['dagger', 'vest'], spark: ['wand', 'book', 'robe'], lantern: ['club', 'lantern', 'vest'] };
+
+/* ---------------- Equipment ---------------- */
+const SLOTS = ['weapon', 'offhand', 'armor', 'trinket'];
+const SLOT_NAMES = { weapon: 'Weapon', offhand: 'Off-hand', armor: 'Armor', trinket: 'Trinket' };
+const RARITY = [
+  { name: 'Common', color: '#e8e2d2', main: 0, lvl: 0, sell: 5 },
+  { name: 'Uncommon', color: '#7fd66a', main: 0, lvl: 1, sell: 10 },
+  { name: 'Rare', color: '#5aa8ff', main: 1, lvl: 1, sell: 20 },
+  { name: 'Epic', color: '#c07bff', main: 1, lvl: 2, sell: 40 },
+  { name: 'Legendary', color: '#ffc93c', main: 2, lvl: 2, sell: 80 }];
+const CHEST_ODDS = [45, 35, 15, 4, 1], BOSS_ODDS = [0, 0, 55, 35, 10];
+const BASES = {
+  sword: { slot: 'weapon', name: 'Sword', dmg: 1 }, dagger: { slot: 'weapon', name: 'Dagger', hit: 1 },
+  wand: { slot: 'weapon', name: 'Wand', hit: 1 }, club: { slot: 'weapon', name: 'Club', dmg: 1 },
+  shield: { slot: 'offhand', name: 'Shield', ac: 2 }, lantern: { slot: 'offhand', name: 'Lantern', light: 30, heal: 1 }, book: { slot: 'offhand', name: 'Spellbook', abil: 1 },
+  vest: { slot: 'armor', name: 'Leather Vest', ac: 1 }, chain: { slot: 'armor', name: 'Chainmail', ac: 2 }, robe: { slot: 'armor', name: 'Mage Robe', hp: 2 },
+  ring: { slot: 'trinket', name: 'Ring' }, amulet: { slot: 'trinket', name: 'Amulet', hp: 3 }
+};
+const FX = {
+  fire: { slot: 'weapon', adj: 'Sparky', d: l => l > 1 ? 'Hits set foes on fire and deal +1 damage.' : 'Hits set foes on fire.' },
+  frost: { slot: 'weapon', adj: 'Frosty', d: l => `Hits have a ${l * 25}% chance to freeze a foe for a turn.` },
+  bounce: { slot: 'weapon', adj: 'Bouncy', d: l => `Hits knock foes ${l > 1 ? 'far ' : ''}back.` },
+  lucky: { slot: 'weapon', adj: 'Lucky', d: l => `Critical hits on a natural ${20 - l} or higher.` },
+  sparkle: { slot: 'weapon', adj: 'Glimmering', d: l => `Hits add 1d${l > 1 ? 6 : 4} magic damage.` },
+  glow: { slot: 'offhand', adj: 'Glowing', d: l => `Your light reaches ${l > 1 ? 'much ' : ''}farther.` },
+  guard: { slot: 'offhand', adj: 'Steadfast', d: l => `+${l} AC.` },
+  heal: { slot: 'offhand', adj: 'Kind', d: l => `Heals you give or drink are +${2 * l}.` },
+  feather: { slot: 'armor', adj: 'Feather-light', d: l => l > 1 ? 'No fall damage.' : 'Falls hurt 1 less.' },
+  spiky: { slot: 'armor', adj: 'Spiky', d: l => `Foes that hit you take ${l} damage.` },
+  sturdy: { slot: 'armor', adj: 'Sturdy', d: l => `+${3 * l} max HP.` },
+  spring: { slot: 'trinket', adj: 'Springy', d: l => `Jump ${l > 1 ? 'much ' : ''}higher.` },
+  swift: { slot: 'trinket', adj: 'Swift', d: l => `+${l} tile${l > 1 ? 's' : ''} of battle movement and faster running.` },
+  magnet: { slot: 'trinket', adj: 'Magnetic', d: l => `Gold and ropes fly to you from ${l > 1 ? 'far' : 'nearby'}.` },
+  charmed: { slot: 'trinket', adj: 'Charmed', d: l => `+${2 * l} on death saves.` }
+};
+function weighted(w) { const t = w.reduce((a, b) => a + b, 0); let x = Math.random() * t; for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return i; } return 0; }
+function makeItem(bk, r, fx, stat) {
+  const b = BASES[bk], R = RARITY[r];
+  const it = { id: Math.random().toString(36).slice(2, 9), base: bk, slot: b.slot, rarity: r, fx: null, lvl: R.lvl, ac: b.ac || 0, hp: b.hp || 0, hit: b.hit || 0, dmg: b.dmg || 0, abil: b.abil || 0, heal: b.heal || 0, light: b.light || 0, stat: null, statB: 0 };
+  const m = R.main;
+  if (b.slot === 'weapon') { it.hit += m; it.dmg += m; }
+  else if (bk === 'shield') it.ac += m; else if (bk === 'lantern') { it.heal += m; it.light += 15 * m; } else if (bk === 'book') it.abil += m;
+  else if (bk === 'robe') it.hp += 2 * m; else if (b.slot === 'armor') it.ac += m;
+  else if (bk === 'ring') { it.stat = stat || pick(['might', 'agi', 'wits', 'heart']); it.statB = 1 + m; } else if (bk === 'amulet') it.hp += 2 * m;
+  if (R.lvl > 0) it.fx = fx || pick(Object.keys(FX).filter(k => FX[k].slot === b.slot));
+  it.name = (it.fx ? FX[it.fx].adj + ' ' : '') + (bk === 'ring' ? `Ring of ${STAT_NAMES[it.stat]}` : b.name) + (r === 4 ? ' of Lanternfall' : '');
+  return it;
+}
+function rollItem(odds) { let r = weighted(odds); if (G.settings.diff === 'hard' && r < 4 && Math.random() < .25) r++; return makeItem(pick(Object.keys(BASES)), r); }
+function itemDesc(it) {
+  const parts = [];
+  if (it.hit) parts.push(`${fmtB(it.hit)} to hit`); if (it.dmg) parts.push(`${fmtB(it.dmg)} damage`);
+  if (it.ac) parts.push(`${fmtB(it.ac)} AC`); if (it.hp) parts.push(`${fmtB(it.hp)} max HP`);
+  if (it.abil) parts.push(`${fmtB(it.abil)} to hit with abilities`); if (it.heal) parts.push(`${fmtB(it.heal)} healing`);
+  if (it.light) parts.push('more light'); if (it.stat) parts.push(`${fmtB(it.statB)} ${STAT_NAMES[it.stat]}`);
+  let s = parts.length ? parts.join(', ') + '.' : ''; if (it.fx) s += ' ' + FX[it.fx].d(it.lvl);
+  return s.trim() || 'Plain and trusty.';
+}
+const fxLvl = (p, k) => { let l = 0; if (!p.gear) return 0; for (const s of SLOTS) { const it = p.gear[s]; if (it && it.fx === k) l = Math.max(l, it.lvl); } return l; };
+const gearSum = (p, k) => p.gear ? SLOTS.reduce((a, s) => a + (p.gear[s] ? p.gear[s][k] || 0 : 0), 0) : 0;
+const healBonus = p => gearSum(p, 'heal') + 2 * fxLvl(p, 'heal');
+function recalc(p) {
+  p.stats = { ...p.baseStats }; for (const s of SLOTS) { const it = p.gear[s]; if (it && it.stat) p.stats[it.stat] += it.statB; }
+  p.ac = p.baseAc + gearSum(p, 'ac') + fxLvl(p, 'guard');
+  const old = p.maxHp || 0;
+  p.maxHp = p.baseHp + Math.max(0, p.stats.heart) + p.lvlHp + gearSum(p, 'hp') + 3 * fxLvl(p, 'sturdy');
+  if (old && p.maxHp > old) p.hp += p.maxHp - old;
+  p.hp = Math.min(p.hp, p.maxHp);
+}
+function giveItem(p, it) {
+  const R = RARITY[it.rarity];
+  if (!p.gear[it.slot]) { p.gear[it.slot] = it; recalc(p); toast(`${p.name} found ${it.name} (${R.name}) and put it on!`); }
+  else if (p.bag.length < 8) { p.bag.push(it); p.newGear = true; toast(`${p.name} found ${it.name} (${R.name}). Press ${keyName(p.ctrl, 'gear')} to look.`); }
+  else { p.gold += R.sell; toast(`${p.name}'s bag is full, so ${it.name} was sold for ${R.sell} gold.`); }
+  floater(cx(p), p.y - 16, it.name, R.color);
+}
+const ICON_PAL = { K: '#1a1222', M: '#cfd2dc', m: '#8a8fa3', W: '#ffffff', B: '#8a5a32', Y: '#ffd75e', R: '#c0392b', P: '#7a5bd6', G: '#5aa8ff' };
+const ICONS_PX = {
+  sword: ['........MM', '.......MWM', '......MWM.', '.....MWM..', '..K.MWM...', '..KMWM....', '...KM.....', '..KBK.....', '.KBK......', 'KK........'],
+  dagger: ['..........', '..........', '.......MM.', '......MWM.', '.....MWM..', '..K.MWM...', '..KMWM....', '..KKK.....', '.KBK......', '.KK.......'],
+  wand: ['........Y.', '.......YWY', '........Y.', '.......B..', '......B...', '.....B....', '....B.....', '...B......', '..B.......', '.B........'],
+  club: ['..........', '......KK..', '.....KBBK.', '....KBBBK.', '...KBBBK..', '..KBBK....', '.KBK......', 'KBK.......', 'KK........', '..........'],
+  shield: ['..KKKKKK..', '.KMMMMMMK.', '.KMRRRRMK.', '.KMRYYRMK.', '.KMRYYRMK.', '.KMRRRRMK.', '..KMRRMK..', '...KMMK...', '....KK....', '..........'],
+  lantern: ['....KK....', '...K..K...', '..KKKKKK..', '..KYYYYK..', '..KYWWYK..', '..KYWWYK..', '..KYYYYK..', '..KKKKKK..', '..........', '..........'],
+  book: ['..........', '.KKKKKKKK.', '.KPPPPPPK.', '.KPPYYPPK.', '.KPPYYPPK.', '.KPPPPPPK.', '.KWWWWWWK.', '.KKKKKKKK.', '..........', '..........'],
+  vest: ['..KK..KK..', '.KBBKKBBK.', '.KBBBBBBK.', '..KBBBBK..', '..KBBBBK..', '..KBBBBK..', '..KBBBBK..', '..KKKKKK..', '..........', '..........'],
+  chain: ['..KK..KK..', '.KMmKKmMK.', '.KMmMmMmK.', '..KmMmMK..', '..KMmMmK..', '..KmMmMK..', '..KMmMmK..', '..KKKKKK..', '..........', '..........'],
+  robe: ['..KK..KK..', '.KPPKKPPK.', '.KPPPPPPK.', '..KPYPPK..', '..KPPPPK..', '.KPPPPPPK.', '.KPPPPPPK.', '.KKKKKKKK.', '..........', '..........'],
+  ring: ['..........', '....RR....', '...KRRK...', '..KY..YK..', '..KY..YK..', '..KY..YK..', '...KYYK...', '....KK....', '..........', '..........'],
+  amulet: ['..K....K..', '...K..K...', '....KK....', '....YY....', '...YGGY...', '...YGGY...', '....YY....', '..........', '..........', '..........']
+};
+const ICON_CACHE = {};
+function iconURL(bk) { if (!ICON_CACHE[bk]) ICON_CACHE[bk] = makeSprite(ICONS_PX[bk], ICON_PAL).toDataURL(); return ICON_CACHE[bk]; }
+const STAT_NAMES = { might: 'Might', agi: 'Agility', wits: 'Wits', heart: 'Heart' };
+const ENEMY = {
+  goblin: { name: 'Cave Goblin', hp: 7, ac: 12, atk: 3, dmg: [1, 6, 0], w: 10, h: 12, speed: 40, init: 1, might: 1, move: 5 },
+  slime: { name: 'Mud Slime', hp: 9, ac: 9, atk: 2, dmg: [1, 4, 1], w: 12, h: 9, speed: 22, init: -1, might: 2, move: 3 },
+  bat: { name: 'Crystal Bat', hp: 5, ac: 13, atk: 3, dmg: [1, 4, 0], w: 12, h: 8, speed: 45, init: 3, might: 0, move: 7, fly: true },
+  boss: { name: 'Lieutenant', hp: 26, ac: 13, atk: 4, dmg: [1, 8, 1], w: 18, h: 22, speed: 35, init: 2, might: 3, move: 5 }
+};
+const DIFF = {
+  easy: { ehp: .75, edmg: -1, hazard: 1, save: 8, rest: 1 },
+  normal: { ehp: 1, edmg: 0, hazard: 2, save: 10, rest: .5 },
+  hard: { ehp: 1.25, edmg: 1, hazard: 3, save: 12, rest: .25 }
+};
+const OUTFITS = ['#d64545', '#e38a2f', '#e2c43a', '#5aa64b', '#3b8fd6', '#8a62e0', '#d65bb0', '#3fb8b0'];
+const SKINS = ['#f6d2b4', '#e8b48f', '#c98d62', '#a76a43', '#7a4a2c', '#583420'];
+const HAIRS = ['#2a1d16', '#5b3a24', '#a8662f', '#e3c06a', '#c9452d', '#d8d4cc'];
+const VCOLORS = { purple: '#8a5cd6', red: '#d4483b', green: '#4f9e48', blue: '#3b7fd6', orange: '#e0802c', teal: '#2fa59d' };
+
+/* ---------------- Pixel sprites ---------------- */
+const BODY = [
+  '............', '............', '....KKKK....', '...KHHHHK...', '..KHHHHHHK..', '..KSSSSSSK..', '..KSKSSKSK..', '..KSSSSSSK..',
+  '...KOOOOK...', '..KOOOOOOK..', '.KSKOOOOKSK.', '.KSKooooKSK.', '..KKOOOOKK..'];
+const LEGS = {
+  idle: ['...KBBBBK...', '...KBKKBK...', '...KK..KK...'],
+  a: ['...KBBBBK...', '..KBK..KBK..', '..KK....KK..'],
+  b: ['...KBBBBK...', '....KBKBK...', '....KKKK....']
+};
+const OVER = {
+  shield: { 1: '....KKKK....', 2: '...KMMMMK...', 3: '..KMMMMMMK..', 4: '..KMmmmmMK..', 8: '..........K.', 9: '.........KMK', 10: '.........KYK', 11: '.........KMK', 12: '..........K.' },
+  shadow: { 1: '....KKKK....', 2: '...KooooK...', 3: '..KooooooK..', 4: '..KoSSSSoK..', 5: '..KoSSSSoK..', 6: '..Ko....oK..', 9: 'M...........', 10: 'M...........' },
+  spark: { 0: '.....KK.....', 1: '....KOOK....', 2: '...KOOOOK...', 3: '..KOOGOOOK.Y', 4: '.KKKKKKKKKKB', 5: '...........B', 6: '...........B', 7: '...........B', 8: '...........B', 9: '...........B', 10: '...........B', 11: '...........B', 12: '...........B', 13: '...........B' },
+  lantern: { 4: '..KYYYYYYK..', 9: '..........K.', 10: '.........KYK', 11: '.........KYK', 12: '..........K.' },
+  miner: { 1: '....KKKK....', 2: '...KGGWGK...', 3: '..KGGGGGGK..', 4: '.KKKKKKKKKK.' }
+};
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  r = clamp(Math.round(r * f), 0, 255); g = clamp(Math.round(g * f), 0, 255); b = clamp(Math.round(b * f), 0, 255);
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+function makeSprite(rows, pal) {
+  const h = rows.length, w = rows[0].length, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) { const ch = rows[y][i]; if (ch === '.' || ch === ' ' || !pal[ch]) continue; x.fillStyle = pal[ch]; x.fillRect(i, y, 1, 1); }
+  return c;
+}
+function heroRows(kind, legs) {
+  const rows = BODY.concat(LEGS[legs]).map(r => r.split(''));
+  const ov = OVER[kind] || {};
+  for (const k in ov) { const r = ov[k]; for (let i = 0; i < 12; i++) if (r[i] !== '.') rows[k][i] = r[i]; }
+  return rows.map(r => r.join(''));
+}
+function heroPal(look) {
+  return { K: '#1a1222', S: SKINS[look.skin], H: HAIRS[look.hair], O: OUTFITS[look.outfit], o: shade(OUTFITS[look.outfit], .68), B: '#3b2a22', M: '#cfd2dc', m: '#8a8fa3', Y: '#ffd75e', G: '#f0c34a', W: '#fff6d8' };
+}
+function heroSprites(kind, look) {
+  const pal = heroPal(look);
+  return { idle: makeSprite(heroRows(kind, 'idle'), pal), a: makeSprite(heroRows(kind, 'a'), pal), b: makeSprite(heroRows(kind, 'b'), pal) };
+}
+const GOBLIN = ['............', '..K......K..', '.KGK....KGK.', '.KGGKKKKGGK.', '..KGGGGGGK..', '..KGRGGRGK..', '..KGGGGGGK..', '...KGWWGK...', '..KbbbbbbK..', '.KGKbbbbKGK.', '...KbKKbK...', '...KK..KK...'];
+const SLIME = ['....KKKK....', '..KKPPPPKK..', '.KPPWPPWPPK.', '.KPPKPPKPPK.', 'KPPPPPPPPPPK', 'KPPPPPPPPPPK', 'KpPPPPPPPPpK', '.KppppppppK.', '..KKKKKKKK..'];
+const BAT = ['K..........K', 'KK..KKKK..KK', 'KCK.KCCK.KCK', 'KCCKRCCRKCCK', '.KCCCCCCCCK.', '..KK.CC.KK..', '......KK....', '............'];
+const BAT2 = ['............', '....KKKK....', 'KK..KCCK..KK', 'KCCKRCCRKCCK', 'KCCCCCCCCCCK', '.KK.KCCK.KK.', '......KK....', '............'];
+const SPR = {};
+function buildEnemySprites(biome) {
+  const crystal = biome === 'crystal';
+  SPR.goblin = makeSprite(GOBLIN, { K: '#1a1222', G: crystal ? '#6ab0a0' : '#5fa046', R: '#ff5544', W: '#f4f0e6', b: '#7a4a2a' });
+  SPR.slime = makeSprite(SLIME, { K: '#1a1222', P: crystal ? '#5c8ee0' : '#8a5cd6', p: crystal ? '#3b5fa6' : '#5e3a9e', W: '#fff' });
+  SPR.bat = makeSprite(BAT, { K: '#1a1222', C: crystal ? '#7fd0f0' : '#6b5a8a', R: '#ff6655' });
+  SPR.bat2 = makeSprite(BAT2, { K: '#1a1222', C: crystal ? '#7fd0f0' : '#6b5a8a', R: '#ff6655' });
+}
+function buildBossSprite(color) {
+  SPR.boss = makeSprite(GOBLIN.map(r => r), { K: '#1a1222', G: color, R: '#ffe066', W: '#f4f0e6', b: '#2a1d2e' });
+}
+
+/* ---------------- Room templates (10 x 8) ----------------
+   # rock  = wood platform  H ladder  ^ spikes  ~ water  % cracked  1 maybe-rock
+   p pot  b barrel  c chest  g gold  r rope  e enemy spot. Rows 5–6 are always the walkway. */
+const TEMPLATES = [
+  ['##########', '#..g.....#', '#.====H..#', '#.....H.p#', '#..e..H==#', '......H...', '..........', '##########'],
+  ['##########', '#........#', '#..p..b..#', '#..====..#', '#....e...#', '..........', '...^......', '##########'],
+  ['##########', '#...g....#', '#.==..==.#', '#........#', '#....p...#', '.....e....', '...~~~....', '###~~~####'],
+  ['##########', '#b.....gb#', '#==.H..==#', '#...H....#', '#.e.H..p.#', '....H.....', '..........', '##########'],
+  ['##########', '#..g.%...#', '#..###...#', '#...%...e#', '#........#', '.....%....', '...p......', '##########'],
+  ['##########', '#H..r...H#', '#H.====.H#', '#H......H#', '#H.e..b.H#', '.H......H.', '..........', '##########'],
+  ['##########', '#...c....#', '#..===...#', '#.......=#', '#=..e....#', '..........', '....^...p.', '##########'],
+  ['##########', '#..1..1..#', '#.......g#', '#11..e.11#', '#........#', '..........', '.p......b.', '##########'],
+  ['##########', '#%%....%%#', '#%..c...%#', '#==....==#', '#....e...#', '..........', '..b....^..', '##########'],
+  ['##########', '#....e...#', '#.H====H.#', '#.H....H.#', '#.H.gg.H.#', '..H....H..', '..........', '##########']
+];
+
+/* ---------------- Audio ---------------- */
+let AC = null, muted = false;
+function audioInit() { if (AC) return; try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+function tone(type, f1, f2, dur, vol = .12, delay = 0) {
+  if (!AC || muted) return; const t = AC.currentTime + delay; const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + .02);
+}
+function noise(dur, vol = .2, freq = 1200, delay = 0) {
+  if (!AC || muted) return; const t = AC.currentTime + delay; const len = Math.floor(AC.sampleRate * dur); const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const s = AC.createBufferSource(); s.buffer = buf; const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq; const g = AC.createGain(); g.gain.value = vol;
+  s.connect(f); f.connect(g); g.connect(AC.destination); s.start(t);
+}
+function sfx(n) {
+  switch (n) {
+    case 'jump': tone('square', 330, 520, .09, .05); break;
+    case 'coin': tone('square', 988, 0, .06, .06); tone('square', 1318, 0, .12, .06, .06); break;
+    case 'hit': noise(.12, .25, 1800); tone('square', 180, 90, .1, .06); break;
+    case 'hurt': tone('sawtooth', 260, 110, .2, .07); break;
+    case 'poof': noise(.35, .18, 700); break;
+    case 'boom': noise(.7, .45, 500); tone('sine', 90, 40, .5, .25); break;
+    case 'rattle': for (let i = 0; i < 6; i++) noise(.03, .12, 3000, i * .09); break;
+    case 'land': tone('triangle', 420, 0, .12, .12); break;
+    case 'crit': [523, 659, 784, 1046].forEach((f, i) => tone('square', f, 0, .12, .07, i * .07)); break;
+    case 'miss': tone('triangle', 300, 150, .2, .08); break;
+    case 'heal': [440, 554, 659].forEach((f, i) => tone('sine', f, 0, .18, .08, i * .06)); break;
+    case 'battle': [196, 247, 294, 392].forEach((f, i) => tone('square', f, 0, .1, .06, i * .08)); break;
+    case 'win': [392, 494, 587, 784, 988].forEach((f, i) => tone('square', f, 0, .14, .07, i * .09)); break;
+    case 'step': noise(.03, .04, 900); break;
+    case 'splash': noise(.25, .12, 2500); break;
+    case 'open': tone('square', 220, 440, .15, .06); break;
+    case 'thud': noise(.18, .3, 400); tone('sine', 110, 50, .18, .15); break;
+  }
+}
+
+/* ---------------- Input ---------------- */
+const keys = new Set(), tapped = new Set();
+const PROFILES = {
+  kb1: { left: ['KeyA'], right: ['KeyD'], up: ['KeyW'], down: ['KeyS'], jump: ['Space'], act: ['KeyE'], item: ['KeyQ'], throw: ['KeyF'], gear: ['KeyR'] },
+  kb2: { left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'], jump: ['ShiftRight', 'Slash'], act: ['Period', 'Enter', 'NumpadEnter'], item: ['Comma'], throw: ['Semicolon'], gear: ['Quote'] }
+};
+const KEYNAME = { kb1: { act: 'E', item: 'Q', throw: 'F', jump: 'Space', gear: 'R' }, kb2: { act: '.', item: ',', throw: ';', jump: 'R-Shift', gear: "'" }, gp: { act: 'X', item: 'Y', throw: 'B', jump: 'A', gear: 'View' } };
+const keyName = (ctrl, k) => (KEYNAME[ctrl.startsWith('gp') ? 'gp' : ctrl] || KEYNAME.kb1)[k];
+const BLANK = { left: false, right: false, up: false, down: false, jump: false, act: false, item: false, throw: false, gear: false, pause: false };
+const PREVENT = new Set(['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Slash', 'Quote', 'Semicolon', 'Enter']);
+addEventListener('keydown', e => {
+  if (G.mode !== 'lobby' && PREVENT.has(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  keys.add(e.code); tapped.add(e.code);
+  if (G.mode === 'play' && e.code === 'Escape') togglePause();
+  if (G.mode === 'play' && e.code === 'KeyM') toggleMute();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+function rawInput(ctrl) {
+  if (ctrl.startsWith('gp')) {
+    const gps = navigator.getGamepads ? navigator.getGamepads() : []; const gp = gps && gps[+ctrl.slice(2)];
+    if (!gp) return BLANK;
+    const b = k => !!(gp.buttons[k] && gp.buttons[k].pressed); const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+    return { left: ax < -.4 || b(14), right: ax > .4 || b(15), up: ay < -.55 || b(12), down: ay > .55 || b(13), jump: b(0), act: b(2), item: b(3), throw: b(1) || b(7), gear: b(8), pause: b(9) };
+  }
+  const P = PROFILES[ctrl] || PROFILES.kb1; const o = {};
+  for (const k in P) o[k] = P[k].some(c => keys.has(c) || tapped.has(c));
+  o.pause = false; return o;
+}
+function pollInputs() {
+  for (const p of G.players) {
+    const cur = rawInput(p.ctrl), prev = p._prev || BLANK; p.in = cur; p.pr = {};
+    for (const k in cur) p.pr[k] = cur[k] && !prev[k];
+    p._prev = cur;
+    if (p.pr.pause) togglePause();
+  }
+  tapped.clear();
+}
+function consume(p, k) { if (p.pr) p.pr[k] = false; }
+function anyPressed(k) { return G.players.some(p => p.pr && p.pr[k]); }
+
+/* ---------------- Game state ---------------- */
+const G = {
+  mode: 'lobby', paused: false, settings: { diff: 'normal', timer: 60, ff: false },
+  setup: [], players: [], story: null, L: null, levelNum: 1, maxLevel: 3,
+  enemies: [], objects: [], projectiles: [], particles: [], floaters: [], fx: [],
+  combat: null, dialogue: null, cam: { x: 0, y: 0 }, shake: 0, time: 0, banner: null, overlay: null, tetherCd: 0
+};
+
+/* ---------------- Lobby ---------------- */
+const NAME_BLOCK = /(fuck|shit|bitch|cunt|dick|cock|pussy|penis|vagina|porn|sex|nazi|hitler|rape|slut|whore|fag|nigg|retard|kill|murder|\bass\b|asshole|damn|piss|boob|tits)/i;
+function defaultSetup(i) {
+  const cls = CLASS_KEYS[i % 4];
+  return { on: i === 0, name: ['Robin', 'Juniper', 'Mo', 'Kit'][i], ctrl: ['kb1', 'kb2', 'gp0', 'gp1'][i], cls, look: { outfit: [4, 0, 3, 5][i], skin: [1, 3, 0, 4][i], hair: [1, 4, 3, 0][i] }, stats: { ...CLASSES[cls].rec }, rolled: null };
+}
+function loadSetup() {
+  let saved = null; try { saved = JSON.parse(localStorage.getItem('ppd-setup') || 'null'); } catch (e) { saved = null; }
+  G.setup = [0, 1, 2, 3].map(i => (saved && saved[i] && saved[i].look) ? { ...defaultSetup(i), ...saved[i] } : defaultSetup(i));
+  try { const s = JSON.parse(localStorage.getItem('ppd-settings') || 'null'); if (s) Object.assign(G.settings, s); } catch (e) { }
+  $('#diff').value = G.settings.diff; $('#timer').value = String(G.settings.timer); $('#ff').value = G.settings.ff ? '1' : '0';
+}
+function saveSetup() { try { localStorage.setItem('ppd-setup', JSON.stringify(G.setup)); localStorage.setItem('ppd-settings', JSON.stringify(G.settings)); } catch (e) { } }
+function nameProblem(n) {
+  const t = n.trim(); if (t.length < 2) return 'Names need at least 2 letters.'; if (t.length > 12) return 'Keep names to 12 letters or fewer.';
+  if (NAME_BLOCK.test(t)) return 'Please pick a different name.';
+  if (/[^\p{L}\p{N} '\-]/u.test(t)) return 'Use letters, numbers, spaces or dashes.';
+  return '';
+}
+const CTRL_OPTS = [['kb1', 'Keyboard 1 (WASD)'], ['kb2', 'Keyboard 2 (arrows)'], ['gp0', 'Controller 1'], ['gp1', 'Controller 2'], ['gp2', 'Controller 3'], ['gp3', 'Controller 4']];
+function drawPreview(canvas, s, frame = 'idle', scale = 8) {
+  const spr = heroSprites(s.cls, s.look)[frame]; const x = canvas.getContext('2d'); x.imageSmoothingEnabled = false;
+  x.clearRect(0, 0, canvas.width, canvas.height); x.drawImage(spr, (canvas.width - 12 * scale) / 2, canvas.height - 16 * scale - 2, 12 * scale, 16 * scale);
+}
+function renderLobby() {
+  const wrap = $('#cards'); wrap.innerHTML = '';
+  G.setup.forEach((s, i) => {
+    if (!s.on) return;
+    const c = CLASSES[s.cls];
+    const card = document.createElement('article'); card.className = 'card'; card.dataset.on = '1'; card.style.setProperty('--pc', OUTFITS[s.look.outfit]);
+    card.innerHTML = `
+      <h2><span class="tag">Player ${i + 1}</span>${i > 0 ? `<button class="rm" type="button" data-rm="${i}">Remove</button>` : ''}</h2>
+      <div class="row">
+        <canvas class="preview" width="96" height="128" aria-hidden="true"></canvas>
+        <div class="fields">
+          <label class="f" for="nm${i}">Name<input type="text" id="nm${i}" maxlength="12" value="${s.name.replace(/"/g, '')}" autocomplete="off"></label>
+          <div class="err" id="ne${i}"></div>
+          <label class="f" for="ct${i}">Controls<select id="ct${i}">${CTRL_OPTS.map(([v, l]) => `<option value="${v}"${v === s.ctrl ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        </div>
+      </div>
+      <div class="classes" role="group" aria-label="Class">${CLASS_KEYS.map(k => `<button type="button" class="cls" data-cls="${k}" aria-pressed="${k === s.cls}"><canvas width="12" height="16"></canvas><b>${CLASSES[k].name}</b><span>${CLASSES[k].role} · ${CLASSES[k].hp} HP</span></button>`).join('')}</div>
+      <p class="trick"><b>${c.name}:</b> ${c.trick} Starts with ${KITS[s.cls].map(k => BASES[k].name).join(', ')}.</p>
+      <div class="swatches"><span class="lbl">Outfit</span>${OUTFITS.map((h, k) => `<button type="button" class="sw" data-sw="outfit" data-k="${k}" style="background:${h}" aria-label="Outfit color ${k + 1}" aria-pressed="${k === s.look.outfit}"></button>`).join('')}</div>
+      <div class="swatches"><span class="lbl">Skin</span>${SKINS.map((h, k) => `<button type="button" class="sw" data-sw="skin" data-k="${k}" style="background:${h}" aria-label="Skin tone ${k + 1}" aria-pressed="${k === s.look.skin}"></button>`).join('')}</div>
+      <div class="swatches"><span class="lbl">Hair</span>${HAIRS.map((h, k) => `<button type="button" class="sw" data-sw="hair" data-k="${k}" style="background:${h}" aria-label="Hair color ${k + 1}" aria-pressed="${k === s.look.hair}"></button>`).join('')}</div>
+      <div class="stats">${Object.keys(STAT_NAMES).map(k => `<div class="stat"><small>${STAT_NAMES[k]}</small><strong>${fmtB(s.stats[k])}</strong><em>${s.rolled ? 'rolled ' + s.rolled[k] : 'recommended'}</em></div>`).join('')}</div>
+      <div class="btns"><button type="button" class="btn" data-roll="${i}">Roll stats (3d6 each)</button><button type="button" class="btn" data-rec="${i}">Use recommended</button></div>`;
+    wrap.appendChild(card);
+    drawPreview(card.querySelector('.preview'), s);
+    card.querySelectorAll('.cls').forEach(b => { const cv = b.querySelector('canvas'); const x = cv.getContext('2d'); x.drawImage(heroSprites(b.dataset.cls, s.look).idle, 0, 0); b.onclick = () => { s.cls = b.dataset.cls; if (!s.rolled) s.stats = { ...CLASSES[s.cls].rec }; saveSetup(); renderLobby(); }; });
+    card.querySelectorAll('.sw').forEach(b => b.onclick = () => { s.look[b.dataset.sw] = +b.dataset.k; saveSetup(); renderLobby(); });
+    const nm = card.querySelector('#nm' + i); nm.oninput = () => { s.name = nm.value; $('#ne' + i).textContent = nameProblem(nm.value); saveSetup(); };
+    card.querySelector('#ct' + i).onchange = e => { s.ctrl = e.target.value; saveSetup(); };
+    card.querySelector('[data-roll]').onclick = () => { const r = {}; s.stats = {}; for (const k in STAT_NAMES) { r[k] = rollN(3, 6); s.stats[k] = statBonus(r[k]); } s.rolled = r; saveSetup(); renderLobby(); };
+    card.querySelector('[data-rec]').onclick = () => { s.stats = { ...CLASSES[s.cls].rec }; s.rolled = null; saveSetup(); renderLobby(); };
+    const rm = card.querySelector('[data-rm]'); if (rm) rm.onclick = () => { s.on = false; saveSetup(); renderLobby(); };
+  });
+  if (G.setup.filter(s => s.on).length < 4) {
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'add'; add.textContent = '+ Add player';
+    add.onclick = () => { const s = G.setup.find(s => !s.on); if (s) { s.on = true; saveSetup(); renderLobby(); } };
+    wrap.appendChild(add);
+  }
+}
+$('#diff').onchange = e => { G.settings.diff = e.target.value; saveSetup(); };
+$('#timer').onchange = e => { G.settings.timer = +e.target.value; saveSetup(); };
+$('#ff').onchange = e => { G.settings.ff = e.target.value === '1'; saveSetup(); };
+$('#startBtn').onclick = () => {
+  const on = G.setup.filter(s => s.on);
+  let bad = false; G.setup.forEach((s, i) => { if (!s.on) return; const p = nameProblem(s.name); const el = $('#ne' + i); if (el) el.textContent = p; if (p) bad = true; });
+  const ctrls = on.map(s => s.ctrl); if (new Set(ctrls).size !== ctrls.length) { $('#startNote').textContent = 'Two players have the same controls. Give each player their own.'; return; }
+  if (bad) { $('#startNote').textContent = 'Fix the highlighted names first.'; return; }
+  audioInit(); if (AC && AC.state === 'suspended') AC.resume();
+  startCampaign(on);
+};
+
+/* ---------------- Story (Claude) ---------------- */
+const FALLBACK_STORIES = [
+  { villain: { name: 'Grizelda Gloop', title: 'the Goo Witch', color: 'purple' }, goal: 'She wants to flood Lanternfall with sticky purple goo so nobody can ever leave their houses.',
+    intro: 'Purple goo is bubbling up from the mine shafts! Follow the slime trail down into the Underhollow.', lieutenant: 'Sir Squelch',
+    levels: ['The Mossy Mines are dripping with goo. Watch your step!', 'Goblins are carrying buckets of goo deeper down. Follow them!', 'The Crystal Caverns glow purple. Sir Squelch guards the way.'],
+    npc: { name: 'Pip', kind: 'a lost mole miner', greeting: 'Oh, hello! My lantern went out and the goo is everywhere. Can you help me?', choices: [{ text: 'Cheer up, Pip! We will light the way.', stat: 'Heart' }, { text: 'Your map is upside down. Let me fix it.', stat: 'Wits' }],
+      success: ['Pip beams and hands everyone a fizzy red potion.', 'Pip gasps, flips his map, and shares his secret gold stash.'], fail: 'Pip sneezes so hard his helmet spins. Nothing else happens.' },
+    victory: 'Sir Squelch melts into a harmless puddle! But somewhere below, Grizelda is stirring a bigger pot.' },
+  { villain: { name: 'King Krumble', title: 'the Rock Grumbler', color: 'orange' }, goal: 'He wants to put the Great Lantern to sleep forever so the caves stay dark and grumpy.',
+    intro: 'The Great Lantern is flickering and yawning! Someone down below is singing it a very boring lullaby.', lieutenant: 'Pebble Pete',
+    levels: ['Snoring sounds echo through the Mossy Mines.', 'Goblins with earmuffs march past. Something is up.', 'In the Crystal Caverns, Pebble Pete hums the lullaby.'],
+    npc: { name: 'Bramble', kind: 'a sleepy hedgehog', greeting: 'Yaaawn. Everything is so cozy. Should I even help you?', choices: [{ text: 'Wake up! Your friends need you!', stat: 'Heart' }, { text: 'Count backwards from ten with me.', stat: 'Wits' }],
+      success: ['Bramble jumps up and gives everyone a potion from his backpack.', 'Bramble snaps awake and tosses you a pouch of gold.'], fail: 'Bramble curls into a ball and rolls away. Then rolls back.' },
+    victory: 'Pebble Pete forgets the words and the lullaby stops! But King Krumble is still grumbling far below.' },
+  { villain: { name: 'Countess Cobweb', title: 'the Sock Snatcher', color: 'teal' }, goal: 'She is stealing every sock in Lanternfall to knit a web big enough to catch the moon.',
+    intro: 'Every sock in town has vanished overnight! A trail of loose threads leads into the caves.', lieutenant: 'Spindle',
+    levels: ['Odd socks hang from the Mossy Mines like flags.', 'The thread trail gets thicker. Goblins are wearing three socks each!', 'In the Crystal Caverns, Spindle guards a mountain of socks.'],
+    npc: { name: 'Fizz', kind: 'a nervous glow-worm', greeting: 'Psst! I know where the socks went, but I am too scared to say.', choices: [{ text: 'You are braver than you think, Fizz.', stat: 'Heart' }, { text: 'Draw it as a map instead!', stat: 'Wits' }],
+      success: ['Fizz glows bright and gives everyone a potion.', 'Fizz draws a perfect map and points to hidden gold.'], fail: 'Fizz blinks off and on like a nervous nightlight.' },
+    victory: 'Spindle drops the sock bag and runs! The Countess will want them back...' }
+];
+const STORY_BLOCK = /\b(blood\w*|gore|gory|kill\w*|dead|death|deadly|die|dies|died|dying|murder\w*|corpses?|skulls?|stab\w*|guns?|knife|knives|weapons?|kiss\w*|love|loves|dating|date|sexy|god|gods|church|president\w*|politic\w*|drugs?|beer|wine|hate\w*)\b/i;
+function cleanStr(v, max) { if (typeof v !== 'string') return null; const s = v.replace(/[\u0000-\u001f<>]/g, '').trim(); if (!s || STORY_BLOCK.test(s)) return null; return s.length > max ? s.slice(0, max - 1).replace(/\s+\S*$/, '') + '…' : s; }
+function validateStory(j) {
+  try {
+    const st = ['Heart', 'Wits', 'Might', 'Agility'];
+    const o = {
+      villain: { name: cleanStr(j.villain.name, 24), title: cleanStr(j.villain.title, 32), color: VCOLORS[j.villain.color] ? j.villain.color : 'purple' },
+      goal: cleanStr(j.goal, 140), intro: cleanStr(j.intro, 200), lieutenant: cleanStr(j.lieutenant, 24),
+      levels: [0, 1, 2].map(i => cleanStr(j.levels[i], 120)),
+      npc: { name: cleanStr(j.npc.name, 16), kind: cleanStr(j.npc.kind, 32), greeting: cleanStr(j.npc.greeting, 140),
+        choices: [0, 1].map(i => ({ text: cleanStr(j.npc.choices[i].text, 70), stat: st.includes(j.npc.choices[i].stat) ? j.npc.choices[i].stat : ['Heart', 'Wits'][i] })),
+        success: [0, 1].map(i => cleanStr(j.npc.success[i], 120)), fail: cleanStr(j.npc.fail, 120) },
+      victory: cleanStr(j.victory, 200)
+    };
+    const flat = JSON.stringify(o); if (flat.includes('null')) return null; return o;
+  } catch (e) { return null; }
+}
+let storyCtl = null;
+async function writeStory(players) {
+  const party = players.map(p => `${p.name} the ${CLASSES[p.cls].name}`).join(', ');
+  const prompt = `You are writing the story for one adventure in a co-op pixel-art dungeon game called Pixel Party Dungeon. The audience is 10-year-olds, playing and watching together.
+Setting: the Underhollow, glowing caves under the cozy hill-town of Lanternfall, lit by the Great Lantern. This adventure has 3 levels: levels 1 and 2 are the Mossy Mines, level 3 is the Crystal Caverns, where the villain's lieutenant waits at the exit.
+The party: ${party}.
+Rules: the villain is mischievous or greedy, never cruel. Silly-spooky is fine, scary is not. No blood, gore, death, dying or killing words (defeated foes "poof into grey mist"). No weapons described in detail, no romance, no real people, brands, religion or politics. Use simple words a 10-year-old reads easily. Invent a fresh villain with a funny scheme (not a goo witch, a rock king or a sock thief).
+The party meets one friendly character who asks for help. If choice 1 works, that character gives everyone a healing potion. If choice 2 works, that character shares some gold.
+Reply with only JSON in exactly this shape:
+{"villain":{"name":"...","title":"the ...","color":"purple|red|green|blue|orange|teal"},"goal":"one sentence: what the villain wants","intro":"two short sentences that start the adventure","lieutenant":"name of the villain's helper","levels":["level 1 intro sentence","level 2 intro sentence","level 3 intro sentence"],"npc":{"name":"short name","kind":"what they are, 2-4 words","greeting":"1-2 short sentences","choices":[{"text":"short thing to say","stat":"Heart"},{"text":"short thing to say","stat":"Wits"}],"success":["what happens when choice 1 works","what happens when choice 2 works"],"fail":"a funny harmless thing when a check fails"},"victory":"two short sentences after beating the lieutenant, hinting the villain is still out there"}
+Names under 22 characters. Every sentence under 110 characters.`;
+  let sample = null;
+  try { sample = (window.claude && window.claude.use) ? await Promise.race([window.claude.use('sample'), new Promise(r => setTimeout(() => r(null), 11000))]) : null; } catch (e) { sample = null; }
+  if (!sample) return { story: pick(FALLBACK_STORIES), note: 'Claude story writing isn’t available in this view, so this is a ready-made story.' };
+  storyCtl = new AbortController();
+  try {
+    const j = await sample.json(prompt, { modelTier: 'quick', cache: false, signal: storyCtl.signal });
+    const s = validateStory(j);
+    if (s) return { story: s, note: 'Written by Claude for this adventure.' };
+    return { story: pick(FALLBACK_STORIES), note: 'Claude’s story didn’t pass the kid-safe check, so this is a ready-made one.' };
+  } catch (e) {
+    const why = e && e.code === 'cancelled' ? 'Skipped. Here’s a ready-made story.' : e && e.code === 'not_granted' ? 'Claude wasn’t allowed for this page, so this is a ready-made story.' : 'Claude couldn’t write a story just now, so this is a ready-made one.';
+    return { story: pick(FALLBACK_STORIES), note: why };
+  } finally { storyCtl = null; }
+}
+
+/* ---------------- Saving ----------------
+   Auto-saves at the start of every level and at camp. Saves live in the signed-in host's private
+   storage on Claude (data/users/<id>/...), so they follow them to any device. If that isn't
+   available in this view, they fall back to this browser only. */
+let STORE = null;
+async function getStore() {
+  if (STORE) return STORE;
+  let db = null, user = null, uid = null;
+  try {
+    if (window.claude && window.claude.use) {
+      const t = new Promise(r => setTimeout(() => r(null), 10000));
+      [db, user] = await Promise.all([Promise.race([window.claude.use('db'), t]), Promise.race([window.claude.use('user'), t])]);
+      if (db && user) uid = await user.id();
+    }
+  } catch (e) { db = null; uid = null; }
+  if (db && uid) {
+    const col = () => db.collection('data/users/' + uid);
+    let chain = Promise.resolve();
+    STORE = { kind: 'cloud',
+      list: async () => (await col().get()).docs.filter(d => d.exists && String(d.id).startsWith('save-')).map(d => d.data()),
+      put: s => (chain = chain.then(() => col().doc('save-' + s.id).set(s)).catch(e => { STORE.failed = e && e.code; throw e; })),
+      del: id => (chain = chain.then(() => col().doc('save-' + id).delete())) };
+  } else {
+    const read = () => { try { return JSON.parse(localStorage.getItem('ppd-saves') || '{}'); } catch (e) { return {}; } };
+    const write = o => { try { localStorage.setItem('ppd-saves', JSON.stringify(o)); return true; } catch (e) { return false; } };
+    STORE = { kind: 'local',
+      list: async () => Object.values(read()),
+      put: async s => { const o = read(); o[s.id] = s; if (!write(o)) throw { code: 'local_failed' }; },
+      del: async id => { const o = read(); delete o[id]; write(o); } };
+  }
+  return STORE;
+}
+function serializeCampaign(level, fresh) {
+  const players = G.players.map(p => ({ name: p.name, cls: p.cls, look: p.look, ctrl: p.ctrl, baseStats: p.baseStats, gear: p.gear, bag: p.bag, baseAc: p.baseAc, baseHp: p.baseHp, lvlHp: p.lvlHp,
+    hp: p.hp, lvl: p.lvl, inv: p.inv, gold: p.gold, sel: p.sel }));
+  const body = { v: 1, campaignId: G.campaignId, level, fresh: !!fresh, maxLevel: G.maxLevel, story: G.story, settings: G.settings, seeds: G.seeds, players };
+  return { id: G.campaignId, title: `${G.story.villain.name} ${G.story.villain.title}`, level, maxLevel: G.maxLevel, party: G.players.map(p => p.name).join(', '), savedAt: Date.now(), json: JSON.stringify(body) };
+}
+async function saveGame(level, fresh) {
+  if (!G.story || !G.campaignId) return;
+  const s = serializeCampaign(level, fresh);
+  try { const st = await getStore(); await st.put(s); flashSaved(st.kind === 'cloud' ? 'Saved' : 'Saved on this browser'); }
+  catch (e) { flashSaved('Couldn’t save'); toast('The game couldn’t save just now. It will try again at the next level.'); }
+}
+function flashSaved(txt) { const el = $('#saveInd'); if (!el) return; el.textContent = txt; el.hidden = false; clearTimeout(flashSaved.t); flashSaved.t = setTimeout(() => { el.hidden = true; }, 2200); }
+async function deleteSave(id) { try { const st = await getStore(); await st.del(id); } catch (e) { } }
+async function renderSaves() {
+  const box = $('#saves'); if (!box) return;
+  box.innerHTML = '<p class="muted">Looking for saved adventures…</p>'; box.hidden = false;
+  let list = [], st = null;
+  try { st = await getStore(); list = (await st.list()).sort((a, b) => b.savedAt - a.savedAt); } catch (e) { list = []; }
+  const where = st && st.kind === 'cloud' ? 'Saved to your Claude account, so they follow you to any device.' : 'Saved on this browser only.';
+  if (!list.length) { box.innerHTML = `<h3>Saved adventures</h3><p class="muted">No saved adventures yet. The game saves at the start of every level and at camp. ${where}</p>`; return; }
+  box.innerHTML = `<h3>Saved adventures</h3><p class="muted">${where}</p><ul class="savelist">${list.map(s => `<li><div><b>${esc(s.title)}</b><small>Level ${s.level} of ${s.maxLevel} · ${esc(s.party)} · ${new Date(s.savedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small></div><span class="sb"><button type="button" class="btn big sm2" data-load="${esc(s.id)}">Continue</button><button type="button" class="btn" data-del="${esc(s.id)}">Delete</button></span></li>`).join('')}</ul>`;
+  box.querySelectorAll('[data-load]').forEach(b => b.onclick = () => { const s = list.find(x => x.id === b.dataset.load); if (s) loadCampaign(s); });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (b.dataset.sure) { deleteSave(b.dataset.del).then(renderSaves); return; }
+    b.dataset.sure = '1'; b.textContent = 'Delete for good?'; b.classList.add('warn');
+  });
+}
+function loadCampaign(s) {
+  let body; try { body = JSON.parse(s.json); } catch (e) { toast('That save looks damaged and can’t be loaded.'); return; }
+  audioInit(); if (AC && AC.state === 'suspended') AC.resume();
+  Object.assign(G.settings, body.settings || {});
+  G.campaignId = body.campaignId; G.story = body.story; G.seeds = body.seeds || []; G.maxLevel = body.maxLevel || 3;
+  G.players = body.players.map((d, i) => {
+    const p = makePlayer({ name: d.name, cls: d.cls, look: d.look, ctrl: d.ctrl, stats: d.baseStats }, i);
+    Object.assign(p, { baseStats: d.baseStats, gear: d.gear, bag: d.bag, baseAc: d.baseAc, baseHp: d.baseHp, lvlHp: d.lvlHp, lvl: d.lvl, inv: d.inv, gold: d.gold, sel: d.sel || 0, maxHp: 0 });
+    recalc(p); p.hp = clamp(d.hp, 1, p.maxHp); p.snap = null; return p;
+  });
+  buildBossSprite(VCOLORS[G.story.villain.color] || VCOLORS.purple);
+  tapped.clear(); keys.clear();
+  $('#lobby').hidden = true; $('#play').hidden = false; document.activeElement && document.activeElement.blur();
+  buildPartyBar(); startLevel(body.level, !!body.fresh);
+  toast(`Welcome back! Continuing at level ${body.level}.`);
+}
+
+/* ---------------- Campaign flow ---------------- */
+function makePlayer(s, i) {
+  const c = CLASSES[s.cls];
+  const gear = { weapon: null, offhand: null, armor: null, trinket: null };
+  for (const k of KITS[s.cls]) { const it = makeItem(k, 0); gear[it.slot] = it; }
+  const kitAc = SLOTS.reduce((a, k) => a + (gear[k] ? gear[k].ac : 0), 0), kitHp = SLOTS.reduce((a, k) => a + (gear[k] ? gear[k].hp : 0), 0);
+  const p = { id: i, isPlayer: true, name: s.name.trim(), cls: s.cls, look: { ...s.look }, ctrl: s.ctrl, baseStats: { ...s.stats }, stats: { ...s.stats }, color: OUTFITS[s.look.outfit],
+    spr: heroSprites(s.cls, s.look), x: 0, y: 0, w: 10, h: 14, vx: 0, vy: 0, facing: 1, onGround: false, climbing: false, inWater: false,
+    gear, bag: [], baseAc: c.ac - kitAc, baseHp: c.hp - kitHp, lvlHp: 0, hp: 0, maxHp: 0, ac: c.ac, gearOpen: false, gearSel: 0, newGear: false,
+    lvl: 1, state: 'ok', saves: { s: 0, f: 0 }, inv: { rope: 2, bomb: 1, potion: 1 }, sel: 0, gold: 0, holding: null,
+    cd: 0, inv_t: 0, hazT: 0, dbl: false, dropT: 0, anim: 0, lightUses: 3, trickCd: 0, in: BLANK, pr: {}, _prev: BLANK };
+  recalc(p); p.hp = p.maxHp; return p;
+}
+const ITEMS = ['rope', 'bomb', 'potion'];
+function prof(p) { return p.lvl >= 3 ? 3 : 2; }
+function startCampaign(setups) {
+  G.players = setups.map((s, i) => makePlayer(s, i));
+  G.levelNum = 1; G.mode = 'story'; G.seeds = []; G.campaignId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); tapped.clear(); keys.clear();
+  $('#lobby').hidden = true; $('#play').hidden = false; document.activeElement && document.activeElement.blur();
+  fitStage(); buildPartyBar();
+  showOverlay(`<div class="spin" aria-hidden="true"></div><h3>A new adventure</h3><p>Claude is writing a villain for ${G.players.map(p => p.name).join(', ')}…</p><p class="muted">If a permission box appears, allow it so Claude can write the story.</p><div class="btns"><button class="btn" id="skipStory" type="button">Skip: use a ready-made story</button></div>`);
+  $('#skipStory').onclick = () => { if (storyCtl) storyCtl.abort(); else storyDone({ story: pick(FALLBACK_STORIES), note: 'Skipped. Here’s a ready-made story.' }); };
+  let done = false;
+  const storyDone = r => {
+    if (done) return; done = true; G.story = r.story; buildBossSprite(VCOLORS[r.story.villain.color] || VCOLORS.purple);
+    showOverlay(`<h3>This adventure's villain</h3><div class="vname">${esc(r.story.villain.name)}</div><p><b>${esc(r.story.villain.title)}</b></p><p>${esc(r.story.goal)}</p><p>${esc(r.story.intro)}</p><p class="muted">${esc(r.note)}</p><div class="btns"><button class="btn big" id="begin" type="button">Begin level 1</button></div>`, () => { hideOverlay(); startLevel(1, true); });
+    $('#begin').onclick = () => { hideOverlay(); startLevel(1, true); };
+  };
+  writeStory(G.players).then(storyDone);
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function startLevel(n, fresh) {
+  G.levelNum = n; G.mode = 'play'; G.combat = null; G.dialogue = null; G.projectiles = []; G.particles = []; G.floaters = []; G.fx = [];
+  D.q = []; D.cur = null; setDiceShow(false); buildTurnStrip(); $('#actions').hidden = true; closeDialogue();
+  const L = genLevel(n); G.L = L; G.enemies = L.enemies; G.objects = L.objects;
+  buildEnemySprites(L.biome);
+  const d = DIFF[G.settings.diff];
+  G.players.forEach((p, i) => {
+    if (fresh) {
+      if (p.state === 'ko') p.hp = p.maxHp; else p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * d.rest));
+      p.state = 'ok'; p.saves = { s: 0, f: 0 }; p.lightUses = 3;
+    }
+    if (fresh || !p.snap) { p.state = 'ok'; p.snap = { gold: p.gold, inv: { ...p.inv }, hp: p.hp, gear: JSON.parse(JSON.stringify(p.gear)), bag: JSON.parse(JSON.stringify(p.bag)) }; }
+    p.x = L.entrance.tx * T + 3 + (i - (G.players.length - 1) / 2) * 7; p.y = L.entrance.ty * T + T - p.h; p.vx = p.vy = 0; p.holding = null; p.climbing = false; p.cd = 0; p.peakY = null; p.wasAir = false; p.stunT = 0;
+  });
+  const c = centroid(); G.cam.x = clamp(c.x - VW / 2, 0, MW * T - VW); G.cam.y = clamp(c.y - VH / 2, 0, MH * T - VH + 56);
+  const biomeName = L.biome === 'crystal' ? 'Crystal Caverns' : 'Mossy Mines';
+  showBanner(`Level ${n} · ${biomeName}`, G.story ? G.story.levels[n - 1] : '', 4.5);
+  saveGame(n);
+  if (n === 1 && fresh) setTimeout(() => toast('Tip: press R, \' or View to open your gear. Chests and bosses drop new gear.'), 4800);
+  for (const s of G.seeds) if (s.level === n && !s.claimed && !s.lost) setTimeout(() => toast(`A treasure map glows! ${s.item.name} for ${G.players[s.owner].name} is hidden in this level.`), 2000);
+}
+function restartLevel() {
+  // Gear found in this level is not lost: it waits in chests of its owner's color in the new layout
+  const seedIds = new Set(G.seeds.filter(s => s.level === G.levelNum && !s.claimed).map(s => s.item.id));
+  let moved = 0;
+  G.players.forEach(p => {
+    const before = new Set([...SLOTS.map(s => p.snap.gear[s] && p.snap.gear[s].id), ...p.snap.bag.map(i => i.id)]);
+    [...SLOTS.map(s => p.gear[s]).filter(Boolean), ...p.bag].filter(it => !before.has(it.id) && !seedIds.has(it.id)).forEach(it => {
+      G.seeds.push({ id: it.id, item: it, owner: p.id, lost: true, level: G.levelNum, found: false, claimed: false }); moved++;
+    });
+  });
+  for (const s of G.seeds) if (s.level === G.levelNum && !s.claimed) s.found = false;
+  if (moved) setTimeout(() => toast('Gear you found before the wipe is waiting in chests marked with your color.'), 2600);
+  G.players.forEach(p => { p.gold = p.snap.gold; p.inv = { ...p.snap.inv }; p.gear = JSON.parse(JSON.stringify(p.snap.gear)); p.bag = JSON.parse(JSON.stringify(p.snap.bag)); p.gearOpen = false; recalc(p); p.hp = Math.max(1, Math.ceil(p.maxHp / 2)); p.state = 'ok'; p.saves = { s: 0, f: 0 }; });
+  startLevel(G.levelNum, false);
+  toast('The lanterns flicker… back to the checkpoint. The caves have shifted!');
+}
+function completeLevel() {
+  G.mode = 'summary'; sfx('win');
+  const n = G.levelNum;
+  G.players.forEach(p => { p.lvl++; p.lvlHp += 3; recalc(p); p.gearOpen = false; if (p.state !== 'ok') { p.state = 'ok'; p.hp = Math.max(p.hp, 1); } });
+  // Treasure maps: found ones are claimed; missed ones move ahead (or are handed over after the last level)
+  for (const s of G.seeds) {
+    if (s.level !== n || s.claimed) continue;
+    if (s.found) { s.claimed = true; continue; }
+    if (n < G.maxLevel) { s.level = n + 1; toast(`The map for ${s.item.name} moves ahead to the next level.`); }
+    else { s.claimed = true; const who = s.owner === null ? G.players[0] : G.players[s.owner]; giveItem(who, JSON.parse(JSON.stringify(s.item))); }
+  }
+  const rows = G.players.map(p => `<div style="--pc:${p.color}"><b>${esc(p.name)}</b>Level ${p.lvl} ${CLASSES[p.cls].name}<br>${p.gold} gold · ${p.maxHp} max HP</div>`).join('');
+  if (n >= G.maxLevel) {
+    G.mode = 'victory'; deleteSave(G.campaignId);
+    showOverlay(`<h3>Adventure complete</h3><h2>Victory!</h2><p>${esc(G.story.victory)}</p><div class="sumgrid">${rows}</div><p class="muted">The full game continues to ${esc(G.story.villain.name)} at level 10. This prototype stops here.</p><div class="btns"><button class="btn big" id="again" type="button">New adventure</button><button class="btn" id="toLobby" type="button">Change the party</button></div>`, () => newAdventure());
+    $('#again').onclick = newAdventure; $('#toLobby').onclick = backToLobby;
+    return;
+  }
+  saveGame(n + 1, true);
+  G.campLevel = n;
+  G.shop = { buyer: 0, recipient: 0, base: 'sword', fx: 'fire', stat: 'might', rarity: 2, contrib: {} }; G.campReady = new Set();
+  renderCamp();
+}
+/* ---------------- Camp: treasure maps ----------------
+   Spend gold to hide a magical item in a random later level. Personal maps open only for the buyer;
+   pooled maps open for anyone. Gear is never traded between characters. */
+const MAP_PRICE = [0, 30, 60, 120, 250];
+// Best rarity for sale grows with progress: in a 10-level campaign Epic opens before level 4, Legendary before level 7.
+const rarityUnlockLevel = r => r <= 2 ? 1 : r === 3 ? Math.ceil(G.maxLevel * .4) : Math.ceil(G.maxLevel * .7);
+const maxRarityFor = next => [4, 3, 2].find(r => next >= rarityUnlockLevel(r));
+function shopPreview() { const S = G.shop; S.preview = makeItem(S.base, S.rarity, S.fx, S.stat); return S.preview; }
+function renderCamp() {
+  const n = G.campLevel, S = G.shop; const party = S.buyer === 'party';
+  const maxR = maxRarityFor(n + 1); if (S.rarity > maxR) S.rarity = maxR;
+  const price = MAP_PRICE[S.rarity];
+  const it = shopPreview();
+  const rows = G.players.map(p => `<div style="--pc:${p.color}"><b>${esc(p.name)}</b>Level ${p.lvl} ${CLASSES[p.cls].name}<br>${p.gold} gold · ${p.maxHp} max HP</div>`).join('');
+  const total = G.players.reduce((a, p) => a + p.gold, 0);
+  const chips = G.players.map(p => `<button type="button" class="chip${S.buyer === p.id ? ' on' : ''}" data-buyer="${p.id}" style="--pc:${p.color}">${esc(p.name)} · ${p.gold}g</button>`).join('') +
+    (G.players.length > 1 ? `<button type="button" class="chip${party ? ' on' : ''}" data-buyer="party" style="--pc:var(--gold)">Whole party pool · ${total}g</button>` : '');
+  const baseOpts = SLOTS.map(s => `<optgroup label="${SLOT_NAMES[s]}">${Object.keys(BASES).filter(k => BASES[k].slot === s).map(k => `<option value="${k}"${k === S.base ? ' selected' : ''}>${BASES[k].name}</option>`).join('')}</optgroup>`).join('');
+  const fxOpts = Object.keys(FX).filter(k => FX[k].slot === BASES[S.base].slot).map(k => `<option value="${k}"${k === S.fx ? ' selected' : ''}>${FX[k].adj}: ${FX[k].d(1)}</option>`).join('');
+  const statSel = S.base === 'ring' ? `<label class="f" for="shopStat">Ring stat<select id="shopStat">${Object.keys(STAT_NAMES).map(k => `<option value="${k}"${k === S.stat ? ' selected' : ''}>${STAT_NAMES[k]}</option>`).join('')}</select></label>` : '';
+  const rar = [1, 2, 3, 4].map(r => r > maxR
+    ? `<button type="button" class="rb" disabled style="--rc:${RARITY[r].color}">${RARITY[r].name}<small>unlocks before level ${rarityUnlockLevel(r)}</small></button>`
+    : `<button type="button" class="rb${S.rarity === r ? ' on' : ''}" data-r="${r}" style="--rc:${RARITY[r].color}">${RARITY[r].name}<small>${MAP_PRICE[r]} gold</small></button>`).join('');
+  let pay = '', can = false, sum = 0;
+  if (party) {
+    sum = G.players.reduce((a, p) => a + (S.contrib[p.id] || 0), 0);
+    can = sum === price && G.players.every(p => (S.contrib[p.id] || 0) <= p.gold);
+    pay = `<div class="chips" role="group" aria-label="Who the map is for"><span class="lbl2">Who is it for?</span>${G.players.map(p => `<button type="button" class="chip${S.recipient === p.id ? ' on' : ''}" data-for="${p.id}" style="--pc:${p.color}">${esc(p.name)}</button>`).join('')}</div><div class="pool">${G.players.map(p => `<div class="prow"><span style="color:${p.color}">${esc(p.name)}</span><small>has ${p.gold}g</small><button type="button" class="btn sm" data-c="${p.id}" data-d="-10" aria-label="${esc(p.name)} gives 10 less">−10</button><b>${S.contrib[p.id] || 0}g</b><button type="button" class="btn sm" data-c="${p.id}" data-d="10" aria-label="${esc(p.name)} gives 10 more">+10</button></div>`).join('')}<div class="prow"><button type="button" class="btn sm" id="split">Split evenly</button><span>Pooled ${sum} of ${price} gold</span></div></div>`;
+  } else can = G.players[S.buyer].gold >= price;
+  const buyLabel = can ? `Buy map for ${price} gold` : party ? `Pool exactly ${price} gold to buy` : `${G.players[S.buyer].name} needs ${price - G.players[S.buyer].gold} more gold`;
+  const owned = G.seeds.filter(s => !s.claimed);
+  const shop = `<section class="shop" aria-label="Treasure maps">
+    <h3>Treasure maps</h3>
+    <p class="muted">Spend gold to hide a magical item in a random level ahead. Its chest shows the owner's color and only opens for them. The whole party can pool gold to buy a map for one player.</p>
+    <div class="chips" role="group" aria-label="Who is buying">${chips}</div>
+    <div class="shopsel"><label class="f" for="shopBase">Item<select id="shopBase">${baseOpts}</select></label><label class="f" for="shopFx">Magic<select id="shopFx">${fxOpts}</select></label>${statSel}</div>
+    <div class="rars" role="group" aria-label="Rarity">${rar}</div>
+    <div class="prev" style="--rc:${RARITY[S.rarity].color}"><img src="${iconURL(S.base)}" alt=""><div><b>${esc(it.name)}</b><small>${RARITY[S.rarity].name} · ${esc(itemDesc(it))}</small></div></div>
+    ${pay}
+    <div class="btns"><button type="button" class="btn buy" id="buyMap"${can ? '' : ' disabled'}>${esc(buyLabel)}</button></div>
+    ${owned.length ? `<ul class="maps">${owned.map(s => `<li style="--rc:${RARITY[s.item.rarity].color}"><b>${esc(s.item.name)}</b> for ${esc(G.players[s.owner].name)}${s.pooled ? ' (party pool)' : ''}: ${s.lost ? 'waiting in a chest ahead' : 'hidden somewhere ahead'}</li>`).join('')}</ul>` : ''}
+  </section>`;
+  const ready = `<section class="ready" aria-label="Ready check"><h3>Ready for level ${n + 1}?</h3><div class="chips">${G.players.map(p => `<button type="button" class="chip rdy${G.campReady.has(p.id) ? ' on' : ''}" data-ready="${p.id}" style="--pc:${p.color}">${esc(p.name)}: ${G.campReady.has(p.id) ? 'Ready!' : `press ${keyName(p.ctrl, 'act')} or click`}</button>`).join('')}</div><p class="muted">The next level starts when everyone is ready.</p></section>`;
+  const scroll = $('#overlay .panel') ? $('#overlay .panel').scrollTop : 0;
+  showOverlay(`<h3>Level ${n} cleared</h3><h2>Level up!</h2><p>Everyone reaches level ${G.players[0].lvl}: +3 max HP${G.players[0].lvl === 3 ? ' and +1 to every attack roll' : ''}.</p><div class="sumgrid">${rows}</div>${shop}${ready}`, null, 'wide');
+  $('#overlay .panel').scrollTop = scroll;
+  document.querySelectorAll('#overlay [data-ready]').forEach(b => b.onclick = () => toggleReady(+b.dataset.ready));
+  document.querySelectorAll('#overlay [data-for]').forEach(b => b.onclick = () => { S.recipient = +b.dataset.for; renderCamp(); });
+  document.querySelectorAll('#overlay [data-buyer]').forEach(b => b.onclick = () => { S.buyer = b.dataset.buyer === 'party' ? 'party' : +b.dataset.buyer; S.contrib = {}; renderCamp(); });
+  $('#shopBase').onchange = e => { S.base = e.target.value; const sl = BASES[S.base].slot; if (FX[S.fx].slot !== sl) S.fx = Object.keys(FX).find(k => FX[k].slot === sl); renderCamp(); };
+  $('#shopFx').onchange = e => { S.fx = e.target.value; renderCamp(); };
+  if ($('#shopStat')) $('#shopStat').onchange = e => { S.stat = e.target.value; renderCamp(); };
+  document.querySelectorAll('#overlay [data-r]').forEach(b => b.onclick = () => { S.rarity = +b.dataset.r; S.contrib = {}; renderCamp(); });
+  document.querySelectorAll('#overlay [data-c]').forEach(b => b.onclick = () => { const id = +b.dataset.c, p = G.players[id]; S.contrib[id] = clamp((S.contrib[id] || 0) + +b.dataset.d, 0, Math.min(p.gold - p.gold % 10, price)); renderCamp(); });
+  if ($('#split')) $('#split').onclick = () => {
+    S.contrib = {}; let left = price / 10, guard = 0;
+    while (left > 0 && guard++ < 200) { let gave = false; for (const p of G.players) { if (left <= 0) break; const c = S.contrib[p.id] || 0; if (c + 10 <= p.gold) { S.contrib[p.id] = c + 10; left--; gave = true; } } if (!gave) break; }
+    renderCamp();
+  };
+  $('#buyMap').onclick = () => { if (!$('#buyMap').disabled) buyMap(); };
+}
+function buyMap() {
+  const S = G.shop, price = MAP_PRICE[S.rarity], party = S.buyer === 'party';
+  if (party) { G.players.forEach(p => p.gold -= (S.contrib[p.id] || 0)); S.contrib = {}; }
+  else { if (G.players[S.buyer].gold < price) return; G.players[S.buyer].gold -= price; }
+  const later = []; for (let l = G.campLevel + 1; l <= G.maxLevel; l++) later.push(l);
+  const item = makeItem(S.base, S.rarity, S.fx, S.stat);
+  G.seeds.push({ id: item.id, item, owner: party ? S.recipient : S.buyer, pooled: party, level: pick(later), found: false, claimed: false });
+  sfx('coin'); renderCamp(); saveGame(G.campLevel + 1, true);
+}
+function toggleReady(id) {
+  if (G.mode !== 'summary' || !G.campReady) return;
+  if (G.campReady.has(id)) G.campReady.delete(id); else G.campReady.add(id);
+  sfx('step');
+  if (G.campReady.size === G.players.length) { const n = G.campLevel; G.campReady = null; G.campLevel = null; sfx('win'); hideOverlay(); startLevel(n + 1, true); return; }
+  renderCamp();
+}
+function campKeys() { if (!G.campReady) return; for (const p of G.players) if (p.pr && p.pr.act) { consume(p, 'act'); toggleReady(p.id); if (!G.campReady) return; } }
+function newAdventure() { hideOverlay(); const setups = G.setup.filter(s => s.on); startCampaign(setups); }
+function backToLobby() { hideOverlay(); G.mode = 'lobby'; G.paused = false; $('#play').hidden = true; $('#lobby').hidden = false; renderLobby(); renderSaves(); }
+
+/* ---------------- Level generation (Spelunky-style room grid) ---------------- */
+function mkObj(kind, tx, ty) {
+  const S = { pot: [10, 10], barrel: [12, 14], chest: [14, 10], gold: [6, 5], ropeItem: [10, 8], bomb: [8, 8], rock: [7, 6] }[kind];
+  return { kind, x: tx * T + (T - S[0]) / 2, y: (ty + 1) * T - S[1], w: S[0], h: S[1], vx: 0, vy: 0, thrown: false, held: false, open: false, alive: true, fuse: 0, owner: null, onGround: false };
+}
+function mkEnemy(type, x, y, n) {
+  const d = ENEMY[type], dif = DIFF[G.settings.diff];
+  const hp = Math.max(2, Math.round((d.hp + (n - 1) * (type === 'boss' ? 0 : 1)) * dif.ehp));
+  return { isEnemy: true, type, name: type === 'boss' && G.story ? G.story.lieutenant : d.name, x, y: y - d.h, w: d.w, h: d.h, vx: 0, vy: 0, hp, maxHp: hp, ac: d.ac + (n >= 3 ? 1 : 0), atk: d.atk + (n >= 3 ? 1 : 0),
+    dmg: [d.dmg[0], d.dmg[1], d.dmg[2] + dif.edmg], dir: Math.random() < .5 ? -1 : 1, fly: !!d.fly, alive: true, onGround: false, spikeT: 0, hurtT: 0, frozen: false, phase: Math.random() * 6, home: y, flash: 0 };
+}
+function tileAt(tx, ty) { if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return BED; return G.L.map[ty * MW + tx]; }
+function setTile(tx, ty, t) { if (tx <= 0 || ty <= 0 || tx >= MW - 1 || ty >= MH - 1) return; G.L.map[ty * MW + tx] = t; G.L.dirty = true; }
+const isSolid = t => t === ROCK || t === BED || t === CRACK;
+function genLevel(n) {
+  const L = { n, map: new Uint8Array(MW * MH).fill(BED), rope: new Uint8Array(MW * MH), enemies: [], objects: [], decor: [], npcs: [], fires: new Map(), door: null, entrance: null, biome: n >= 3 ? 'crystal' : 'mines', dirty: true, canvas: null };
+  const rooms = []; for (let y = 0; y < GH; y++) { rooms.push([]); for (let x = 0; x < GW; x++) rooms[y].push({ path: false, up: false, down: false }); }
+  let cx = rnd(GW), cy = 0; rooms[0][cx].path = true; const start = { cx, cy }; let dir = Math.random() < .5 ? -1 : 1, guard = 0;
+  while (guard++ < 60) {
+    let down = Math.random() < .3;
+    if (!down) { const nx = cx + dir; if (nx < 0 || nx >= GW) { down = true; dir = -dir; } else { cx = nx; rooms[cy][cx].path = true; } }
+    if (down) { if (cy === GH - 1) break; rooms[cy][cx].down = true; cy++; rooms[cy][cx].up = true; rooms[cy][cx].path = true; }
+  }
+  while (cy < GH - 1) { rooms[cy][cx].down = true; cy++; rooms[cy][cx].up = true; rooms[cy][cx].path = true; }
+  const exitR = { cx, cy }; const spawns = [];
+  for (let ry = 0; ry < GH; ry++) for (let rx = 0; rx < GW; rx++) {
+    const R = rooms[ry][rx]; let tpl = pick(TEMPLATES); if (Math.random() < .5) tpl = tpl.map(r => [...r].reverse().join(''));
+    const isStart = rx === start.cx && ry === start.cy; const ox = 1 + rx * RW, oy = 1 + ry * RH;
+    for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
+      const ch = tpl[y][x], tx = ox + x, ty = oy + y; let t = E;
+      switch (ch) {
+        case '#': t = ROCK; break; case '=': t = PLAT; break; case 'H': t = LAD; break; case '^': t = SPIKE; break; case '~': t = WATER; break; case '%': t = CRACK; break;
+        case '1': t = Math.random() < .5 ? ROCK : E; break;
+        case 'p': L.objects.push(mkObj('pot', tx, ty)); break; case 'b': L.objects.push(mkObj('barrel', tx, ty)); break;
+        case 'c': L.objects.push(mkObj('chest', tx, ty)); break; case 'g': L.objects.push(mkObj('gold', tx, ty)); break; case 'r': L.objects.push(mkObj('ropeItem', tx, ty)); break;
+        case 'e': if (!isStart) spawns.push({ tx, ty }); break;
+      }
+      L.map[ty * MW + tx] = t;
+    }
+    for (const y of [5, 6]) for (const x of [0, RW - 1]) { const i = (oy + y) * MW + ox + x; if (isSolid(L.map[i])) L.map[i] = E; }
+    if (R.down) for (const x of [4, 5]) for (let y = 5; y < RH; y++) L.map[(oy + y) * MW + ox + x] = E;
+    if (R.up) for (const x of [4, 5]) for (let y = 0; y < 5; y++) L.map[(oy + y) * MW + ox + x] = E;
+    if (Math.random() < .6) { const tx = ox + 1 + rnd(8), ty = oy + 1 + rnd(3); if (L.map[ty * MW + tx] === E) L.decor.push({ kind: 'torch', tx, ty }); }
+    if (L.biome === 'crystal') for (let k = 0; k < 2; k++) { const tx = ox + 1 + rnd(8), ty = oy + 1 + rnd(6); if (L.map[ty * MW + tx] === E) L.decor.push({ kind: 'crystal', tx, ty }); }
+  }
+  // Objects inside carved shafts fall with gravity; drop any sitting in solid tiles
+  L.objects = L.objects.filter(o => !isSolid(L.map[Math.floor((o.y + o.h - 1) / T) * MW + Math.floor((o.x + o.w / 2) / T)]));
+  const floorSpot = (rx, ry, avoid = []) => {
+    const ox = 1 + rx * RW, oy = 1 + ry * RH; const R = rooms[ry][rx]; const out = [];
+    for (let x = 1; x < RW - 1; x++) {
+      if (R.down && (x === 4 || x === 5)) continue; if (avoid.includes(x)) continue;
+      const a = L.map[(oy + 6) * MW + ox + x], b = L.map[(oy + 7) * MW + ox + x];
+      if (a === E && isSolid(b)) out.push({ tx: ox + x, ty: oy + 6, x });
+    }
+    if (!out.length) { const x = 2; L.map[(oy + 6) * MW + ox + x] = E; L.map[(oy + 7) * MW + ox + x] = ROCK; out.push({ tx: ox + x, ty: oy + 6, x }); }
+    return out;
+  };
+  L.entrance = pick(floorSpot(start.cx, start.cy));
+  const ds = floorSpot(exitR.cx, exitR.cy); L.door = ds.sort((a, b) => Math.abs(b.x - 4.5) - Math.abs(a.x - 4.5))[0];
+  if (exitR.cx === start.cx && exitR.cy === start.cy && L.door.tx === L.entrance.tx) L.door = ds[ds.length - 1];
+  L.objects = L.objects.filter(o => Math.abs(o.x / T - L.door.tx) > 1 || Math.abs(o.y / T - L.door.ty) > 1);
+  const types = L.biome === 'crystal' ? ['bat', 'bat', 'slime', 'goblin'] : ['goblin', 'goblin', 'slime', 'bat'];
+  const farFromStart = (tx, ty) => Math.abs(tx - L.entrance.tx) > 7 || Math.abs(ty - L.entrance.ty) > 4;
+  for (const s of spawns) { if (Math.random() < .6 && farFromStart(s.tx, s.ty)) L.enemies.push(mkEnemy(pick(types), s.tx * T + 3, (s.ty + 1) * T, n)); }
+  const pathRooms = []; for (let ry = 0; ry < GH; ry++) for (let rx = 0; rx < GW; rx++) if (rooms[ry][rx].path && !(rx === start.cx && ry === start.cy)) pathRooms.push({ rx, ry });
+  let tries = 0; while (L.enemies.length < 3 + n && tries++ < 30) {
+    const r = pick(pathRooms); if (!r) break; const sp = pick(floorSpot(r.rx, r.ry)); if (!farFromStart(sp.tx, sp.ty)) continue;
+    L.enemies.push(mkEnemy(pick(['goblin', 'slime', 'goblin']), sp.tx * T + 3, (sp.ty + 1) * T, n));
+  }
+  if (n === 1 && G.story) {
+    const cands = pathRooms.filter(r => !(r.rx === exitR.cx && r.ry === exitR.cy)); const r = cands.length ? pick(cands) : { rx: start.cx, ry: start.cy };
+    const sp = pick(floorSpot(r.rx, r.ry));
+    L.npcs.push({ name: G.story.npc.name, kind: G.story.npc.kind, x: sp.tx * T + 3, y: (sp.ty + 1) * T - 14, w: 10, h: 14, talked: false, spr: heroSprites('miner', { outfit: 1, skin: 2, hair: 5 }) });
+    L.enemies = L.enemies.filter(e => Math.abs(e.x - sp.tx * T) > 5 * T || Math.abs(e.y - sp.ty * T) > 2 * T);
+  }
+  for (const s of (G.seeds || [])) {
+    if (s.level !== n || s.claimed) continue;
+    const cands = pathRooms.length ? pathRooms : [{ rx: start.cx, ry: start.cy }];
+    let sp = null; for (let k = 0; k < 10 && !sp; k++) { const r = pick(cands); const o = floorSpot(r.rx, r.ry).filter(q => !(q.tx === L.door.tx && q.ty === L.door.ty) && !L.objects.some(ob => Math.abs(ob.x / T - q.tx) < 1 && Math.abs(ob.y / T - q.ty) < 1)); if (o.length) sp = pick(o); }
+    if (!sp) sp = pick(floorSpot(start.cx, start.cy));
+    const c = mkObj('chest', sp.tx, sp.ty); c.seed = s; L.objects.push(c);
+  }
+  if (n === G.maxLevel) {
+    const tx = clamp(L.door.tx + (L.door.x < 5 ? 3 : -3), 1 + exitR.cx * RW + 1, 1 + exitR.cx * RW + 8);
+    L.enemies.push(mkEnemy('boss', tx * T, (L.door.ty + 1) * T, n)); L.boss = L.enemies[L.enemies.length - 1];
+  }
+  return L;
+}
+
+/* ---------------- Physics ---------------- */
+function rectHits(x, y, w, h, fn) {
+  const x0 = Math.floor(x / T), x1 = Math.floor((x + w - .01) / T), y0 = Math.floor(y / T), y1 = Math.floor((y + h - .01) / T);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (fn(tileAt(tx, ty), tx, ty)) return true;
+  return false;
+}
+function moveBody(e, dt, opts = {}) {
+  e.hitWall = false; const oldBottom = e.y + e.h;
+  let nx = e.x + e.vx * dt;
+  if (rectHits(nx, e.y, e.w, e.h, isSolid)) { nx = e.vx > 0 ? Math.floor((nx + e.w) / T) * T - e.w - .001 : Math.floor(nx / T + 1) * T + .001; if (rectHits(nx, e.y, e.w, e.h, isSolid)) nx = e.x; e.vx = 0; e.hitWall = true; }
+  e.x = nx;
+  let ny = e.y + e.vy * dt; e.onGround = false;
+  if (e.vy > 0) {
+    const landSolid = rectHits(e.x, ny, e.w, e.h, isSolid);
+    const landPlat = !opts.noPlat && !landSolid && rectHits(e.x, ny + e.h - 1, e.w, 1, (t, tx, ty) => (t === PLAT || (t === LAD && tileAt(tx, ty - 1) !== LAD)) && oldBottom <= ty * T + .5);
+    if (landSolid || landPlat) { ny = Math.floor((ny + e.h) / T) * T - e.h; e.vy = 0; e.onGround = true; }
+  } else if (e.vy < 0 && rectHits(e.x, ny, e.w, e.h, isSolid)) { ny = Math.floor(ny / T + 1) * T + .001; e.vy = 0; }
+  e.y = ny;
+  if (rectHits(e.x, e.y, e.w, e.h, isSolid)) { e.y -= 2; }
+}
+const cx = e => e.x + e.w / 2, cy = e => e.y + e.h / 2;
+const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+function canClimb(e) {
+  const tx = Math.floor(cx(e) / T), ty = Math.floor((e.y + e.h - 2) / T), ty2 = Math.floor((e.y + 3) / T);
+  const c = (x, y) => tileAt(x, y) === LAD || G.L.rope[y * MW + x];
+  return c(tx, ty) || c(tx, ty2);
+}
+function inWater(e) { return tileAt(Math.floor(cx(e) / T), Math.floor(cy(e) / T)) === WATER; }
+function hasLOS(a, b) {
+  const x0 = cx(a), y0 = cy(a), x1 = cx(b), y1 = cy(b); const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 6);
+  for (let i = 1; i < n; i++) { const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n; if (isSolid(tileAt(Math.floor(x / T), Math.floor(y / T)))) return false; }
+  return true;
+}
+const activePlayers = () => G.players.filter(p => p.state !== 'ko');
+function centroid() { const ps = activePlayers().length ? activePlayers() : G.players; let x = 0, y = 0; ps.forEach(p => { x += cx(p); y += cy(p); }); return { x: x / ps.length, y: y / ps.length }; }
+
+/* ---------------- Effects ---------------- */
+function puff(x, y, n = 10, color = '#9a96a8', spread = 40) { for (let i = 0; i < n; i++) G.particles.push({ x, y, vx: (Math.random() - .5) * spread, vy: (Math.random() - .7) * spread * .6, life: .6 + Math.random() * .5, max: 1.1, size: 2 + rnd(3), color, kind: 'mist' }); }
+function sparks(x, y, n, color, sp = 120) { for (let i = 0; i < n; i++) G.particles.push({ x, y, vx: (Math.random() - .5) * sp, vy: (Math.random() - .8) * sp, life: .3 + Math.random() * .4, max: .7, size: 1 + rnd(2), color, kind: 'spark', grav: 1 }); }
+function confetti(x, y) { const cols = ['#ffd75e', '#ff6b6b', '#6be0ff', '#a6ef8a', '#e09bff']; for (let i = 0; i < 40; i++) G.particles.push({ x, y, vx: (Math.random() - .5) * 220, vy: -Math.random() * 220, life: 1 + Math.random(), max: 2, size: 2, color: pick(cols), kind: 'spark', grav: 1 }); }
+function floater(x, y, text, color = '#fff') {
+  const near = G.floaters.filter(f => Math.abs(f.x - x) < 40 && Math.abs(f.y0 - y) < 12 && f.life > .7).length;
+  G.floaters.push({ x, y: y - near * 9, y0: y, text, color, life: 1.2 + near * .15 });
+}
+function toast(msg) {
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; const box = $('#toasts'); box.appendChild(el);
+  while (box.children.length > 4) box.firstChild.remove(); setTimeout(() => el.remove(), 4200);
+}
+function showBanner(t1, t2 = '', dur = 2) {
+  $('#b1').textContent = t1; const b2 = $('#b2'); b2.textContent = t2 || ''; b2.hidden = !t2; $('#banner').dataset.show = '1'; G.banner = dur;
+}
+function showOverlay(html, primary, cls = '') { const o = $('#overlay'); o.innerHTML = `<div class="panel ${cls}">${html}</div>`; o.hidden = false; G.overlay = primary || null; G.overlayT = 0; }
+function hideOverlay() { $('#overlay').hidden = true; G.overlay = null; }
+
+/* ---------------- Damage + hazards ---------------- */
+function hurtPlayerHazard(p, dmg, why) {
+  if (p.state !== 'ok' || p.inv_t > 0) return;
+  const before = p.hp; p.hp = Math.max(1, p.hp - dmg); p.inv_t = 1; sfx('hurt'); G.shake = Math.max(G.shake, 3);
+  floater(cx(p), p.y - 4, before === p.hp ? 'ouch!' : '-' + (before - p.hp), '#ff8a7a');
+  if (p.hp === 1 && before > 1) toast(`${p.name} is hanging on with 1 HP! Hazards can't knock you out.`);
+}
+/* Fall damage: tracked from the highest point of each fall. Ladders, ropes and water are safe landings.
+   Players: hazard rule (never below 1 HP). Enemies: real damage, so shoving them off ledges works. */
+function trackFall(e) {
+  const safe = e.onGround || e.climbing || e.fly || inWater(e);
+  if (e.peakY === undefined || e.peakY === null) e.peakY = e.y;
+  if (!safe) { e.peakY = Math.min(e.peakY, e.y); e.wasAir = true; return; }
+  if (e.wasAir && e.onGround) { const tiles = (e.y - e.peakY) / T; if (tiles >= 5) landHard(e, tiles); }
+  e.wasAir = false; e.peakY = e.y;
+}
+function landHard(e, tiles) {
+  const base = tiles < 9 ? 1 : tiles < 13 ? 2 : 3;
+  puff(cx(e), e.y + e.h, 10, '#8a7a6a', 70); sfx('thud'); G.shake = Math.max(G.shake, tiles >= 9 ? 5 : 3);
+  if (e.isPlayer) {
+    if (e.state !== 'ok') return;
+    // Players: a standard one-room drop (under 9 tiles) is always free
+    if (tiles < 9) { floater(cx(e), e.y - 4, 'thud', '#c8c4d6'); return; }
+    const pbase = tiles < 13 ? 1 : tiles < 17 ? 2 : 3;
+    const fl = fxLvl(e, 'feather');
+    const dmg = fl > 1 ? 0 : Math.max(0, pbase + DIFF[G.settings.diff].hazard - 2 - fl);
+    if (tiles >= 13) { e.stunT = .8; floater(cx(e), e.y - 10, 'dizzy!', '#ffd75e'); }
+    if (!dmg) { floater(cx(e), e.y - 4, 'thud', '#c8c4d6'); return; }
+    const before = e.hp; e.hp = Math.max(1, e.hp - dmg); sfx('hurt');
+    floater(cx(e), e.y - 4, before === e.hp ? 'THUD!' : 'THUD -' + (before - e.hp), '#ff8a7a');
+    if (e.hp === 1 && before > 1) toast(`${e.name} took a big fall and is hanging on with 1 HP. Falls can't knock you out.`);
+  } else if (e.alive) { floater(cx(e), e.y - 12, 'splat!', '#ffe066'); damageEnemy(e, rollN(base, 4), 'fall'); }
+}
+function damageEnemy(e, dmg, src) {
+  if (!e.alive) return; e.hp -= dmg; e.flash = .25; floater(cx(e), e.y - 4, '-' + dmg, '#ffe066'); sfx('hit');
+  if (e.hp <= 0) killEnemy(e);
+}
+function killEnemy(e) {
+  e.alive = false; puff(cx(e), cy(e), 22, '#8f8ba0', 60); sfx('poof'); floater(cx(e), e.y - 10, 'poof!', '#c8c4d6');
+  if (e.type === 'boss') { toast(`${e.name} poofs into grey mist! The door is open.`); G.players.forEach(p => giveItem(p, rollItem(BOSS_ODDS))); confetti(cx(e), cy(e)); }
+  if (Math.random() < .5 || e.type === 'boss') { const g = mkObj('gold', 0, 0); g.x = cx(e) - 3; g.y = cy(e); g.vy = -120; g.vx = (Math.random() - .5) * 60; G.objects.push(g); if (e.type === 'boss') for (let i = 0; i < 4; i++) { const g2 = mkObj('gold', 0, 0); g2.x = cx(e); g2.y = cy(e); g2.vy = -160; g2.vx = (Math.random() - .5) * 140; G.objects.push(g2); } }
+}
+function damagePlayerCombat(p, dmg) {
+  if (p.state !== 'ok') return; p.hp -= dmg; p.inv_t = .5; sfx('hurt'); G.shake = Math.max(G.shake, 4); floater(cx(p), p.y - 4, '-' + dmg, '#ff8a7a');
+  if (p.hp <= 0) { p.hp = 0; p.state = 'down'; p.saves = { s: 0, f: 0 }; p.holding = dropHeld(p); toast(`${p.name} is down! Death saves on their turn. A friend can help them up.`); }
+}
+function dropHeld(p) { if (p.holding) { p.holding.held = false; p.holding.vx = p.facing * 20; } return null; }
+function igniteAt(tx, ty, life = 3) {
+  const t = tileAt(tx, ty); if (isSolid(t) || t === WATER || t === BED) return; const k = ty * MW + tx;
+  if (!G.L.fires.has(k)) G.L.fires.set(k, { life: t === PLAT || t === LAD ? 4.5 : life, tick: 0 });
+}
+function explode(x, y, r = 30) {
+  sfx('boom'); G.shake = 8; G.fx.push({ kind: 'flash', x, y, life: .35, r: r * 1.6 });
+  for (let i = 0; i < 26; i++) G.particles.push({ x, y, vx: (Math.random() - .5) * 260, vy: (Math.random() - .7) * 240, life: .5 + Math.random() * .5, max: 1, size: 2 + rnd(3), color: pick(['#ffd75e', '#ff8a3a', '#ff4f3a', '#fff2b0']), kind: 'spark', grav: 1 });
+  puff(x, y, 18, '#6a6478', 90);
+  const tx0 = Math.floor((x - r) / T), tx1 = Math.floor((x + r) / T), ty0 = Math.floor((y - r) / T), ty1 = Math.floor((y + r) / T);
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const t = tileAt(tx, ty); if (t === BED || t === E || t === WATER) continue;
+    if (Math.hypot(tx * T + 8 - x, ty * T + 8 - y) <= r + 4) { setTile(tx, ty, E); G.L.rope[ty * MW + tx] = 0; sparks(tx * T + 8, ty * T + 8, 3, '#7a6656', 80); }
+  }
+  for (let i = 0; i < 4; i++) igniteAt(Math.floor((x + (Math.random() - .5) * r * 2) / T), Math.floor((y + (Math.random() - .5) * r) / T), 2);
+  for (const e of G.enemies) if (e.alive) { const d = Math.hypot(cx(e) - x, cy(e) - y); if (d < r * 1.4) { e.vx = sgn(cx(e) - x || 1) * 220; e.vy = -200; damageEnemy(e, rollN(2, 6), 'boom'); } }
+  for (const p of G.players) if (p.state === 'ok') { const d = Math.hypot(cx(p) - x, cy(p) - y); if (d < r * 1.4) { p.vx = sgn(cx(p) - x || 1) * 200; p.vy = -220; hurtPlayerHazard(p, rollN(2, 6), 'boom'); } }
+  for (const o of G.objects) if (o.alive && !o.held) { const d = Math.hypot(cx(o) - x, cy(o) - y); if (d < r * 1.6) { if (o.kind === 'barrel' && o.fuse <= 0) o.fuse = .18; else if (o.kind === 'pot') breakPot(o); else { o.vx = sgn(cx(o) - x || 1) * 160; o.vy = -180; } } }
+  checkCombatTrigger();
+}
+function breakPot(o) {
+  o.alive = false; sparks(cx(o), cy(o), 10, '#c27a4a', 100); sfx('hit');
+  if (Math.random() < .45) { const g = mkObj('gold', 0, 0); g.x = cx(o) - 3; g.y = o.y; g.vy = -100; G.objects.push(g); }
+}
+
+/* ---------------- Player update ---------------- */
+function updatePlayer(p, dt, first, controlled) {
+  if (p.gearOpen) controlled = false;
+  const I = controlled ? p.in : BLANK; const P = controlled && first ? p.pr : {};
+  if (p.inv_t > 0) p.inv_t -= dt; if (p.dropT > 0) p.dropT -= dt; if (p.trickCd > 0) p.trickCd -= dt;
+  if (p.state === 'ko') { const c = centroid(); p.x += (c.x - 30 * (p.id % 2 ? 1 : -1) - p.x) * dt * 1.5; p.y += (c.y - 30 - p.y) * dt * 1.5; return; }
+  if (p.state !== 'ok') { p.vx *= .8; p.vy += 900 * dt; moveBody(p, dt); p.peakY = p.y; p.wasAir = false; return; }
+  const inC = !!G.combat; const myTurn = inC && G.combat.actor === p && G.combat.phase === 'pturn';
+  let ax = (I.right ? 1 : 0) - (I.left ? 1 : 0);
+  if (inC && (!myTurn || G.combat.moveLeft <= 0)) ax = 0;
+  const stunned = p.stunT > 0; if (stunned) { p.stunT -= dt; ax = 0; if (Math.random() < dt * 6) G.particles.push({ x: cx(p) + (Math.random() - .5) * 10, y: p.y - 2, vx: (Math.random() - .5) * 20, vy: -10, life: .4, max: .4, size: 2, color: '#ffd75e', kind: 'spark' }); }
+  const water = inWater(p); p.inWater = water;
+  const climbable = canClimb(p);
+  const below = (() => { const tx = Math.floor(cx(p) / T), ty = Math.floor((p.y + p.h + 2) / T); return tileAt(tx, ty) === LAD || G.L.rope[ty * MW + tx]; })();
+  if (!p.climbing && !(inC && !myTurn) && ((I.up && climbable) || (I.down && (climbable || below)))) { p.climbing = true; p.vx = 0; if (!climbable) p.y += 3; }
+  if (p.climbing && !climbable) p.climbing = false;
+  const x0 = p.x;
+  if (p.climbing) {
+    p.vy = ((I.down ? 1 : 0) - (I.up ? 1 : 0)) * 70; p.vx = ax * 45;
+    if (P.jump && !(inC && !myTurn)) { p.climbing = false; p.vy = -230; sfx('jump'); }
+    moveBody(p, dt, { noPlat: true });
+  } else {
+    const speed = (water ? 52 : 88) * (1 + .1 * fxLvl(p, 'swift')); const target = ax * speed; const acc = p.onGround ? 1100 : 650;
+    if (p.vx < target) p.vx = Math.min(target, p.vx + acc * dt); else if (p.vx > target) p.vx = Math.max(target, p.vx - acc * dt);
+    p.vy += (water ? 280 : 900) * dt; p.vy = Math.min(p.vy, water ? 70 : 380);
+    const canJump = !(inC && !myTurn) && !stunned;
+    if (P.jump && canJump) {
+      if (I.down && p.onGround && rectHits(p.x, p.y + p.h, p.w, 1, t => t === PLAT)) { p.dropT = .25; p.y += 2; }
+      else if (water) { p.vy = -170; sfx('splash'); }
+      else if (p.onGround) { p.vy = -300 * (1 + .1 * fxLvl(p, 'spring')); p.dbl = false; sfx('jump'); }
+      else if (p.cls === 'shadow' && !p.dbl) { p.vy = -270 * (1 + .1 * fxLvl(p, 'spring')); p.dbl = true; puff(cx(p), p.y + p.h, 6, '#5b4a7a', 30); sfx('jump'); }
+    }
+    if (!I.jump && p.vy < -140 && !water) p.vy = -140;
+    moveBody(p, dt, { noPlat: p.dropT > 0 });
+  }
+  trackFall(p);
+  if (ax) p.facing = ax;
+  if (myTurn) G.combat.moveLeft -= Math.abs(p.x - x0);
+  if (!inC) {
+    // Tether: nobody walks off the shared screen
+    const others = activePlayers().filter(o => o !== p && o.state === 'ok');
+    if (others.length) { const mn = Math.min(...others.map(o => o.x)), mx = Math.max(...others.map(o => o.x)); if (p.x + p.w - mn > VW - 56 || mx - p.x > VW - 56) { if (Math.abs(p.x - x0) > 0 && ((p.x > x0 && p.x + p.w - mn > VW - 56) || (p.x < x0 && mx - p.x > VW - 56))) { p.x = x0; p.vx = 0; if (!p.tetherMsg || G.time - p.tetherMsg > 3) { p.tetherMsg = G.time; floater(cx(p), p.y - 8, 'tether!', '#f5b544'); } } } }
+  }
+  p.anim += Math.abs(p.vx) * dt;
+  if (p.holding) { const o = p.holding; o.x = cx(p) - o.w / 2; o.y = p.y - o.h + 2; o.vx = 0; o.vy = 0; }
+  if (controlled && !inC && first) explorationActions(p);
+}
+function explorationActions(p) {
+  const P = p.pr; if (!P) return;
+  if (P.throw && p.holding) {
+    const o = p.holding; p.holding = null; o.held = false; o.thrown = true; o.owner = p;
+    o.vx = p.facing * (p.in.up ? 120 : 230) + p.vx * .3; o.vy = p.in.up ? -300 : -110; o.y = p.y - o.h; sfx('jump'); consume(p, 'throw'); return;
+  }
+  if (P.item) {
+    consume(p, 'item');
+    if (p.in.down) { p.sel = (p.sel + 1) % 3; floater(cx(p), p.y - 6, ITEMS[p.sel], '#f4ecd8'); return; }
+    useItem(p, ITEMS[p.sel]); return;
+  }
+  if (P.act) {
+    consume(p, 'act');
+    const npc = G.L.npcs.find(n => Math.abs(cx(n) - cx(p)) < 22 && Math.abs(cy(n) - cy(p)) < 16);
+    if (npc) { openDialogue(npc, p); return; }
+    const chest = G.objects.find(o => o.alive && o.kind === 'chest' && !o.open && Math.abs(cx(o) - cx(p)) < 16 && Math.abs(cy(o) - cy(p)) < 14);
+    if (chest) { openChest(chest, p); return; }
+    if (!p.holding) {
+      const o = G.objects.find(o => o.alive && !o.held && ['pot', 'barrel', 'bomb', 'rock'].includes(o.kind) && Math.abs(cx(o) - cx(p)) < 13 && Math.abs((o.y + o.h) - (p.y + p.h)) < 12);
+      if (o) { p.holding = o; o.held = true; o.thrown = false; return; }
+    }
+    const foe = G.enemies.find(e => e.alive && Math.abs(cx(e) - cx(p)) < 22 && Math.abs(cy(e) - cy(p)) < 16);
+    if (foe) { startCombat(foe, true, p); return; }
+    classTrick(p);
+  }
+}
+function classTrick(p) {
+  if (p.trickCd > 0) return;
+  if (p.cls === 'shield') {
+    const tx = Math.floor((cx(p) + p.facing * 12) / T); const tys = [Math.floor((p.y + 2) / T), Math.floor((p.y + p.h - 2) / T)];
+    let hit = false; for (const ty of tys) if (tileAt(tx, ty) === CRACK) { setTile(tx, ty, E); sparks(tx * T + 8, ty * T + 8, 14, '#9b8270', 140); hit = true; }
+    if (hit) { sfx('hit'); G.shake = 3; floater(cx(p), p.y - 6, 'BASH!', '#f4ecd8'); } else floater(cx(p), p.y - 6, 'no cracked wall', '#aaa2bf');
+    p.trickCd = .4;
+  } else if (p.cls === 'spark') {
+    G.projectiles.push({ kind: 'spark', x: cx(p) + p.facing * 6, y: p.y + 5, vx: p.facing * 210, vy: -20, owner: p, life: 1.2 }); sfx('jump'); p.trickCd = .9;
+  } else if (p.cls === 'shadow') {
+    G.projectiles.push({ kind: 'dagger', x: cx(p) + p.facing * 6, y: p.y + 6, vx: p.facing * 260, vy: -10, owner: p, life: 1 }); sfx('jump'); p.trickCd = .8;
+  } else if (p.cls === 'lantern') {
+    if (p.lightUses <= 0) { floater(cx(p), p.y - 6, 'lantern needs a rest', '#aaa2bf'); p.trickCd = .5; return; }
+    const near = G.players.filter(o => o.state === 'ok' && Math.hypot(cx(o) - cx(p), cy(o) - cy(p)) < 4 * T);
+    p.lightUses--; p.trickCd = 1;
+    queueRoll({ label: `${p.name}'s Warm Light heals nearby friends`, n: 1, sides: 6, bonus: p.stats.heart + healBonus(p), kind: 'heal', auto: true, hold: .7,
+      onDone: d => { const amt = Math.max(1, d.total); near.forEach(o => { o.hp = Math.min(o.maxHp, o.hp + amt); floater(cx(o), o.y - 6, '+' + amt, '#ffd75e'); }); sfx('heal'); G.fx.push({ kind: 'ring', x: cx(p), y: cy(p), life: .6, r: 4 * T }); } });
+  }
+}
+function useItem(p, it) {
+  if (p.inv[it] <= 0) { floater(cx(p), p.y - 6, 'no ' + it + 's left', '#aaa2bf'); return; }
+  if (it === 'rope') {
+    const tx = Math.floor(cx(p) / T); let ty = Math.floor((p.y + p.h - 1) / T); let n = 0;
+    while (n < 9 && !isSolid(tileAt(tx, ty))) { G.L.rope[ty * MW + tx] = 1; ty--; n++; }
+    if (n <= 1) { floater(cx(p), p.y - 6, 'no room for a rope', '#aaa2bf'); for (let y = ty; y <= ty + 2; y++) G.L.rope[y * MW + tx] = 0; return; }
+    p.inv.rope--; G.L.ropeDirty = true; sfx('jump'); floater(cx(p), p.y - 6, 'rope!', '#f4ecd8');
+  } else if (it === 'bomb') {
+    const b = mkObj('bomb', 0, 0); b.x = cx(p) - 4; b.y = p.y; b.vx = p.facing * 110; b.vy = -140; b.fuse = 2.2; b.thrown = true; b.owner = p; G.objects.push(b); p.inv.bomb--; sfx('jump');
+  } else if (it === 'potion') {
+    p.inv.potion--; queueRoll({ label: `${p.name} drinks a potion`, n: 1, sides: 8, bonus: 2 + healBonus(p), kind: 'heal', auto: true, hold: .6, onDone: d => { p.hp = Math.min(p.maxHp, p.hp + d.total); floater(cx(p), p.y - 6, '+' + d.total, '#ffd75e'); sfx('heal'); } });
+  }
+}
+function giveRandomItem(p) { const it = pick(['rope', 'bomb', 'potion', 'rope']); p.inv[it]++; return it; }
+function openChest(c, p) {
+  if (c.seed) {
+    const s = c.seed;
+    if (s.owner !== null && s.owner !== p.id) { floater(cx(c), c.y - 8, `only ${G.players[s.owner].name} can open this`, G.players[s.owner].color); sfx('miss'); return; }
+    c.open = true; s.found = true; sfx('open'); sfx('crit'); confetti(cx(c), c.y);
+    toast(s.lost ? `${p.name} gets their ${s.item.name} back!` : `${p.name} finds the treasure map chest!`); giveItem(p, JSON.parse(JSON.stringify(s.item))); return;
+  }
+  c.open = true; sfx('open'); sparks(cx(c), c.y, 16, '#ffd75e', 90);
+  toast(`${p.name} opens a chest! Everyone gets 10 gold and a piece of gear.`); sfx('coin');
+  G.players.filter(o => o.state !== 'ko').forEach(o => { o.gold += 10; if (Math.random() < .5) giveRandomItem(o); giveItem(o, rollItem(CHEST_ODDS)); });
+}
+
+/* ---------------- World update ---------------- */
+function updateObjects(dt) {
+  for (const o of G.objects) {
+    if (!o.alive || o.held) continue;
+    if (o.kind === 'bomb' || (o.kind === 'barrel' && o.fuse > 0)) { o.fuse -= dt; if (o.fuse <= 0) { o.alive = false; explode(cx(o), cy(o), o.kind === 'barrel' ? 34 : 28); continue; } }
+    if (o.kind === 'chest' && o.onGround) continue;
+    const vy0 = o.vy, vx0 = o.vx;
+    o.vy = Math.min(o.vy + 800 * dt, 380); moveBody(o, dt);
+    if (o.onGround) { o.vx *= Math.pow(.02, dt); if (Math.abs(o.vx) < 4) o.vx = 0; }
+    if (o.thrown) {
+      const fast = Math.hypot(vx0, vy0) > 70;
+      if (fast) {
+        const foe = G.enemies.find(e => e.alive && overlap(e, o));
+        if (foe) { thrownHit(o, foe); continue; }
+        if (G.settings.ff) { const pl = G.players.find(q => q !== o.owner && q.state === 'ok' && overlap(q, o)); if (pl) { hurtPlayerHazard(pl, 1); o.vx *= -.3; } }
+      }
+      if (o.hitWall || (o.onGround && vy0 > 160)) {
+        if (o.kind === 'pot') { breakPot(o); continue; }
+        if (o.kind === 'barrel') { o.alive = false; explode(cx(o), cy(o), 34); continue; }
+      }
+      if (o.onGround && Math.abs(o.vx) < 10) o.thrown = false;
+    }
+    if (o.kind === 'gold' || o.kind === 'ropeItem') {
+      for (const q of G.players) { const ml = fxLvl(q, 'magnet'); if (!ml || q.state !== 'ok') continue; const dx = cx(q) - cx(o), dy = cy(q) - cy(o), d = Math.hypot(dx, dy); if (d < (ml > 1 ? 6 : 3) * T && d > 2) { o.x += dx / d * 140 * dt; o.y += dy / d * 140 * dt; o.vy = 0; break; } }
+      const p = G.players.find(p => p.state === 'ok' && overlap(p, o));
+      if (p) { o.alive = false; if (o.kind === 'gold') { const v = 5 + rnd(3) * 5; p.gold += v; floater(cx(o), o.y - 4, '+' + v, '#ffd75e'); sfx('coin'); } else { p.inv.rope++; floater(cx(o), o.y - 4, '+1 rope', '#f4ecd8'); sfx('coin'); } }
+    }
+    if (o.y > MH * T) o.alive = false;
+  }
+  G.objects = G.objects.filter(o => o.alive || o.kind === 'chest');
+}
+function thrownHit(o, foe) {
+  const dmg = o.kind === 'barrel' ? 0 : rollN(1, 4);
+  if (o.kind === 'barrel') { o.alive = false; explode(cx(o), cy(o), 34); return; }
+  if (o.kind === 'bomb') { o.vx *= -.3; return; }
+  damageEnemy(foe, dmg); foe.vx = sgn(o.vx) * 120; foe.vy = -120;
+  if (o.kind === 'pot') breakPot(o); else { o.vx *= -.3; o.thrown = false; }
+  if (!G.combat && foe.alive && o.owner) { toast(`${o.owner.name} hits ${foe.name} with a ${o.kind}! Surprise round!`); startCombat(foe, true, o.owner); }
+}
+function updateProjectiles(dt) {
+  for (const pr of G.projectiles) {
+    pr.life -= dt; pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.vy += (pr.kind === 'dagger' ? 260 : 60) * dt;
+    if (pr.kind === 'spark' && Math.random() < .6) G.particles.push({ x: pr.x, y: pr.y, vx: 0, vy: -10, life: .25, max: .25, size: 1, color: pick(['#ffd75e', '#ff8a3a']), kind: 'spark' });
+    const tx = Math.floor(pr.x / T), ty = Math.floor(pr.y / T); const t = tileAt(tx, ty);
+    const foe = G.enemies.find(e => e.alive && pr.x > e.x && pr.x < e.x + e.w && pr.y > e.y && pr.y < e.y + e.h);
+    if (foe) {
+      pr.life = 0; const dmg = pr.kind === 'spark' ? rollN(1, 4) : rollN(1, 4) + Math.max(0, pr.owner.stats.agi);
+      damageEnemy(foe, dmg); if (pr.kind === 'spark') igniteAt(Math.floor(cx(foe) / T), Math.floor((foe.y + foe.h - 2) / T), 2);
+      if (!G.combat && foe.alive) { toast(`${pr.owner.name} strikes first! Surprise round!`); startCombat(foe, true, pr.owner); }
+      continue;
+    }
+    if (isSolid(t) || t === WATER || t === PLAT && pr.kind === 'spark') {
+      pr.life = 0;
+      if (pr.kind === 'spark') { if (t === PLAT) igniteAt(tx, ty); else igniteAt(Math.floor((pr.x - pr.vx * dt) / T), Math.floor((pr.y - pr.vy * dt) / T), 1.5); sparks(pr.x, pr.y, 6, '#ffb03a', 60); if (t === WATER) sfx('splash'); }
+      else sparks(pr.x, pr.y, 3, '#cfd2dc', 50);
+    }
+    const ob = G.objects.find(o => o.alive && !o.held && pr.x > o.x && pr.x < o.x + o.w && pr.y > o.y && pr.y < o.y + o.h && (o.kind === 'barrel' || o.kind === 'pot'));
+    if (ob && pr.life > 0) { pr.life = 0; if (ob.kind === 'barrel') { if (pr.kind === 'spark') ob.fuse = .25; else { ob.vx = sgn(pr.vx) * 60; } } else breakPot(ob); }
+  }
+  G.projectiles = G.projectiles.filter(p => p.life > 0);
+}
+function updateFires(dt) {
+  const L = G.L;
+  for (const [k, f] of L.fires) {
+    f.life -= dt; f.tick += dt;
+    const tx = k % MW, ty = Math.floor(k / MW);
+    if (Math.random() < dt * 8) G.particles.push({ x: tx * T + 3 + Math.random() * 10, y: ty * T + 12, vx: (Math.random() - .5) * 10, vy: -30 - Math.random() * 30, life: .5, max: .5, size: 1 + rnd(2), color: pick(['#ffd75e', '#ff8a3a', '#ff4f3a']), kind: 'spark' });
+    if (f.tick > .45) {
+      f.tick = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) { const t = tileAt(tx + dx, ty + dy); if ((t === PLAT || t === LAD) && Math.random() < .4) igniteAt(tx + dx, ty + dy); }
+      for (const o of G.objects) if (o.alive && !o.held && Math.floor(cx(o) / T) === tx && Math.floor((o.y + o.h - 1) / T) === ty) { if (o.kind === 'barrel' && o.fuse <= 0) o.fuse = .5; else if (o.kind === 'pot') breakPot(o); }
+    }
+    const box = { x: tx * T, y: ty * T, w: T, h: T };
+    for (const p of G.players) if (p.state === 'ok' && overlap(p, box)) { p.hazT = (p.hazT || 0) - dt; if (p.hazT <= 0) { p.hazT = 1; hurtPlayerHazard(p, 1, 'fire'); } }
+    for (const e of G.enemies) if (e.alive && overlap(e, box)) { e.fireT = (e.fireT || 0) - dt; if (e.fireT <= 0) { e.fireT = 1; damageEnemy(e, rollN(1, 4), 'fire'); } }
+    if (f.life <= 0) { L.fires.delete(k); const t = tileAt(tx, ty); if (t === PLAT || t === LAD) { setTile(tx, ty, E); puff(tx * T + 8, ty * T + 8, 5, '#4a4452', 30); } }
+  }
+}
+function updateHazards(dt) {
+  const d = DIFF[G.settings.diff];
+  for (const p of G.players) {
+    if (p.state !== 'ok') continue;
+    if (rectHits(p.x + 1, p.y + p.h - 6, p.w - 2, 6, t => t === SPIKE)) { if (p.inv_t <= 0) { hurtPlayerHazard(p, d.hazard, 'spikes'); p.vy = -230; } }
+    if (p.y > MH * T) { p.y = G.L.entrance.ty * T; }
+  }
+  for (const e of G.enemies) {
+    if (!e.alive) continue; if (e.spikeT > 0) e.spikeT -= dt;
+    if (!e.fly && rectHits(e.x + 1, e.y + e.h - 6, e.w - 2, 6, t => t === SPIKE) && e.spikeT <= 0) { e.spikeT = 1; e.vy = -200; damageEnemy(e, rollN(1, 6), 'spikes'); floater(cx(e), e.y - 12, 'spiked!', '#ffe066'); }
+  }
+}
+function updateEnemiesExplore(dt) {
+  for (const e of G.enemies) {
+    if (!e.alive) continue; if (e.flash > 0) e.flash -= dt; if (e.calm > 0) e.calm -= dt;
+    const d = ENEMY[e.type];
+    if (e.fly) {
+      e.phase += dt; e.vx = e.dir * d.speed * .6; e.vy = Math.sin(e.phase * 2) * 25 + (e.home - 30 - cy(e)) * .5;
+      moveBody(e, dt, { noPlat: true }); if (e.hitWall) e.dir *= -1;
+    } else {
+      if (e.onGround && Math.abs(e.vx) <= d.speed) {
+        e.vx = e.dir * d.speed * .55;
+        const aheadX = Math.floor((e.dir > 0 ? e.x + e.w + 1 : e.x - 1) / T), footY = Math.floor((e.y + e.h + 1) / T);
+        const t = tileAt(aheadX, footY); if (!isSolid(t) && t !== PLAT) e.dir *= -1;
+      } else if (e.onGround) e.vx *= Math.pow(.01, dt);
+      e.vy = Math.min(e.vy + 900 * dt, 380); moveBody(e, dt); trackFall(e); if (e.hitWall) e.dir *= -1;
+    }
+  }
+  checkCombatTrigger();
+}
+function checkCombatTrigger() {
+  if (G.combat || G.mode !== 'play' || G.dialogue) return;
+  for (const e of G.enemies) {
+    if (!e.alive || e.calm > 0) continue;
+    for (const p of G.players) {
+      if (p.state !== 'ok') continue;
+      const dx = Math.abs(cx(e) - cx(p)), dy = Math.abs(cy(e) - cy(p));
+      const seeX = e.fly ? 5 * T : 4 * T, seeY = e.fly ? 3 * T : 1.5 * T;
+      if (overlap(e, p) || (dx < seeX && dy < seeY && hasLOS(e, p))) { toast(`${e.name} spots ${p.name}!`); startCombat(e, false, null); return; }
+    }
+  }
+}
+function updateTether() {
+  const ps = G.players.filter(p => p.state === 'ok'); if (ps.length < 2) return;
+  const low = ps.reduce((a, b) => (b.y > a.y ? b : a));
+  if (!low.onGround) return;
+  for (const p of ps) {
+    if (low.y - p.y > VH - 70) { puff(cx(p), cy(p), 10, '#f5b544', 40); p.x = low.x + (p.id - low.id) * 6; p.y = low.y; p.vx = p.vy = 0; p.climbing = false; p.peakY = p.y; p.wasAir = false; puff(cx(p), cy(p), 10, '#f5b544', 40); toast(`The lantern tether pulls ${p.name} along!`); }
+  }
+}
+function checkExit() {
+  const L = G.L, door = { x: L.door.tx * T - 4, y: L.door.ty * T - 10, w: T + 8, h: T + 10 };
+  const ps = G.players.filter(p => p.state === 'ok'); if (!ps.length) return;
+  const at = ps.filter(p => overlap(p, door));
+  if (!at.length) { G.doorMsg = 0; return; }
+  if (L.boss && L.boss.alive) { if (!G.doorMsg) { toast(`The door is sealed! ${L.boss.name} holds the key.`); G.doorMsg = 1; } return; }
+  if (at.length === ps.length) { completeLevel(); return; }
+  if (!G.doorMsg) { toast(`${at[0].name} found the exit! Everyone gather at the door.`); G.doorMsg = 1; }
+}
+
+/* ---------------- Dice ---------------- */
+const D = { q: [], cur: null, idleT: 0 };
+function queueRoll(o) { D.q.push(o); }
+function setDiceShow(v) { $('#dice').dataset.show = v ? '1' : '0'; }
+function updateDice(dt, first) {
+  if (!D.cur) {
+    if (D.q.length) {
+      const d = D.cur = D.q.shift(); d.t = 0; d.phase = d.auto ? 'spin' : 'prompt'; d.wait = 0;
+      const el = $('#dice'); el.dataset.show = '1'; el.dataset.phase = d.phase; el.dataset.res = ''; el.dataset.kind = d.kind || '';
+      $('#dLabel').textContent = d.label; $('#dRes').textContent = ''; $('#dRes').className = 'dr';
+      $('#dNum').textContent = d.sides; const pr = $('#dPrompt');
+      if (!d.auto) { if (d.actor) d.actor.gearOpen = false; pr.hidden = false; pr.textContent = `${d.actor.name}: press ${keyName(d.actor.ctrl, 'act')} to roll!`; } else { pr.hidden = true; sfx('rattle'); }
+      D.idleT = 0;
+    } else { D.idleT += dt; if (D.idleT > 1.4) setDiceShow(false); }
+    return;
+  }
+  const d = D.cur; d.t += dt;
+  if (d.phase === 'prompt') {
+    d.wait += dt;
+    const go = (first && d.actor && d.actor.pr && d.actor.pr.act) || d.clicked || (G.settings.timer && d.wait > 25);
+    if (go) { if (d.actor) consume(d.actor, 'act'); d.phase = 'spin'; d.t = 0; $('#dice').dataset.phase = 'spin'; $('#dPrompt').hidden = true; sfx('rattle'); }
+  } else if (d.phase === 'spin') {
+    if (Math.floor(d.t / .06) !== d.lastFace) { d.lastFace = Math.floor(d.t / .06); $('#dNum').textContent = 1 + rnd(d.sides); }
+    if (d.t > .8) {
+      d.rolls = []; for (let i = 0; i < (d.n || 1); i++) d.rolls.push(1 + rnd(d.sides));
+      d.nat = d.rolls[0]; d.total = d.rolls.reduce((a, b) => a + b, 0) + (d.bonus || 0);
+      d.phase = 'show'; d.t = 0; const el = $('#dice'); el.dataset.phase = 'show';
+      $('#dNum').textContent = d.n > 1 ? d.rolls.reduce((a, b) => a + b, 0) : d.nat;
+      let res = '', cls = '';
+      if (d.judge) { const j = d.judge(d); res = j.text; cls = j.cls; }
+      else { res = `${d.n > 1 ? d.n : ''}d${d.sides}${d.bonus ? ' ' + fmtB(d.bonus) : ''} = ${d.total}`; cls = d.kind === 'heal' ? 'heal' : ''; }
+      el.dataset.res = cls; const r = $('#dRes'); r.textContent = res; r.className = 'dr ' + cls;
+      if (cls === 'crit') { sfx('crit'); if (d.at) confetti(cx(d.at), d.at.y); } else if (cls === 'miss' || cls === 'fumble') sfx('miss'); else sfx('land');
+    }
+  } else if (d.phase === 'show') {
+    if (d.t > (d.hold || 1.1)) { D.cur = null; D.idleT = 0; d.onDone && d.onDone(d); }
+  }
+}
+$('#die').addEventListener('click', () => { if (D.cur && D.cur.phase === 'prompt') D.cur.clicked = true; });
+function d20Judge(vsLabel, target, critOn = 20) {
+  return d => {
+    const crit = d.nat >= critOn, fumble = d.nat === 1, ok = crit || (!fumble && d.total >= target);
+    d.ok = ok; d.crit = crit; d.fumble = fumble;
+    const sum = `${d.nat} ${fmtB(d.bonus || 0)} = ${d.total} vs ${vsLabel} ${target}`;
+    if (crit) return { text: 'CRITICAL! ' + sum, cls: 'crit' }; if (fumble) return { text: 'FUMBLE! ' + sum, cls: 'fumble' };
+    return { text: (ok ? (d.okWord || 'HIT! ') : (d.noWord || 'MISS · ')) + sum, cls: ok ? 'hit' : 'miss' };
+  };
+}
+
+/* ---------------- Combat ---------------- */
+function startCombat(trigger, surprise, attacker) {
+  if (G.combat || G.mode !== 'play') return;
+  const ps = G.players.filter(p => p.state !== 'ko');
+  // Only foes that can actually see someone in the party join the fight
+  let foes = G.enemies.filter(e => e.alive && !(e.calm > 0) && ps.some(p => Math.abs(cx(e) - cx(p)) < 13 * T && Math.abs(cy(e) - cy(p)) < 7 * T && hasLOS(e, p)));
+  if (!foes.includes(trigger) && trigger.alive) foes.push(trigger);
+  if (!foes.length) return;
+  for (const p of ps) { if (p.holding) { p.holding.held = false; p.holding.vx = 0; p.holding = null; } p.climbing = false; p.vx = 0; }
+  const list = [...ps, ...foes].map(c => ({ c, init: rollN(1, 20) + (c.isPlayer ? c.stats.agi : ENEMY[c.type].init) }));
+  list.sort((a, b) => b.init - a.init);
+  let order = list.map(x => x.c);
+  if (surprise) { const pls = order.filter(c => c.isPlayer), ens = order.filter(c => !c.isPlayer); if (attacker) { pls.splice(pls.indexOf(attacker), 1); pls.unshift(attacker); } order = [...pls, ...ens]; }
+  G.combat = { order, idx: -1, round: 1, phase: 'intro', t: 1.5, surprise, actor: null, moveLeft: 0, acted: false, sel: 0, timer: 0 };
+  foes.forEach(f => { f.vx = 0; f.inCombat = true; });
+  showBanner(surprise ? 'SURPRISE ATTACK!' : 'BATTLE!', surprise ? 'Your party acts first this round.' : 'Take turns: move, then do one action.', 1.5);
+  sfx('battle'); buildTurnStrip();
+}
+function combatOver() {
+  const c = G.combat; if (!c || c.ending) return true;
+  const foesLeft = c.order.some(x => x.isEnemy && x.alive);
+  const up = G.players.some(p => p.state === 'ok');
+  if (!foesLeft) {
+    c.ending = true; c.phase = 'end'; c.t = 1.6;
+    G.players.forEach(p => { if (p.state === 'down' || p.state === 'stable') { p.state = 'ok'; p.hp = Math.max(1, p.hp); floater(cx(p), p.y - 6, 'back up!', '#a6ef8a'); } });
+    showBanner('VICTORY!', 'All foes poofed into grey mist.', 1.6); sfx('win'); return true;
+  }
+  if (!up) { c.ending = true; c.phase = 'wipe'; c.t = 3; showBanner('Party out of action', 'Back to the checkpoint. Loot from this level is lost.', 3); return true; }
+  return false;
+}
+function nextTurn() {
+  const c = G.combat; if (combatOver()) return;
+  let guard = 0;
+  while (guard++ < 40) {
+    c.idx++; if (c.idx >= c.order.length) { c.idx = 0; c.round++; }
+    const a = c.order[c.idx];
+    if (a.isEnemy) {
+      if (!a.alive) continue;
+      if (c.surprise && c.round === 1) continue;
+      c.actor = a;
+      if (a.frozen) { a.frozen = false; floater(cx(a), a.y - 8, 'frozen!', '#82d2f0'); c.phase = 'ewait'; c.t = .9; buildTurnStrip(); return; }
+      const targets = G.players.filter(p => p.state === 'ok');
+      a.target = targets.sort((p, q) => Math.hypot(cx(p) - cx(a), cy(p) - cy(a)) - Math.hypot(cx(q) - cx(a), cy(q) - cy(a)))[0];
+      c.moveLeft = ENEMY[a.type].move * T; c.phase = 'emove'; c.t = 0; buildTurnStrip(); return;
+    } else {
+      if (a.state === 'ko' || a.state === 'stable') continue;
+      c.actor = a;
+      if (a.state === 'down') { c.phase = 'deathsave'; buildTurnStrip(); deathSave(a); return; }
+      if (a.cd > 0) a.cd--;
+      c.phase = 'pturn'; c.moveLeft = (6 + fxLvl(a, 'swift')) * T; c.acted = false; c.sel = 0; c.timer = G.settings.timer; buildTurnStrip(); return;
+    }
+  }
+}
+function deathSave(p) {
+  const dc = DIFF[G.settings.diff].save;
+  queueRoll({ label: `${p.name} is down: death save!`, n: 1, sides: 20, bonus: 2 * fxLvl(p, 'charmed'), actor: p, at: p, auto: false,
+    judge: d => { if (d.nat === 20) return { text: 'NATURAL 20! Back up!', cls: 'crit' }; if (d.nat === 1) return { text: '1: counts as two fails', cls: 'fumble' }; return d.total >= dc ? { text: `${d.total} ≥ ${dc}: success`, cls: 'hit' } : { text: `${d.total} < ${dc}: fail`, cls: 'miss' }; },
+    onDone: d => {
+      if (d.nat === 20) { p.state = 'ok'; p.hp = 1; floater(cx(p), p.y - 6, 'back up!', '#a6ef8a'); }
+      else if (d.nat === 1) p.saves.f += 2; else if (d.total >= dc) p.saves.s++; else p.saves.f++;
+      if (p.saves.s >= 3) { p.state = 'stable'; toast(`${p.name} is stable and will get up after the fight.`); }
+      if (p.saves.f >= 3) { p.state = 'ko'; puff(cx(p), cy(p), 16, '#f5b544', 40); toast(`${p.name} becomes a lantern ghost until the next level.`); }
+      G.combat && (G.combat.phase = 'ewait', G.combat.t = .5);
+    } });
+}
+function nearestFoe(p, range) {
+  let best = null, bd = 1e9; for (const e of G.combat.order) { if (!e.isEnemy || !e.alive) continue; const d = Math.hypot(cx(e) - cx(p), cy(e) - cy(p)); const r = range * T + (e.w + p.w) / 2 - 8; if (d <= r && d < bd && (range < 2 || hasLOS(p, e))) { bd = d; best = e; } }
+  return best;
+}
+function combatOptions(p) {
+  const c = CLASSES[p.cls], C = G.combat; const opts = [];
+  opts.push({ id: 'attack', label: c.attack.name, target: nearestFoe(p, c.attack.range), why: 'No foe in reach. Move closer!' });
+  let abT = null;
+  if (c.ability.kind === 'heal') {
+    const allies = G.players.filter(o => (o.state === 'ok' || o.state === 'down' || o.state === 'stable') && Math.hypot(cx(o) - cx(p), cy(o) - cy(p)) <= c.ability.range * T);
+    abT = allies.filter(o => o.state !== 'ok')[0] || allies.filter(o => o.hp < o.maxHp).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] || null;
+  } else abT = nearestFoe(p, c.ability.range);
+  opts.push({ id: 'ability', label: c.ability.name + (p.cd > 0 ? ` (ready in ${p.cd})` : ''), target: abT, off: p.cd > 0, why: p.cd > 0 ? 'Still recharging.' : c.ability.kind === 'heal' ? 'Nobody nearby needs healing.' : 'No foe in range.' });
+  opts.push({ id: 'shove', label: 'Shove', target: nearestFoe(p, 1.7), why: 'Get right next to a foe to shove.' });
+  const downed = G.players.find(o => o !== p && (o.state === 'down' || o.state === 'stable') && Math.abs(cx(o) - cx(p)) < 22 && Math.abs(cy(o) - cy(p)) < 18);
+  opts.push({ id: 'help', label: 'Help up', target: downed, why: 'Stand next to a downed friend.' });
+  opts.push({ id: 'potion', label: `Potion (${p.inv.potion})`, target: p, off: p.inv.potion <= 0, why: 'No potions left.' });
+  opts.push({ id: 'run', label: 'Run away', target: p });
+  opts.push({ id: 'end', label: 'End turn', target: p });
+  for (const o of opts) o.ok = !o.off && !!o.target && (o.id === 'end' || !C.acted);
+  if (C.acted) for (const o of opts) if (o.id !== 'end') o.why = 'You already acted this turn.';
+  return opts;
+}
+function playerTurnInput(p, first) {
+  const C = G.combat; const opts = combatOptions(p); C.opts = opts;
+  if (C.acted && C.sel !== opts.length - 1 && !C.autoSel) { C.sel = opts.length - 1; C.autoSel = true; }
+  if (!first || p.gearOpen) return;
+  if (p.pr.item) { consume(p, 'item'); C.sel = (C.sel + 1) % opts.length; sfx('step'); }
+  if (p.pr.throw) { consume(p, 'throw'); endPlayerTurn(); return; }
+  if (p.pr.act) { consume(p, 'act'); doAction(p, opts[C.sel]); }
+}
+function endPlayerTurn() { const C = G.combat; if (!C) return; C.phase = 'ewait'; C.t = .25; C.autoSel = false; }
+function doAction(p, o) {
+  const C = G.combat; if (!o) return;
+  if (o.id === 'end') { endPlayerTurn(); return; }
+  if (!o.ok) { floater(cx(p), p.y - 8, o.why, '#ffb0a0'); sfx('miss'); return; }
+  const cl = CLASSES[p.cls]; C.phase = 'acting';
+  const done = () => { if (!G.combat) return; C.acted = true; C.phase = 'pturn'; C.autoSel = false; if (combatOver()) return; };
+  if (o.id === 'attack' || (o.id === 'ability' && cl.ability.kind !== 'heal')) {
+    const spec = o.id === 'attack' ? cl.attack : cl.ability; const t = o.target;
+    if (o.id === 'ability') p.cd = cl.ability.cd;
+    const isAtk = o.id === 'attack', W = p.gear.weapon;
+    const bonus = p.stats[spec.stat] + prof(p) + (isAtk ? (W ? W.hit : 0) : gearSum(p, 'abil'));
+    const critOn = 20 - (isAtk ? fxLvl(p, 'lucky') : 0);
+    const ranged = spec.range > 2;
+    queueRoll({ label: `${p.name} uses ${spec.name}${isAtk && W && W.fx ? ' (' + W.name + ')' : ''} on ${t.name}`, n: 1, sides: 20, bonus, actor: p, at: t, auto: false, judge: d20Judge('AC', t.ac, critOn),
+      onDone: d => {
+        const resolve = () => {
+          if (d.fumble) { floater(cx(p), p.y - 8, 'oops!', '#c7cbe0'); p.vy = -120; done(); return; }
+          if (!d.ok) { floater(cx(t), t.y - 8, 'miss', '#ffb0a0'); if (spec.kind === 'fire' && Math.random() < .5) igniteAt(Math.floor(cx(t) / T), Math.floor((t.y + t.h - 2) / T), 2); done(); return; }
+          let n = spec.dmg[0] * (d.crit ? 2 : 1); let extra = 0;
+          if (spec.sneak && G.players.some(o2 => o2 !== p && o2.state === 'ok' && Math.abs(cx(o2) - cx(t)) < 26 && Math.abs(cy(o2) - cy(t)) < 20)) extra = 1;
+          const dmgBonus = Math.max(0, p.stats[spec.stat]) + (isAtk && W ? W.dmg : 0);
+          queueRoll({ label: `${spec.name} damage${extra ? ' + sneak strike!' : ''}${d.crit ? ' (critical: double dice)' : ''}`, n: n + extra, sides: spec.dmg[1], bonus: dmgBonus, auto: true, hold: .7,
+            onDone: dd => {
+              if (!t.alive) { done(); return; }
+              let total = Math.max(1, dd.total); const wfx = isAtk && W ? W.fx : null, wl = W ? W.lvl : 0;
+              if (wfx === 'sparkle') { const s = rollN(1, wl > 1 ? 6 : 4); total += s; floater(cx(t), t.y - 22, '+' + s + ' sparkle', '#c07bff'); }
+              if (wfx === 'fire' && wl > 1) total += 1;
+              const dir = sgn(cx(t) - cx(p) || p.facing);
+              damageEnemy(t, total);
+              if (wfx === 'fire') igniteAt(Math.floor(cx(t) / T), Math.floor((t.y + t.h - 2) / T), 2.5);
+              if (wfx === 'frost' && t.alive && Math.random() < wl * .25) { t.frozen = true; floater(cx(t), t.y - 14, 'frozen!', '#82d2f0'); }
+              if (wfx === 'bounce' && t.alive) { t.vx = dir * (wl > 1 ? 320 : 220); t.vy = -150; floater(cx(t), t.y - 14, 'boing!', '#f4ecd8'); }
+              if (spec.kind === 'slam' && t.alive) { t.vx = sgn(cx(t) - cx(p) || p.facing) * 300; t.vy = -150; floater(cx(t), t.y - 14, 'SLAM!', '#f4ecd8'); }
+              if (spec.kind === 'fire') igniteAt(Math.floor(cx(t) / T), Math.floor((t.y + t.h - 2) / T), 2.5);
+              if (spec.kind === 'frost' && t.alive) { t.frozen = true; floater(cx(t), t.y - 14, 'frozen!', '#82d2f0'); }
+              done();
+            } });
+        };
+        if (ranged) G.fx.push({ kind: 'bolt', x0: cx(p), y0: cy(p), x1: cx(t), y1: cy(t), t: 0, dur: .25, color: spec.kind === 'fire' ? '#ffb03a' : spec.kind === 'frost' ? '#82d2f0' : '#cfd2dc', cb: resolve });
+        else { p.facing = sgn(cx(t) - cx(p)) || p.facing; p.lunge = .2; resolve(); }
+      } });
+  } else if (o.id === 'ability') {
+    const t = o.target; p.cd = cl.ability.cd;
+    queueRoll({ label: `${p.name}'s Warm Light on ${t.name}`, n: 1, sides: 8, bonus: Math.max(0, p.stats.heart) + healBonus(p), kind: 'heal', auto: true, hold: .8,
+      onDone: d => { if (t.state !== 'ok' && t.state !== 'ko') { t.state = 'ok'; t.saves = { s: 0, f: 0 }; t.hp = 0; } t.hp = Math.min(t.maxHp, t.hp + d.total); floater(cx(t), t.y - 6, '+' + d.total, '#ffd75e'); sfx('heal'); G.fx.push({ kind: 'ring', x: cx(t), y: cy(t), life: .6, r: 30 }); done(); } });
+  } else if (o.id === 'shove') {
+    const t = o.target; const dc = 10 + ENEMY[t.type].might;
+    queueRoll({ label: `${p.name} shoves ${t.name}! (Might check)`, n: 1, sides: 20, bonus: p.stats.might, actor: p, at: t, auto: false, judge: Object.assign(d20Judge('DC', dc)), okWord: 'SHOVED! ', noWord: 'BUDGE-PROOF · ',
+      onDone: d => { if (d.ok && t.alive) { const dir = sgn(cx(t) - cx(p)) || p.facing; t.vx = dir * (d.crit ? 380 : 270); t.vy = -170; floater(cx(t), t.y - 10, 'whoosh!', '#f4ecd8'); } done(); } });
+  } else if (o.id === 'run') {
+    queueRoll({ label: `${p.name} tries to lead the party away! (Agility check)`, n: 1, sides: 20, bonus: p.stats.agi, actor: p, at: p, auto: false, judge: d20Judge('DC', 10), okWord: 'GOT AWAY! ', noWord: 'CAUGHT · ',
+      onDone: d => { if (d.ok && G.combat) fleeCombat(); else done(); } });
+  } else if (o.id === 'help') {
+    const t = o.target; t.state = 'ok'; t.hp = 1; t.saves = { s: 0, f: 0 }; floater(cx(t), t.y - 6, 'back up!', '#a6ef8a'); sfx('heal'); done();
+  } else if (o.id === 'potion') {
+    p.inv.potion--; queueRoll({ label: `${p.name} drinks a potion`, n: 1, sides: 8, bonus: 2 + healBonus(p), kind: 'heal', auto: true, hold: .7, onDone: d => { p.hp = Math.min(p.maxHp, p.hp + d.total); floater(cx(p), p.y - 6, '+' + d.total, '#ffd75e'); sfx('heal'); done(); } });
+  }
+}
+function fleeCombat() {
+  const C = G.combat; C.ending = true; C.phase = 'end'; C.t = 1.4;
+  C.order.forEach(e => { if (e.isEnemy) { e.calm = 8; e.inCombat = false; } });
+  G.players.forEach(p => { if (p.state === 'down' || p.state === 'stable') { p.state = 'ok'; p.hp = Math.max(1, p.hp); } p.inv_t = 1.5; });
+  showBanner('GOT AWAY!', 'The foes lose track of you for a few seconds.', 1.6); sfx('jump');
+}
+function enemyAttack(e, t) {
+  const C = G.combat; C.phase = 'eacting';
+  queueRoll({ label: `${e.name} attacks ${t.name}`, n: 1, sides: 20, bonus: e.atk, at: t, auto: true, hold: .9, judge: d20Judge('AC', t.ac),
+    onDone: d => {
+      if (!d.ok || !e.alive) { if (d.fumble) floater(cx(e), e.y - 8, 'oops!', '#c7cbe0'); C.phase = 'ewait'; C.t = .4; return; }
+      queueRoll({ label: `${e.name} damage${d.crit ? ' (critical)' : ''}`, n: e.dmg[0] * (d.crit ? 2 : 1), sides: e.dmg[1], bonus: e.dmg[2], auto: true, hold: .7,
+        onDone: dd => { damagePlayerCombat(t, Math.max(1, dd.total)); t.vx = sgn(cx(t) - cx(e) || 1) * 90; t.vy = -90;
+          const sp = fxLvl(t, 'spiky'); if (sp && e.alive) { floater(cx(e), e.y - 16, 'spiky!', '#ffe066'); damageEnemy(e, sp, 'spiky'); }
+          if (G.combat) { C.phase = 'ewait'; C.t = .4; } } });
+    } });
+}
+function updateCombat(dt, first) {
+  const C = G.combat;
+  for (const e of G.enemies) {
+    if (!e.alive) continue; if (e.flash > 0) e.flash -= dt;
+    if (e === C.actor && C.phase === 'emove') continue;
+    if (e.fly) { e.vx *= Math.pow(.05, dt); e.vy *= Math.pow(.05, dt); moveBody(e, dt, { noPlat: true }); }
+    else { if (e.onGround) e.vx *= Math.pow(.004, dt); e.vy = Math.min(e.vy + 900 * dt, 380); moveBody(e, dt); trackFall(e); }
+  }
+  for (const p of G.players) updatePlayer(p, dt, first, p === C.actor && C.phase === 'pturn');
+  if (C.phase === 'intro') { C.t -= dt; if (C.t <= 0) nextTurn(); }
+  else if (C.phase === 'pturn') {
+    const p = C.actor; if (p.state !== 'ok') { endPlayerTurn(); return; }
+    if (C.timer > 0 && !p.gearOpen) { C.timer -= dt; if (C.timer <= 0) { toast(`Time's up for ${p.name}!`); endPlayerTurn(); return; } }
+    playerTurnInput(p, first);
+    if (C.acted && C.moveLeft <= 1 && !C.autoEndT) C.autoEndT = 1.2;
+    if (C.autoEndT) { C.autoEndT -= dt; if (C.autoEndT <= 0) { C.autoEndT = 0; endPlayerTurn(); } }
+  } else if (C.phase === 'emove') {
+    const e = C.actor, t = e.target; C.t += dt;
+    if (!e.alive || !t || t.state !== 'ok') { C.phase = 'ewait'; C.t = .2; return; }
+    const dx = cx(t) - cx(e), dy = cy(t) - cy(e); const reach = (e.w + t.w) / 2 + 10;
+    if (Math.abs(dx) <= reach && Math.abs(dy) < 20) { e.vx = 0; enemyAttack(e, t); return; }
+    if (C.moveLeft <= 0 || C.t > 2.6) { C.phase = 'ewait'; C.t = .3; return; }
+    const d = ENEMY[e.type]; const x0 = e.x;
+    e.dir = sgn(dx) || e.dir;
+    if (e.fly) { e.vx = sgn(dx) * d.speed * 1.8; e.vy = clamp(dy * 2, -90, 90); moveBody(e, dt, { noPlat: true }); }
+    else { e.vx = sgn(dx) * d.speed * 1.8; e.vy = Math.min(e.vy + 900 * dt, 380); moveBody(e, dt); trackFall(e); if (e.hitWall && e.onGround) e.vy = -260; else if (e.onGround && dy < -T && Math.abs(dx) < 2 * T) e.vy = -280; }
+    C.moveLeft -= Math.abs(e.x - x0);
+  } else if (C.phase === 'ewait') { C.t -= dt; if (C.t <= 0) nextTurn(); }
+  else if (C.phase === 'end') {
+    C.t -= dt; if (C.t <= 0) { G.combat = null; G.enemies.forEach(e => e.inCombat = false); $('#actions').hidden = true; buildTurnStrip(); }
+  } else if (C.phase === 'wipe') { C.t -= dt; if (C.t <= 0) { G.combat = null; restartLevel(); } }
+  if (C && !C.ending && ['pturn', 'emove', 'ewait'].includes(C.phase)) combatOver();
+}
+
+/* ---------------- Dialogue ---------------- */
+function openDialogue(npc, p) {
+  const st = G.story.npc;
+  if (npc.talked) { G.dialogue = { npc, owner: p, stage: 'result', text: `${npc.name} waves. "Good luck down there!"` }; renderDialogue(); return; }
+  G.dialogue = { npc, owner: p, stage: 'choose', sel: 0, text: st.greeting, opts: [...st.choices.map((c, i) => ({ ...c, i })), { text: 'Good luck! (leave)', stat: null }] };
+  renderDialogue();
+}
+function renderDialogue() {
+  const d = G.dialogue, el = $('#dialogue');
+  if (!d) { el.hidden = true; return; }
+  el.hidden = false; const n = d.npc; const statKey = { Heart: 'heart', Wits: 'wits', Might: 'might', Agility: 'agi' };
+  const dcs = [11, 12];
+  let html = `<div class="who">${esc(n.name)} · ${esc(n.kind)}</div><p class="line">${esc(d.text)}</p>`;
+  if (d.stage === 'choose') {
+    html += `<div class="ch">${d.opts.map((o, i) => `<button type="button" data-i="${i}" class="${i === d.sel ? 'sel' : ''}">${o.stat ? `<em>[${o.stat} ${dcs[o.i]}]</em>` : ''}${esc(o.text)}</button>`).join('')}</div><div class="hint">${esc(d.owner.name)} chooses: ${keyName(d.owner.ctrl, 'item')} or up/down to pick, ${keyName(d.owner.ctrl, 'act')} to say it. Or click.</div>`;
+  } else if (d.stage === 'result') html += `<div class="hint">Press ${keyName(d.owner.ctrl, 'act')} or click to close.</div>`;
+  el.innerHTML = html;
+  el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { d.sel = +b.dataset.i; chooseDialogue(); });
+  if (d.stage === 'result') el.onclick = () => closeDialogue(); else el.onclick = null;
+  d.statKey = statKey; d.dcs = dcs;
+}
+function chooseDialogue() {
+  const d = G.dialogue, o = d.opts[d.sel], st = G.story.npc, p = d.owner;
+  if (!o.stat) { d.npc.talked = true; d.stage = 'result'; d.text = `${d.npc.name}: "Okay! Come back if you change your mind."`; d.npc.talked = false; renderDialogue(); return; }
+  const dc = d.dcs[o.i]; const bonus = p.stats[d.statKey[o.stat]];
+  d.stage = 'rolling'; renderDialogue();
+  queueRoll({ label: `${p.name}: ${o.stat} check`, n: 1, sides: 20, bonus, actor: p, at: p, auto: false, judge: Object.assign(d20Judge('DC', dc)), okWord: 'SUCCESS! ', noWord: 'NOT QUITE · ',
+    onDone: r => {
+      d.npc.talked = true; d.stage = 'result';
+      if (r.ok) {
+        d.text = st.success[o.i];
+        if (o.i === 0) { G.players.forEach(q => q.inv.potion++); toast('Everyone gets a potion!'); }
+        else { G.players.forEach(q => q.gold += 15); toast('Everyone gets 15 gold!'); }
+        sfx('coin');
+      } else d.text = st.fail;
+      renderDialogue();
+    } });
+}
+function updateDialogue(first) {
+  const d = G.dialogue, p = d.owner; if (!first || !p.pr) return;
+  if (d.stage === 'choose') {
+    if (p.pr.item || p.pr.down) { d.sel = (d.sel + 1) % d.opts.length; renderDialogue(); }
+    if (p.pr.up) { d.sel = (d.sel + d.opts.length - 1) % d.opts.length; renderDialogue(); }
+    if (p.pr.act) { consume(p, 'act'); chooseDialogue(); }
+    if (p.pr.throw) closeDialogue();
+  } else if (d.stage === 'result' && (p.pr.act || p.pr.throw)) { consume(p, 'act'); closeDialogue(); }
+}
+function closeDialogue() { G.dialogue = null; renderDialogue(); }
+
+/* ---------------- HUD ---------------- */
+const ICONS = {
+  rope: '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="3.5" fill="none" stroke="#c99a5e" stroke-width="2"/></svg>',
+  bomb: '<svg viewBox="0 0 10 10"><circle cx="5" cy="6" r="3.5" fill="#2a2a33" stroke="#000"/><path d="M6 2.5 8 1" stroke="#ffb03a" stroke-width="1.2"/></svg>',
+  potion: '<svg viewBox="0 0 10 10"><rect x="4" y="1" width="2" height="2" fill="#cfd2dc"/><path d="M3 3h4v1.5l1.5 2.5V9h-7V7L3 4.5z" fill="#e2453b" stroke="#000" stroke-width=".6"/></svg>'
+};
+function buildPartyBar() {
+  const box = $('#party'); box.innerHTML = '';
+  const n = G.players.length;
+  box.style.gridTemplateColumns = `repeat(${Math.max(2, n)},1fr)`;
+  G.players.forEach((p, i) => {
+    const el = document.createElement('div'); el.className = 'pc' + (n > 1 && i >= n / 2 ? ' right' : ''); el.style.setProperty('--pc', p.color); el.id = 'pc' + p.id;
+    el.innerHTML = `<canvas width="12" height="16"></canvas><div class="nm"></div><div class="hp"><i></i><span></span></div><div class="inv"></div><div class="gp" hidden></div>`;
+    el.querySelector('canvas').getContext('2d').drawImage(p.spr.idle, 0, 0); box.appendChild(el); p.hudEl = el; p.hudSig = ''; p.gpEl = el.querySelector('.gp'); p.gearSig = '';
+  });
+}
+/* Gear screen: one per player, opens above their own card. The game keeps running. */
+function handleGear(first) {
+  if (!first) return;
+  for (const p of G.players) {
+    if (!p.pr) continue;
+    if (p.pr.gear) { toggleGear(p); consume(p, 'gear'); continue; }
+    if (!p.gearOpen) continue;
+    const rows = 4 + p.bag.length;
+    if (p.pr.down || p.pr.item) p.gearSel = (p.gearSel + 1) % rows;
+    if (p.pr.up) p.gearSel = (p.gearSel + rows - 1) % rows;
+    if (p.pr.act) gearAct(p, p.gearSel);
+    if (p.pr.throw) p.gearOpen = false;
+    for (const k of ['act', 'item', 'throw', 'jump', 'up', 'down']) consume(p, k);
+  }
+}
+function toggleGear(p) { p.gearOpen = !p.gearOpen; if (p.gearOpen) { p.newGear = false; p.gearSel = Math.min(p.gearSel, 3 + p.bag.length); } p.gearSig = ''; sfx('step'); }
+function gearAct(p, i) {
+  if (i < 4) {
+    const s = SLOTS[i], it = p.gear[s]; if (!it) return;
+    if (p.bag.length >= 8) { toast(`${p.name}'s bag is full.`); return; }
+    p.gear[s] = null; p.bag.push(it); sfx('step');
+  } else {
+    const it = p.bag[i - 4]; if (!it) return; const old = p.gear[it.slot];
+    p.gear[it.slot] = it; p.bag.splice(i - 4, 1); if (old) p.bag.splice(i - 4, 0, old); else p.gearSel = SLOTS.indexOf(it.slot);
+    sfx('open'); floater(cx(p), p.y - 16, it.name, RARITY[it.rarity].color);
+  }
+  recalc(p); p.gearSel = Math.min(p.gearSel, 3 + p.bag.length); p.gearSig = ''; p.hudSig = '';
+}
+function gearRow(p, it, i, label) {
+  const c = it ? RARITY[it.rarity].color : '#3d3156';
+  return `<button type="button" class="gr${i === p.gearSel ? ' sel' : ''}" data-g="${i}" style="--rc:${c}">${it ? `<img src="${iconURL(it.base)}" alt="">` : '<span class="ph"></span>'}<span class="gt">${it ? `<b>${esc(it.name)}</b><small>${label ? label + ' · ' : ''}${RARITY[it.rarity].name}${it.fx ? ' · magic' : ''}</small>` : `<b>${label}: empty</b>`}</span></button>`;
+}
+function renderGear(p) {
+  const el = p.gpEl; if (!el) return;
+  if (!p.gearOpen || G.mode !== 'play') { if (!el.hidden) el.hidden = true; return; }
+  const sig = [p.gearSel, p.bag.map(i => i.id).join(), SLOTS.map(s => p.gear[s] ? p.gear[s].id : '-').join(), p.ac, p.maxHp].join('|');
+  if (!el.hidden && sig === p.gearSig) return; p.gearSig = sig; el.hidden = false;
+  const sel = p.gearSel < 4 ? p.gear[SLOTS[p.gearSel]] : p.bag[p.gearSel - 4];
+  let detail = '';
+  if (sel) {
+    const worn = p.gearSel < 4, cur = !worn ? p.gear[sel.slot] : null;
+    detail = `<b style="color:${RARITY[sel.rarity].color}">${esc(sel.name)}</b> ${esc(itemDesc(sel))}` +
+      `<span class="gk">${keyName(p.ctrl, 'act')}: ${worn ? 'take off (to bag)' : cur ? 'wear it (swaps with ' + esc(cur.name) + ')' : 'wear it'}</span>`;
+  } else detail = `<span class="gk">Empty slot. Pick something in your bag to wear it here. Chests and bosses drop gear.</span>`;
+  el.innerHTML = `<h4>${esc(p.name)}'s gear <span>AC ${p.ac} · ${p.maxHp} max HP</span></h4>` +
+    SLOTS.map((s, i) => gearRow(p, p.gear[s], i, SLOT_NAMES[s])).join('') +
+    `<div class="sec">Bag ${p.bag.length}/8</div>` + (p.bag.length ? p.bag.map((it, k) => gearRow(p, it, 4 + k, SLOT_NAMES[it.slot])).join('') : '<div class="empty">Empty</div>') +
+    `<div class="gd">${detail}</div><div class="gk2">${keyName(p.ctrl, 'item')} or up/down: pick · ${keyName(p.ctrl, 'gear')} or ${keyName(p.ctrl, 'throw')}: close</div>`;
+  el.querySelectorAll('[data-g]').forEach(b => b.onclick = ev => { ev.stopPropagation(); p.gearSel = +b.dataset.g; gearAct(p, p.gearSel); });
+  const s = el.querySelector('.gr.sel'); if (s) s.scrollIntoView({ block: 'nearest' });
+}
+function updatePartyBar() {
+  for (const p of G.players) {
+    const el = p.hudEl; if (!el) continue;
+    const st = p.state === 'down' ? `<span class="st down">DOWN ${'●'.repeat(p.saves.s)}${'○'.repeat(Math.max(0, 3 - p.saves.s))} ${'✕'.repeat(p.saves.f)}</span>` : p.state === 'stable' ? '<span class="st stable">STABLE</span>' : p.state === 'ko' ? '<span class="st ko">GHOST</span>' : '';
+    const sig = [p.hp, p.maxHp, p.state, p.saves.s, p.saves.f, p.inv.rope, p.inv.bomb, p.inv.potion, p.sel, p.gold, p.lvl, G.combat && G.combat.actor === p, p.newGear, p.gearOpen, SLOTS.map(s => p.gear[s] ? p.gear[s].id : '-').join()].join(',');
+    if (sig === p.hudSig) continue; p.hudSig = sig;
+    el.classList.toggle('turn', !!(G.combat && G.combat.actor === p));
+    el.querySelector('.nm').innerHTML = `${esc(p.name)} <small>Lv${p.lvl} ${CLASSES[p.cls].name}</small> ${st}`;
+    el.querySelector('.hp i').style.width = (100 * p.hp / p.maxHp) + '%';
+    el.querySelector('.hp span').textContent = `${p.hp}/${p.maxHp}`;
+    el.querySelector('.inv').innerHTML = ITEMS.map((k, i) => `<span class="it${i === p.sel ? ' sel' : ''}" title="${k}">${ICONS[k]}${p.inv[k]}</span>`).join('') + `<span class="g">${p.gold}g</span>` +
+      `<button type="button" class="gbtn${p.gearOpen ? ' on' : ''}" data-gear="1" title="Gear (${keyName(p.ctrl, 'gear')})">${SLOTS.map(s => { const it = p.gear[s]; return `<i style="--rc:${it ? RARITY[it.rarity].color : '#3d3156'}${it ? `;background-image:url(${iconURL(it.base)})` : ''}"></i>`; }).join('')}<span>${keyName(p.ctrl, 'gear')}</span>${p.newGear ? '<em>NEW</em>' : ''}</button>`;
+    el.querySelector('[data-gear]').onclick = () => toggleGear(p);
+  }
+}
+function buildTurnStrip() {
+  const box = $('#turns'); const C = G.combat;
+  if (!C) { box.dataset.show = '0'; return; }
+  box.dataset.show = '1'; box.innerHTML = '';
+  C.order.forEach(a => {
+    const el = document.createElement('div'); const out = a.isEnemy ? !a.alive : a.state === 'ko';
+    el.className = 'tk' + (a === C.actor ? ' now' : '') + (a.isEnemy ? ' enemy' : '') + (out ? ' out' : '');
+    if (a.isPlayer) { const cv = document.createElement('canvas'); cv.width = 12; cv.height = 16; cv.getContext('2d').drawImage(a.spr.idle, 0, 0); el.appendChild(cv); }
+    else { const i = document.createElement('div'); i.className = 'ei'; i.style.background = a.type === 'boss' ? VCOLORS[G.story.villain.color] : a.type === 'goblin' ? '#5fa046' : a.type === 'slime' ? '#8a5cd6' : '#7fd0f0'; i.textContent = a.name[0]; el.appendChild(i); }
+    const nm = document.createElement('div'); nm.textContent = a.name.split(' ').pop().slice(0, 8); el.appendChild(nm);
+    box.appendChild(el);
+  });
+}
+let lastActSig = '';
+function updateActionMenu() {
+  const C = G.combat, el = $('#actions');
+  if (!C || C.phase !== 'pturn' || !C.opts) { if (!el.hidden) { el.hidden = true; lastActSig = ''; } return; }
+  const p = C.actor;
+  const sig = C.opts.map(o => o.label + o.ok).join('|') + C.sel + '|' + Math.ceil(Math.max(0, C.moveLeft) / T) + '|' + (C.timer > 0 ? Math.ceil(C.timer) : '');
+  if (sig === lastActSig) return; lastActSig = sig; el.hidden = false;
+  $('#amenu').innerHTML = C.opts.map((o, i) => `<button type="button" class="ab${i === C.sel ? ' sel' : ''}${o.ok ? '' : ' off'}" data-a="${i}">${esc(o.label)}</button>`).join('');
+  $('#amenu').querySelectorAll('[data-a]').forEach(b => b.onclick = () => { C.sel = +b.dataset.a; doAction(p, C.opts[C.sel]); });
+  const mv = Math.max(0, C.moveLeft / T).toFixed(1);
+  $('#ahint').innerHTML = `<b>${esc(p.name)}'s turn</b> · move ${mv} tiles · <b>${keyName(p.ctrl, 'item')}</b> next · <b>${keyName(p.ctrl, 'act')}</b> do it · <b>${keyName(p.ctrl, 'throw')}</b> end turn${C.timer > 0 ? ` · ${Math.ceil(C.timer)}s` : ''}`;
+}
+function togglePause() {
+  if (G.mode !== 'play') return;
+  if (G.paused) { G.paused = false; hideOverlay(); return; }
+  G.paused = true;
+  showOverlay(`<h2>Paused</h2><p class="muted">Level ${G.levelNum} · ${esc(G.story ? G.story.villain.name + ' ' + G.story.villain.title : '')}</p><p class="muted">The game saves at the start of each level. If you quit now, you'll continue from the start of level ${G.levelNum}.</p><div class="btns"><button class="btn big" id="resume" type="button">Resume</button><button class="btn" id="restartL" type="button">Restart level</button><button class="btn" id="quitL" type="button">Quit to the party screen</button></div>`, () => togglePause());
+  $('#resume').onclick = togglePause; $('#restartL').onclick = () => { G.paused = false; hideOverlay(); restartLevel(); }; $('#quitL').onclick = () => { G.paused = false; backToLobby(); };
+}
+function toggleMute() { muted = !muted; $('#muteBtn').textContent = muted ? 'Sound off' : 'Sound on'; }
+$('#muteBtn').onclick = toggleMute; $('#pauseBtn').onclick = togglePause;
+
+/* ---------------- Rendering ---------------- */
+const cv = $('#game'), ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+const light = document.createElement('canvas'); light.width = VW; light.height = VH; const lctx = light.getContext('2d');
+const BIOME = {
+  mines: { wall: '#1d1726', wallSpot: '#261d32', rock: '#5b4a42', rockL: '#78614f', rockD: '#3b2f2b', moss: '#6aa84f', mossD: '#3f7a34', bed: '#2a2232', bedS: '#362b42', dark: .80 },
+  crystal: { wall: '#151a2e', wallSpot: '#1e2442', rock: '#3f3d72', rockL: '#5a57a3', rockD: '#28264d', moss: '#86e6f4', mossD: '#4aa3c4', bed: '#1c1a36', bedS: '#2a2850', dark: .78 }
+};
+function renderLevelCanvas() {
+  const L = G.L, B = BIOME[L.biome];
+  if (!L.canvas) { L.canvas = document.createElement('canvas'); L.canvas.width = MW * T; L.canvas.height = MH * T; }
+  const c = L.canvas.getContext('2d');
+  for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
+    const t = L.map[ty * MW + tx], x = tx * T, y = ty * T;
+    c.fillStyle = B.wall; c.fillRect(x, y, T, T);
+    for (let k = 0; k < 3; k++) { const h = hash(tx, ty, k); c.fillStyle = B.wallSpot; c.fillRect(x + Math.floor(h * 14), y + Math.floor(hash(ty, tx, k + 7) * 14), 2, 2); }
+    if (hash(tx, ty, 99) < .05) { c.fillStyle = B.wallSpot; c.fillRect(x + 4, y + 4, 8, 6); }
+    const up = tileAt(tx, ty - 1), dn = tileAt(tx, ty + 1), lf = tileAt(tx - 1, ty), rt = tileAt(tx + 1, ty);
+    if (t === ROCK || t === CRACK) {
+      c.fillStyle = B.rock; c.fillRect(x, y, T, T);
+      for (let k = 0; k < 5; k++) { const h1 = hash(tx, ty, k + 20), h2 = hash(tx, ty, k + 40); c.fillStyle = k % 2 ? B.rockD : B.rockL; c.fillRect(x + Math.floor(h1 * 14), y + Math.floor(h2 * 14), 2, 1 + (k % 2)); }
+      if (!isSolid(dn)) { c.fillStyle = B.rockD; c.fillRect(x, y + T - 3, T, 3); }
+      if (!isSolid(lf)) { c.fillStyle = B.rockL; c.fillRect(x, y, 1, T); }
+      if (!isSolid(rt)) { c.fillStyle = B.rockD; c.fillRect(x + T - 2, y, 2, T); }
+      if (!isSolid(up)) {
+        c.fillStyle = B.rockL; c.fillRect(x, y, T, 3);
+        if (L.biome === 'mines') { c.fillStyle = B.moss; c.fillRect(x, y, T, 2); c.fillStyle = B.mossD; for (let k = 0; k < 3; k++) { const h = hash(tx, ty, k + 60); if (h < .6) c.fillRect(x + Math.floor(hash(ty, tx, k + 61) * 15), y + 2, 1, 1 + Math.floor(h * 4)); } }
+        else { for (let k = 0; k < 2; k++) { const h = hash(tx, ty, k + 70); if (h < .5) { const px = x + 2 + Math.floor(hash(ty, tx, k) * 11); c.fillStyle = B.moss; c.fillRect(px, y - 3, 2, 4); c.fillStyle = '#d8fbff'; c.fillRect(px, y - 3, 1, 2); } } }
+      }
+      if (t === CRACK) { c.fillStyle = '#1a1222'; c.fillRect(x + 3, y + 3, 1, 4); c.fillRect(x + 4, y + 7, 3, 1); c.fillRect(x + 7, y + 7, 1, 5); c.fillRect(x + 10, y + 2, 1, 6); c.fillRect(x + 11, y + 8, 2, 1); }
+    } else if (t === BED) {
+      c.fillStyle = B.bed; c.fillRect(x, y, T, T);
+      for (let k = 0; k < 4; k++) { c.fillStyle = B.bedS; c.fillRect(x + Math.floor(hash(tx, ty, k + 3) * 14), y + Math.floor(hash(ty, tx, k + 5) * 14), 2, 2); }
+    } else if (t === PLAT) {
+      c.fillStyle = '#6e4526'; c.fillRect(x, y, T, 5); c.fillStyle = '#a06a3c'; c.fillRect(x, y, T, 2); c.fillStyle = '#3d2614'; c.fillRect(x, y + 5, T, 1);
+      c.fillStyle = '#3d2614'; c.fillRect(x + (hash(tx, ty) < .5 ? 5 : 10), y + 1, 1, 4);
+      if (lf !== PLAT && !isSolid(lf)) { c.fillStyle = '#4a2f1a'; c.fillRect(x + 1, y + 6, 2, 5); }
+      if (rt !== PLAT && !isSolid(rt)) { c.fillStyle = '#4a2f1a'; c.fillRect(x + T - 3, y + 6, 2, 5); }
+    } else if (t === LAD) {
+      c.fillStyle = '#7a5030'; c.fillRect(x + 3, y, 2, T); c.fillRect(x + 11, y, 2, T);
+      c.fillStyle = '#a06a3c'; for (let k = 2; k < T; k += 5) c.fillRect(x + 3, y + k, 10, 2);
+    } else if (t === SPIKE) {
+      for (let k = 0; k < 3; k++) { const bx = x + 1 + k * 5; c.fillStyle = '#c9ccd6'; c.fillRect(bx + 2, y + 8, 1, 8); c.fillRect(bx + 1, y + 11, 3, 5); c.fillRect(bx, y + 14, 5, 2); c.fillStyle = '#7d8197'; c.fillRect(bx + 3, y + 11, 1, 5); }
+    }
+  }
+  for (const d of L.decor) if (d.kind === 'crystal' && L.map[d.ty * MW + d.tx] === E) {
+    const x = d.tx * T, y = d.ty * T; c.fillStyle = '#4aa3c4'; c.fillRect(x + 6, y + 6, 3, 8); c.fillRect(x + 9, y + 9, 2, 5); c.fillStyle = '#d8fbff'; c.fillRect(x + 6, y + 6, 1, 4);
+  }
+  L.dirty = false;
+}
+function drawObj(o) {
+  const x = Math.round(o.x - G.cam.x), y = Math.round(o.y - G.cam.y);
+  switch (o.kind) {
+    case 'pot': ctx.fillStyle = '#1a1222'; ctx.fillRect(x + 1, y, 8, 10); ctx.fillStyle = '#b8693e'; ctx.fillRect(x + 2, y + 2, 6, 7); ctx.fillStyle = '#d9894f'; ctx.fillRect(x + 2, y + 3, 2, 4); ctx.fillStyle = '#7c4224'; ctx.fillRect(x + 3, y, 4, 2); break;
+    case 'barrel': ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y, 12, 14); ctx.fillStyle = o.fuse > 0 && Math.floor(G.time * 12) % 2 ? '#ffd75e' : '#b33a2e'; ctx.fillRect(x + 1, y + 1, 10, 12); ctx.fillStyle = '#5a2a20'; ctx.fillRect(x + 1, y + 3, 10, 1); ctx.fillRect(x + 1, y + 10, 10, 1); ctx.fillStyle = '#ffd75e'; ctx.fillRect(x + 5, y + 5, 2, 3); ctx.fillRect(x + 5, y + 9, 2, 1); break;
+    case 'chest': {
+      const sc = o.seed ? (o.seed.owner === null ? '#ffd75e' : G.players[o.seed.owner].color) : null;
+      ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y, 14, 10); ctx.fillStyle = o.open ? '#3d2614' : sc || '#8a5a32'; ctx.fillRect(x + 1, y + 1, 12, 4); ctx.fillStyle = sc ? shade(sc, .6) : '#6e4526'; ctx.fillRect(x + 1, y + 5, 12, 4);
+      if (sc && !o.open && Math.floor(G.time * 4 + o.x) % 6 === 0) { ctx.fillStyle = '#fff'; ctx.fillRect(x + 11, y - 2, 1, 1); ctx.fillRect(x + 2, y - 1, 1, 1); }
+    } ctx.fillStyle = '#f0c34a'; ctx.fillRect(x + 6, y + 4, 2, 3); if (o.open) { ctx.fillStyle = '#ffd75e'; ctx.fillRect(x + 3, y + 2, 8, 2); } break;
+    case 'gold': ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y + 1, 6, 4); ctx.fillStyle = '#f0c34a'; ctx.fillRect(x + 1, y, 4, 4); ctx.fillStyle = '#fff3b0'; ctx.fillRect(x + 1, y, 2, 1); if (Math.floor(G.time * 3 + o.x) % 5 === 0) { ctx.fillStyle = '#fff'; ctx.fillRect(x + 4, y - 2, 1, 1); } break;
+    case 'ropeItem': ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y, 10, 8); ctx.fillStyle = '#c99a5e'; ctx.fillRect(x + 1, y + 1, 8, 6); ctx.fillStyle = '#7a5030'; ctx.fillRect(x + 3, y + 3, 4, 2); break;
+    case 'bomb': ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y + 1, 8, 7); ctx.fillStyle = '#3a3a46'; ctx.fillRect(x + 1, y + 2, 6, 5); ctx.fillStyle = '#6a6a7a'; ctx.fillRect(x + 2, y + 3, 2, 1); ctx.fillStyle = Math.floor(G.time * 14) % 2 ? '#ffd75e' : '#ff5a2a'; ctx.fillRect(x + 6, y - 1, 2, 2); break;
+  }
+}
+function drawSprite(img, x, y, flip, alpha = 1, scale = 1) {
+  ctx.save(); ctx.globalAlpha = alpha; const w = img.width * scale, h = img.height * scale;
+  if (flip) { ctx.translate(Math.round(x + w), Math.round(y)); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, w, h); } else ctx.drawImage(img, Math.round(x), Math.round(y), w, h);
+  ctx.restore();
+}
+function drawPlayer(p) {
+  const x = p.x - 1 - G.cam.x, y = p.y - 2 - G.cam.y;
+  if (p.state === 'ko') {
+    drawSprite(p.spr.idle, x, y + Math.sin(G.time * 3 + p.id) * 2, p.facing < 0, .4);
+    ctx.fillStyle = '#ffd75e'; ctx.fillRect(Math.round(x + 10), Math.round(y + 9), 2, 3); return;
+  }
+  if (p.state !== 'ok') {
+    ctx.save(); ctx.translate(Math.round(x + 8), Math.round(y + 14)); ctx.rotate(-Math.PI / 2 * (p.facing > 0 ? 1 : -1)); ctx.drawImage(p.spr.idle, -6, -12); ctx.restore();
+    if (p.state === 'down' && Math.floor(G.time * 2) % 2) { ctx.fillStyle = '#ff6b5a'; ctx.fillRect(Math.round(x + 5), Math.round(y + 2), 2, 4); ctx.fillRect(Math.round(x + 5), Math.round(y + 7), 2, 2); }
+    return;
+  }
+  if (p.inv_t > 0 && Math.floor(G.time * 20) % 2) return;
+  const moving = Math.abs(p.vx) > 10 && p.onGround; const fr = !p.onGround && !p.climbing ? 'a' : moving ? (Math.floor(p.anim / 8) % 2 ? 'a' : 'b') : 'idle';
+  const lx = p.lunge > 0 ? p.facing * 4 : 0; if (p.lunge > 0) p.lunge -= 1 / 60;
+  drawSprite(p.spr[fr], x + lx, y, p.facing < 0);
+}
+function drawEnemy(e) {
+  const d = ENEMY[e.type]; let img = SPR[e.type]; if (e.type === 'bat') img = Math.floor(G.time * 8 + e.phase) % 2 ? SPR.bat : SPR.bat2;
+  const scale = e.type === 'boss' ? 2 : 1; const iw = img.width * scale, ih = img.height * scale;
+  const x = e.x + e.w / 2 - iw / 2 - G.cam.x, y = e.y + e.h - ih - G.cam.y + (e.type === 'boss' ? 2 : 0);
+  if (e.flash > 0 && Math.floor(G.time * 30) % 2) { ctx.save(); ctx.filter = 'brightness(3)'; drawSprite(img, x, y, e.dir < 0, 1, scale); ctx.restore(); } else drawSprite(img, x, y, e.dir < 0, 1, scale);
+  if (e.frozen) { ctx.fillStyle = 'rgba(130,210,240,.45)'; ctx.fillRect(Math.round(e.x - G.cam.x - 1), Math.round(e.y - G.cam.y - 1), e.w + 2, e.h + 2); }
+  if (e.type === 'boss') { ctx.fillStyle = '#ffd75e'; const bx = Math.round(x + iw / 2 - 5), by = Math.round(y - 4); ctx.fillRect(bx, by + 2, 10, 3); ctx.fillRect(bx, by, 2, 2); ctx.fillRect(bx + 4, by - 1, 2, 3); ctx.fillRect(bx + 8, by, 2, 2); }
+}
+function drawHpBar(e) {
+  const x = Math.round(cx(e) - 9 - G.cam.x), y = Math.round(e.y - 6 - G.cam.y - (e.type === 'boss' ? 8 : 0));
+  ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - 1, 20, 4); ctx.fillStyle = '#3a1f24'; ctx.fillRect(x, y, 18, 2); ctx.fillStyle = '#ff6b5a'; ctx.fillRect(x, y, Math.max(0, Math.round(18 * e.hp / e.maxHp)), 2);
+}
+function pixelText(txt, x, y, color, size = 8, align = 'center') {
+  ctx.font = `${size}px Silkscreen, monospace`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#000'; ctx.fillText(txt, Math.round(x) + 1, Math.round(y) + 1); ctx.fillStyle = color; ctx.fillText(txt, Math.round(x), Math.round(y));
+}
+function render() {
+  if (G.mode === 'lobby' || !G.L) { ctx.fillStyle = '#05030a'; ctx.fillRect(0, 0, VW, VH); return; }
+  const L = G.L, B = BIOME[L.biome];
+  if (L.dirty) renderLevelCanvas();
+  const sh = G.shake > 0 ? { x: (Math.random() - .5) * G.shake, y: (Math.random() - .5) * G.shake } : { x: 0, y: 0 };
+  const camx = Math.round(G.cam.x + sh.x), camy = Math.round(G.cam.y + sh.y); const savedCam = { x: G.cam.x, y: G.cam.y }; G.cam.x = camx; G.cam.y = camy;
+  ctx.fillStyle = '#07050c'; ctx.fillRect(0, 0, VW, VH);
+  ctx.drawImage(L.canvas, -camx, -camy);
+  // ropes
+  ctx.fillStyle = '#c99a5e';
+  const tx0 = Math.max(0, Math.floor(camx / T)), tx1 = Math.min(MW - 1, Math.floor((camx + VW) / T)), ty0 = Math.max(0, Math.floor(camy / T)), ty1 = Math.min(MH - 1, Math.floor((camy + VH) / T));
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    if (L.rope[ty * MW + tx]) { const x = tx * T - camx, y = ty * T - camy; ctx.fillStyle = '#c99a5e'; ctx.fillRect(x + 7, y, 2, T); ctx.fillStyle = '#7a5030'; for (let k = 0; k < T; k += 4) ctx.fillRect(x + 7, y + k, 2, 1); }
+    if (L.map[ty * MW + tx] === WATER) { const x = tx * T - camx, y = ty * T - camy; ctx.fillStyle = 'rgba(58,123,213,.55)'; ctx.fillRect(x, y, T, T); if (tileAt(tx, ty - 1) !== WATER) { ctx.fillStyle = '#9fd8ff'; const o = Math.floor(G.time * 4 + tx) % 4; ctx.fillRect(x, y + (o < 2 ? 1 : 2), T, 1); } }
+  }
+  // decor + doors
+  for (const d of L.decor) if (d.kind === 'torch') { const x = d.tx * T - camx, y = d.ty * T - camy; if (x < -T || x > VW || y < -T || y > VH) continue; ctx.fillStyle = '#5a3a20'; ctx.fillRect(x + 7, y + 8, 2, 7); const f = Math.floor(G.time * 10 + d.tx) % 3; ctx.fillStyle = '#ff8a3a'; ctx.fillRect(x + 6, y + 4 - f, 4, 5); ctx.fillStyle = '#ffd75e'; ctx.fillRect(x + 7, y + 5 - f, 2, 3); }
+  { const e = L.entrance, x = e.tx * T - camx, y = e.ty * T - camy; ctx.fillStyle = '#0a0710'; ctx.fillRect(x, y - 8, T, 24); ctx.fillStyle = '#6d6478'; ctx.fillRect(x - 2, y - 10, T + 4, 3); ctx.fillRect(x - 2, y - 8, 3, 24); ctx.fillRect(x + T - 1, y - 8, 3, 24); }
+  { const dd = L.door, x = dd.tx * T - camx, y = dd.ty * T - camy; const sealed = L.boss && L.boss.alive;
+    ctx.fillStyle = '#1a1222'; ctx.fillRect(x - 2, y - 11, T + 4, 27); ctx.fillStyle = '#7a5030'; ctx.fillRect(x, y - 9, T, 25); ctx.fillStyle = '#5a3a20'; ctx.fillRect(x + 7, y - 9, 2, 25); ctx.fillStyle = sealed ? '#8a5cd6' : '#ffd75e'; ctx.fillRect(x + 11, y + 4, 2, 2);
+    ctx.fillStyle = sealed ? '#8a5cd6' : '#f5b544'; ctx.fillRect(x + 5, y - 15, 6, 3);
+    if (sealed) { ctx.fillStyle = 'rgba(138,92,214,.5)'; ctx.fillRect(x - 2, y - 11, T + 4, 27); }
+    pixelText('EXIT', x + 8, y - 18, sealed ? '#c7a6ff' : '#ffd75e', 8); }
+  for (const n of L.npcs) { drawSprite(n.spr.idle, n.x - 1 - camx, n.y - 2 - camy, false); if (!n.talked && Math.floor(G.time * 2) % 2) pixelText('!', cx(n) - camx, n.y - 6 - camy, '#ffd75e', 10); }
+  for (const o of G.objects) if (o.alive || o.kind === 'chest') if (!o.held) drawObj(o);
+  for (const e of G.enemies) if (e.alive) drawEnemy(e);
+  for (const p of G.players) if (p.state !== 'ko') drawPlayer(p);
+  for (const p of G.players) if (p.holding) drawObj(p.holding);
+  for (const pr of G.projectiles) { const x = pr.x - camx, y = pr.y - camy; if (pr.kind === 'spark') { ctx.fillStyle = '#ffd75e'; ctx.fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); ctx.fillStyle = '#ff8a3a'; ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2); } else { ctx.fillStyle = '#cfd2dc'; ctx.fillRect(Math.round(x) - 3, Math.round(y), 6, 1); } }
+  // fire
+  for (const [k] of L.fires) { const tx = k % MW, ty = Math.floor(k / MW), x = tx * T - camx, y = ty * T - camy; const f = Math.floor(G.time * 12 + tx * 3) % 3; ctx.fillStyle = '#ff4f3a'; ctx.fillRect(x + 2, y + 6 + f, 12, 10 - f); ctx.fillStyle = '#ff8a3a'; ctx.fillRect(x + 4, y + 8 - f, 8, 8); ctx.fillStyle = '#ffd75e'; ctx.fillRect(x + 6, y + 10 - f, 4, 6); }
+  for (const pa of G.particles) { const a = clamp(pa.life / pa.max, 0, 1); ctx.globalAlpha = pa.kind === 'mist' ? a * .8 : 1; ctx.fillStyle = pa.color; const s = pa.kind === 'mist' ? pa.size + (1 - a) * 4 : pa.size; ctx.fillRect(Math.round(pa.x - camx - s / 2), Math.round(pa.y - camy - s / 2), s, s); }
+  ctx.globalAlpha = 1;
+  // lighting
+  const dark = G.combat ? B.dark - .2 : B.dark;
+  lctx.globalCompositeOperation = 'source-over'; lctx.fillStyle = `rgba(5,3,12,${dark})`; lctx.fillRect(0, 0, VW, VH);
+  lctx.globalCompositeOperation = 'destination-out';
+  const hole = (x, y, r, s = 1) => { const g = lctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(0,0,0,${s})`); g.addColorStop(.6, `rgba(0,0,0,${s * .7})`); g.addColorStop(1, 'rgba(0,0,0,0)'); lctx.fillStyle = g; lctx.fillRect(x - r, y - r, r * 2, r * 2); };
+  for (const p of G.players) hole(cx(p) - camx, cy(p) - camy, p.state === 'ko' ? 24 : (p.cls === 'lantern' ? 100 : 80) + gearSum(p, 'light') + 35 * fxLvl(p, 'glow'), p.state === 'ko' ? .5 : 1);
+  for (const d of L.decor) if (d.kind === 'torch') hole(d.tx * T + 8 - camx, d.ty * T + 6 - camy, 46 + Math.sin(G.time * 9 + d.tx) * 2, .85);
+  for (const [k] of L.fires) hole((k % MW) * T + 8 - camx, Math.floor(k / MW) * T + 8 - camy, 40, .9);
+  hole(L.door.tx * T + 8 - camx, L.door.ty * T - camy, 42, .8);
+  for (const n of L.npcs) hole(cx(n) - camx, cy(n) - camy, 36, .7);
+  for (const o of G.objects) if (o.seed && !o.open) hole(cx(o) - camx, cy(o) - camy, 34, .8);
+  for (const f of G.fx) if (f.kind === 'flash') hole(f.x - camx, f.y - camy, f.r * 2.5, 1);
+  for (const pr of G.projectiles) if (pr.kind === 'spark') hole(pr.x - camx, pr.y - camy, 26, .9);
+  if (G.combat && G.combat.actor && G.combat.actor.isEnemy) hole(cx(G.combat.actor) - camx, cy(G.combat.actor) - camy, 60, .9);
+  ctx.drawImage(light, 0, 0);
+  // warm glow
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of G.players) if (p.cls === 'lantern' && p.state === 'ok') { const g = ctx.createRadialGradient(cx(p) - camx, cy(p) - camy, 0, cx(p) - camx, cy(p) - camy, 60); g.addColorStop(0, 'rgba(255,190,90,.14)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH); }
+  for (const f of G.fx) if (f.kind === 'flash') { ctx.fillStyle = `rgba(255,200,120,${f.life})`; ctx.fillRect(0, 0, VW, VH); }
+  ctx.globalCompositeOperation = 'source-over';
+  // FX on top
+  for (const f of G.fx) {
+    if (f.kind === 'bolt') { const k = clamp(f.t / f.dur, 0, 1); const x = f.x0 + (f.x1 - f.x0) * k - camx, y = f.y0 + (f.y1 - f.y0) * k - camy; ctx.fillStyle = f.color; ctx.fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2); }
+    if (f.kind === 'ring') { ctx.strokeStyle = `rgba(255,215,94,${f.life})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(f.x - camx, f.y - camy, f.r * (1 - f.life / .6) + 6, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  // name tags + combat overlays
+  G.players.forEach((p, i) => {
+    const stack = G.players.slice(0, i).filter(q => Math.abs(cx(q) - cx(p)) < 34 && Math.abs(q.y - p.y) < 12).length;
+    pixelText(p.name, cx(p) - camx, p.y - camy - 5 - (p.holding ? 10 : 0) - stack * 8, p.state === 'ko' ? '#aaa2bf' : p.color, 8);
+  });
+  const C = G.combat;
+  if (C) {
+    for (const e of G.enemies) if (e.alive && e.inCombat) drawHpBar(e);
+    const a = C.actor;
+    if (a && (a.isPlayer ? a.state !== 'ko' : a.alive)) { const bob = Math.sin(G.time * 6) * 2; const x = Math.round(cx(a) - camx), y = Math.round(a.y - camy - 16 - (a.isPlayer ? 6 : 0) + bob - (a.type === 'boss' ? 10 : 0)); ctx.fillStyle = '#000'; ctx.fillRect(x - 4, y - 1, 9, 3); ctx.fillStyle = '#f5b544'; ctx.fillRect(x - 3, y, 7, 1); ctx.fillRect(x - 2, y + 1, 5, 1); ctx.fillRect(x - 1, y + 2, 3, 1); ctx.fillRect(x, y + 3, 1, 1); }
+    if (C.phase === 'pturn' && a.isPlayer) {
+      const left = Math.max(0, C.moveLeft); const fy = Math.round(a.y + a.h - camy + 1);
+      if (left > 1) { ctx.fillStyle = 'rgba(245,181,68,.45)'; ctx.fillRect(Math.round(cx(a) - left - camx), fy, Math.round(left * 2), 2); ctx.fillStyle = '#f5b544'; ctx.fillRect(Math.round(cx(a) - left - camx), fy - 2, 1, 4); ctx.fillRect(Math.round(cx(a) + left - camx), fy - 2, 1, 4); }
+      const o = C.opts && C.opts[C.sel];
+      if (o && o.target && o.id !== 'end' && o.id !== 'potion') { const t = o.target; const pul = Math.floor(G.time * 4) % 2; ctx.strokeStyle = t.isEnemy ? '#ff6b5a' : '#a6ef8a'; ctx.lineWidth = 1; ctx.strokeRect(Math.round(t.x - camx) - 3 - pul + .5, Math.round(t.y - camy) - 3 - pul + .5, t.w + 6 + pul * 2, t.h + 6 + pul * 2); }
+    }
+  }
+  for (const f of G.floaters) { const a = clamp(f.life / .4, 0, 1); ctx.globalAlpha = a; pixelText(f.text, f.x - camx, f.y - camy - (1.2 - f.life) * 16, f.color, 8); }
+  ctx.globalAlpha = 1;
+  // door + treasure-map pointers when off screen
+  { const dx = L.door.tx * T + 8 - camx, dy = L.door.ty * T - camy; if (dx < 0 || dx > VW || dy < 0 || dy > VH - 50) { const ax = clamp(dx, 14, VW - 14), ay = clamp(dy, 18, VH - 60); if (Math.floor(G.time * 2) % 2 && !G.combat) pixelText('EXIT', ax, ay, '#ffd75e', 8); } }
+  for (const o of G.objects) {
+    if (!o.seed || o.open) continue;
+    const col = o.seed.owner === null ? '#ffd75e' : G.players[o.seed.owner].color, who = o.seed.owner === null ? 'PARTY' : G.players[o.seed.owner].name;
+    const dx = cx(o) - camx, dy = o.y - camy;
+    if (dx < 0 || dx > VW || dy < 0 || dy > VH - 50) { if (Math.floor(G.time * 2 + 1) % 2 && !G.combat) pixelText('MAP: ' + who, clamp(dx, 30, VW - 30), clamp(dy, 18, VH - 60), col, 8); }
+    else pixelText(who, dx, dy - 4, col, 8);
+  }
+  G.cam.x = savedCam.x; G.cam.y = savedCam.y;
+}
+
+/* ---------------- Main loop ---------------- */
+function updateCamera(dt) {
+  let tx, ty; const c = centroid();
+  if (G.combat && G.combat.actor) { const a = G.combat.actor; tx = (c.x + cx(a)) / 2; ty = (c.y + cy(a)) / 2; } else { tx = c.x; ty = c.y; }
+  const gx = clamp(tx - VW / 2, 0, MW * T - VW), gy = clamp(ty - VH / 2 + 22, 0, MH * T - VH + 56);
+  G.cam.x += (gx - G.cam.x) * Math.min(1, dt * 5); G.cam.y += (gy - G.cam.y) * Math.min(1, dt * 5);
+}
+function update(dt, first) {
+  G.time += dt; if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 20);
+  if (G.banner > 0) { G.banner -= dt; if (G.banner <= 0) $('#banner').dataset.show = '0'; }
+  for (const pa of G.particles) { pa.life -= dt; pa.x += pa.vx * dt; pa.y += pa.vy * dt; if (pa.grav) pa.vy += 500 * dt; else { pa.vx *= .96; pa.vy *= .96; } }
+  G.particles = G.particles.filter(p => p.life > 0);
+  for (const f of G.floaters) f.life -= dt; G.floaters = G.floaters.filter(f => f.life > 0);
+  for (const f of G.fx) { if (f.kind === 'bolt') { f.t += dt; if (f.t >= f.dur && !f.done) { f.done = true; f.life = 0; f.cb && f.cb(); } } else f.life -= dt; }
+  G.fx = G.fx.filter(f => f.kind === 'bolt' ? !f.done : f.life > 0);
+  updateDice(dt, first);
+  if (G.dialogue) { updateDialogue(first); updateCamera(dt); return; }
+  handleGear(first);
+  if (G.combat) updateCombat(dt, first);
+  else {
+    for (const p of G.players) updatePlayer(p, dt, first, p.state === 'ok');
+    updateEnemiesExplore(dt); if (G.mode === 'play') { updateTether(); checkExit(); }
+  }
+  if (G.mode !== 'play') return;
+  updateObjects(dt); updateProjectiles(dt); updateFires(dt); updateHazards(dt);
+  if (!G.combat) checkCombatTrigger();
+  updateCamera(dt);
+}
+let last = performance.now();
+function frame(now) {
+  let dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (G.mode !== 'lobby') {
+    pollInputs();
+    if (G.mode === 'summary' && G.campReady) campKeys();
+    if (G.overlay && !G.paused) { G.overlayT += dt; if (G.overlayT > .6 && (anyPressed('act') || anyPressed('jump'))) { const f = G.overlay; G.overlay = null; f(); } }
+    if (G.mode === 'play' && !G.paused && $('#overlay').hidden) {
+      const steps = Math.max(1, Math.ceil(dt / (1 / 60))), h = dt / steps;
+      for (let i = 0; i < steps; i++) update(h, i === 0);
+    }
+    render(); updatePartyBar(); updateActionMenu(); G.players.forEach(renderGear);
+  }
+  requestAnimationFrame(frame);
+}
+function fitStage() { /* the stage sizes itself with CSS; keep the canvas crisp */ ctx.imageSmoothingEnabled = false; }
+function updatePads() {
+  const el = $('#pads'); if (!el) return;
+  const gps = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(Boolean);
+  el.textContent = gps.length ? 'Controllers found: ' + gps.map(g => `Controller ${g.index + 1}`).join(', ') + '. Each player picks their number under Controls.' : 'No controllers found yet. Plug one in and press any button on it.';
+}
+addEventListener('gamepadconnected', updatePads); addEventListener('gamepaddisconnected', updatePads);
+window.__PPD = G;
+loadSetup(); renderLobby(); updatePads(); renderSaves(); requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
