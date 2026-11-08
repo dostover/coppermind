@@ -663,7 +663,10 @@ export function ReviewEditor({
       setUnstruckIds(new Set());
       setSavedMessage(
         changedCount > 0
-          ? `Saved - ${changedCount} correction${changedCount === 1 ? "" : "s"} recorded.`
+          ? // Learning from corrections now runs in the background after the
+            // save returns (jobs.ts's evaluate_corrections), so "recorded"
+            // would claim something that hasn't happened yet.
+            `Saved - learning from ${changedCount} correction${changedCount === 1 ? "" : "s"} in the background.`
           : "Saved."
       );
       router.refresh();

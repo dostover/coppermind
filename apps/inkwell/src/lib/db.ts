@@ -907,6 +907,21 @@ export const noteTagsRepo = {
 };
 
 export const handwritingExamplesRepo = {
+  // Used by jobs.ts's evaluate_corrections stage to stay idempotent: a job
+  // requeued after a crash (requeueOrphanedRunning) re-runs its whole
+  // payload, and any correction it had already recorded before the crash
+  // must not be recorded a second time.
+  exists(input: { noteId: string; segmentId: string; aiText: string; correctedText: string }): boolean {
+    const row = db
+      .prepare(
+        `SELECT 1 FROM handwriting_examples
+         WHERE note_id = ? AND segment_id = ? AND ai_text = ? AND corrected_text = ?
+         LIMIT 1`
+      )
+      .get(input.noteId, input.segmentId, input.aiText, input.correctedText);
+    return Boolean(row);
+  },
+
   create(input: {
     id: string;
     noteId: string;
