@@ -1447,6 +1447,32 @@ main {
   background: var(--surface-alt);
 }
 
+/* Magnifier beside the segment being edited (2026-11-07): opens the photo
+   close-up, replacing the old double-click trigger so double-click can
+   select words again. Sized as a comfortable tap target on phones. */
+.flow .zoom-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin: 0 0.1rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--dusk-blue);
+  cursor: zoom-in;
+  vertical-align: middle;
+  align-self: center;
+}
+
+.flow .zoom-trigger:hover,
+.flow .zoom-trigger:focus-visible {
+  background: var(--accent-tint);
+  color: var(--prussian-blue);
+}
+
 /* Upload filmstrip thumbnails + capture time (2026-11-05) - enough to check
    the page order at a glance before uploading. */
 .page-filmstrip-thumb {
