@@ -254,6 +254,13 @@ export function ReviewEditor({
     setActiveSegmentId(null);
   }
 
+  // Pop-out zoom trigger, 2026-11-07: double-click moved to a magnifier
+  // button. Double-click is the browser's own "select this word" gesture in
+  // a text field, and opening the close-up on it kept getting in the way of
+  // editing. The button (see renderLineSegments) shows only beside the
+  // segment being edited, so double-click goes back to selecting words.
+  // Earlier history below.
+  //
   // Pop-out zoom (2026-09-16, replacing the in-page zoom-on-focus this
   // screen previously used - "I don't think this is quite what I want").
   // Originally opened on plain focus, same as the highlight above - but
@@ -268,7 +275,7 @@ export function ReviewEditor({
   // clicks fall through to the text underneath, since there's no longer
   // any everyday click for it to conflict with.
   const [popoutSegmentId, setPopoutSegmentId] = useState<string | null>(null);
-  function handleSegmentDoubleClick(segmentId: string) {
+  function openPopout(segmentId: string) {
     setPopoutSegmentId(segmentId);
   }
 
@@ -296,7 +303,7 @@ export function ReviewEditor({
   // button handling in the JSX below - a real listener (not a JSX
   // onKeyDown) since the pop-out itself holds no focus for a key event to
   // land on; the focused element stays whichever segment textarea opened
-  // it (double-clicking to open one doesn't blur it), wherever that is in
+  // it (the magnifier button keeps focus there - see renderLineSegments), wherever that is in
   // the DOM.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -840,7 +847,13 @@ export function ReviewEditor({
   // textareas (a line is split into several segments only where the AI
   // wanted to score a word's confidence separately, or at crossed-out text).
   function renderLineSegments(pageId: string, segments: TranscriptSegment[]) {
+    // The close-up needs the page's photo and the segment's region on it -
+    // the same conditions popoutVisible checks - so the magnifier is only
+    // offered where clicking it would actually show something.
+    const page = pageStates.find((p) => p.id === pageId);
+    const pageHasImage = Boolean(page && page.imagePath && !page.imageRemoved);
     return segments.map((segment) => {
+      const showMagnifier = pageHasImage && Boolean(segment.sourceRegion) && activeSegmentId === segment.id;
       const titleParts = [
         segment.crossedOut
           ? "Crossed out in the original - left out of the note when you save"
@@ -875,7 +888,6 @@ export function ReviewEditor({
             }}
             onFocus={() => handleSegmentFocus(segment.id)}
             onBlur={handleSegmentBlur}
-            onDoubleClick={() => handleSegmentDoubleClick(segment.id)}
             onKeyDown={(e) => {
               // Enter always splits (never inserts a literal newline into a
               // segment's text - these are meant to be single flowing lines,
@@ -892,6 +904,27 @@ export function ReviewEditor({
               }
             }}
           />
+          {showMagnifier && (
+            <button
+              type="button"
+              className="zoom-trigger"
+              // preventDefault on pointer/mouse down keeps focus in the
+              // segment's textarea: without it, pressing the button blurs the
+              // textarea first, which clears activeSegmentId and unmounts this
+              // button before its click can land. Keeping focus also means
+              // the cursor is still where it was after the close-up closes.
+              onPointerDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => openPopout(segment.id)}
+              title="Show this part of the photo close up"
+              aria-label="Show this part of the photo close up"
+            >
+              <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
+                <line x1="12.6" y1="12.6" x2="17.5" y2="17.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
           {showToggle && (
             <button
               type="button"
@@ -1147,7 +1180,7 @@ export function ReviewEditor({
 
       {popoutVisible && popoutPage && popoutRegion && (
         // A real modal again (2026-09-16: now that opening it is a
-        // deliberate double-click - see handleSegmentDoubleClick above -
+        // deliberate click on the magnifier button - see openPopout above -
         // rather than plain focus, there's no everyday single click left
         // for a blocking backdrop to conflict with). Clicking anywhere
         // here - the backdrop or the close-up image itself - closes it,
