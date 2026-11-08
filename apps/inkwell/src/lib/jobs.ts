@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import type { ProcessingJobRow } from "./db";
-import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo, processingJobsRepo } from "./db";
+import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo, processingJobsRepo, handwritingExamplesRepo } from "./db";
 import { getAIProvider } from "./ai";
-import { getHandwritingContext } from "./handwritingProfile";
+import { getHandwritingContext, recordHandwritingCorrection, updateHandwritingProfile } from "./handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "./config";
 import { derivePlaceholderTitle } from "./titleGen";
 import { findNotesNeedingIndex, indexNote } from "./searchIndex";
@@ -71,6 +71,27 @@ const STAGE_RASTERIZE_PDF = "rasterize_pdf";
 // fails the job itself (see runOneJob), never the note's pages - search
 // being briefly out of date must not look like a transcription error.
 const STAGE_INDEX_NOTE = "index_note";
+
+// Learns from the corrections in one save (the handwriting learning loop):
+// classifies each corrected segment with evaluateHandwritingCorrection,
+// records a HandwritingExample for it, then recomputes the profile once.
+// Enqueued by the review screen's PATCH (api/notes/[id]/route.ts) instead
+// of running inline there - one AI call per correction, in sequence, made
+// large saves take minutes. Note-level, no page_id; like index_note, a
+// failure here only fails the job, never the note's pages - the saved text
+// is already safe, only learning from it is affected.
+const STAGE_EVALUATE_CORRECTIONS = "evaluate_corrections";
+
+export interface PendingCorrection {
+  segmentId: string;
+  aiText: string;
+  correctedText: string;
+  originalConfidence: number;
+}
+
+interface EvaluateCorrectionsPayload {
+  corrections: PendingCorrection[];
+}
 
 interface RasterizePdfPayload {
   pdfPath: string;
@@ -258,6 +279,49 @@ async function runRasterizePdfJob(job: ProcessingJobRow): Promise<void> {
   maybeEnqueueTranscribeForNote(job.note_id);
 }
 
+// Runs the evaluate_corrections stage for one save. One correction's AI
+// call failing doesn't stop the rest: it's logged and skipped (the text it
+// came from is already saved either way). Throws only if every correction
+// failed, so a wholly broken run (e.g. the API unreachable) still shows up
+// as a failed job. Idempotent per correction (handwritingExamplesRepo.exists)
+// so a run requeued after a crash doesn't record anything twice.
+async function runEvaluateCorrectionsJob(job: ProcessingJobRow): Promise<void> {
+  if (!job.payload) throw new Error(`Job ${job.id} has no payload - cannot run stage "${job.stage}".`);
+  const { corrections } = JSON.parse(job.payload) as EvaluateCorrectionsPayload;
+
+  const provider = getAIProvider();
+  let recorded = 0;
+  let failed = 0;
+  let lastError: unknown = null;
+  for (const c of corrections) {
+    const key = { noteId: job.note_id, segmentId: c.segmentId, aiText: c.aiText, correctedText: c.correctedText };
+    if (handwritingExamplesRepo.exists(key)) continue;
+    try {
+      const evaluation = await provider.evaluateHandwritingCorrection({
+        aiText: c.aiText,
+        correctedText: c.correctedText,
+        originalConfidence: c.originalConfidence,
+      });
+      // The note may have been permanently deleted while this call was in
+      // flight - its examples would cascade-delete anyway, and inserting one
+      // now would fail its foreign key.
+      if (!notesRepo.getById(job.note_id)) return;
+      recordHandwritingCorrection({ ...key, originalConfidence: c.originalConfidence, evaluation });
+      recorded++;
+    } catch (err) {
+      failed++;
+      lastError = err;
+      console.error(`Evaluating a correction for note ${job.note_id} failed (skipped):`, err);
+    }
+  }
+
+  if (recorded > 0) updateHandwritingProfile();
+  if (failed > 0 && recorded === 0) {
+    const reason = lastError instanceof Error ? lastError.message : "unknown error";
+    throw new Error(`All ${failed} correction evaluation(s) failed: ${reason}`);
+  }
+}
+
 const STAGE_RUNNERS: Record<string, (job: ProcessingJobRow) => Promise<void>> = {
   [STAGE_TRANSCRIBE]: (job) => {
     if (!job.page_id) throw new Error(`Job ${job.id} has no page_id - cannot run stage "${job.stage}".`);
@@ -268,7 +332,22 @@ const STAGE_RUNNERS: Record<string, (job: ProcessingJobRow) => Promise<void>> = 
   [STAGE_INDEX_NOTE]: async (job) => {
     await indexNote(job.note_id);
   },
+  [STAGE_EVALUATE_CORRECTIONS]: runEvaluateCorrectionsJob,
 };
+
+// Called by the review screen's save (PATCH /api/notes/[id]) with every
+// correction that save made - one job per save, not per correction.
+export function enqueueEvaluateCorrections(noteId: string, corrections: PendingCorrection[]): void {
+  const payload: EvaluateCorrectionsPayload = { corrections };
+  processingJobsRepo.enqueue({
+    id: randomUUID(),
+    noteId,
+    pageId: null,
+    stage: STAGE_EVALUATE_CORRECTIONS,
+    createdAt: new Date().toISOString(),
+    payload: JSON.stringify(payload),
+  });
+}
 
 // Safe to call on every save: skipped if an index job for this note is
 // already waiting, since that job reads the note's content when it runs.
@@ -369,6 +448,13 @@ async function runOneJob(): Promise<boolean> {
       // The next save re-triggers indexing, and startup re-checks every
       // note (findNotesNeedingIndex).
       console.error(`Search indexing failed for note ${job.note_id} (non-fatal):`, message);
+      return true;
+    }
+    if (job.stage === STAGE_EVALUATE_CORRECTIONS) {
+      // Same reasoning as index_note: the save already succeeded, so the
+      // note's pages are fine. Only this round of handwriting learning is
+      // missing; it doesn't block anything else.
+      console.error(`Handwriting learning failed for note ${job.note_id} (non-fatal):`, message);
       return true;
     }
     if (job.stage === STAGE_RASTERIZE_PDF) {

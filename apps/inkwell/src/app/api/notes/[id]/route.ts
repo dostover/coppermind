@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo, foldersRepo } from "@/lib/db";
-import { getAIProvider } from "@/lib/ai";
-import {
-  recordHandwritingCorrection,
-  updateHandwritingProfile,
-} from "@/lib/handwritingProfile";
 import { isStructureType, type StructureType, type TranscriptSegment } from "@/lib/ai/types";
-import { enqueueIndexNote } from "@/lib/jobs";
+import { enqueueEvaluateCorrections, enqueueIndexNote, type PendingCorrection } from "@/lib/jobs";
 import { withoutCrossedOut } from "@/lib/crossedOut";
 
 export async function GET(
@@ -181,10 +176,16 @@ export async function PATCH(
   }
 
   const pagesById = new Map(note.pages.map((p) => [p.id, p]));
-  const provider = getAIProvider();
   const now = new Date().toISOString();
 
-  let anyCorrectionRecorded = false;
+  // Corrections to learn from are only collected here, not evaluated. Each
+  // one needs its own AI call (evaluateHandwritingCorrection), and doing
+  // those inline - one after another, before the save could respond - made a
+  // save with a few dozen corrections take minutes (32 corrections ~4 min,
+  // 2026-11-07). The text is the user's work and is written immediately
+  // below; learning from it is best-effort and runs as a background job
+  // (jobs.ts's evaluate_corrections stage) once this save has returned.
+  const pendingCorrections: PendingCorrection[] = [];
 
   for (const pageBody of body.pages) {
     const page = pagesById.get(pageBody.pageId);
@@ -237,20 +238,12 @@ export async function PATCH(
         // Crossed-out text is dropped from the saved note just below, so an
         // edit to it isn't a correction worth learning from (or an AI call).
         if (changedThisSave && changedFromOriginalAi && !crossedOut) {
-          const evaluation = await provider.evaluateHandwritingCorrection({
-            aiText: original.text,
-            correctedText: edited.text,
-            originalConfidence: original.confidence,
-          });
-          recordHandwritingCorrection({
-            noteId: id,
+          pendingCorrections.push({
             segmentId: original.id,
             aiText: original.text,
             correctedText: edited.text,
             originalConfidence: original.confidence,
-            evaluation,
           });
-          anyCorrectionRecorded = true;
         }
       } else {
         // No AI baseline at all - a segment created client-side by
@@ -295,10 +288,6 @@ export async function PATCH(
     }
   }
 
-  if (anyCorrectionRecorded) {
-    updateHandwritingProfile();
-  }
-
   const title = body.title?.trim() || null;
   notesRepo.setReviewed(id, title, now, title !== note.title);
 
@@ -327,6 +316,13 @@ export async function PATCH(
   // Saved text/title changed what search should find - re-index in the
   // background (a no-op if nothing indexable actually changed).
   enqueueIndexNote(id);
+
+  // Enqueued last, once every write above has succeeded, so a save that
+  // fails partway never leaves behind a job learning from text that wasn't
+  // actually saved.
+  if (pendingCorrections.length > 0) {
+    enqueueEvaluateCorrections(id, pendingCorrections);
+  }
 
   return NextResponse.json(notesRepo.getById(id));
 }
