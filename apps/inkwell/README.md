@@ -51,6 +51,15 @@ in `.env.local`, then restart `npm run dev`. No code changes needed - the
 `AIProvider` factory in `src/lib/ai/index.ts` picks `ClaudeAIProvider`
 automatically once a key is present.
 
+Transcription (and answering questions) uses `claude-opus-5`; the small,
+frequent jobs - classifying each correction you save and suggesting tags -
+use the much cheaper `claude-haiku-5-5`. Override either in `.env.local`:
+
+```bash
+ANTHROPIC_MODEL=claude-opus-5          # transcription + answers
+ANTHROPIC_LIGHT_MODEL=claude-haiku-5-5 # correction classification + tags
+```
+
 ### Search and asking questions
 
 The Library's search box finds notes three ways at once and ranks the

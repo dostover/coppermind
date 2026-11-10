@@ -26,13 +26,22 @@ import type {
 // built but not the default provider yet - MockAIProvider is, until an
 // ANTHROPIC_API_KEY is supplied and the pipeline mechanics are proven.
 
-// claude-opus-5 is the current flagship model (the previously-hardcoded
-// "claude-sonnet-4-5" is a stale/invalid model ID and, separately, was never
-// eligible for Claude's high-resolution vision tier). Accuracy on small,
-// difficult cursive matters more than latency for this low-volume,
-// single-user app, so we default to the strongest model rather than
-// optimizing for speed/cost.
-const MODEL = "claude-opus-5";
+// Two models, chosen per job rather than one for everything:
+//
+// - MODEL (transcription and answering questions): claude-opus-5, the
+//   strongest model. Accuracy on small, difficult cursive matters more than
+//   cost for this low-volume, single-user app, and answers should reason
+//   carefully over the cited passages. (The previously-hardcoded
+//   "claude-sonnet-4-5" was a stale/invalid model ID and never eligible for
+//   Claude's high-resolution vision tier.)
+// - LIGHT_MODEL (classifying a correction, suggesting tags): small text-only
+//   classification jobs that run far more often than transcription (once per
+//   edited segment on every save), so a much cheaper model is plenty.
+//
+// Both can be overridden from .env.local (ANTHROPIC_MODEL /
+// ANTHROPIC_LIGHT_MODEL) without a code change, same as VOYAGE_MODEL.
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5";
+const LIGHT_MODEL = process.env.ANTHROPIC_LIGHT_MODEL || "claude-haiku-5-5";
 
 // Shared by TRANSCRIBE_TOOL (one page per call) and TRANSCRIBE_BATCH_TOOL
 // (several pages per call) so the two schemas can't drift apart - a batch
@@ -437,7 +446,7 @@ export class ClaudeAIProvider implements AIProvider {
 
   async evaluateHandwritingCorrection(input: LearningEvalInput): Promise<LearningEvalOutput> {
     const message = await this.client.messages.create({
-      model: MODEL,
+      model: LIGHT_MODEL,
       max_tokens: 512,
       system:
         "You classify a single edit a user made to an AI transcription of their own handwriting. " +
@@ -469,7 +478,7 @@ export class ClaudeAIProvider implements AIProvider {
       : "This user has no existing tags yet.";
 
     const message = await this.client.messages.create({
-      model: MODEL,
+      model: LIGHT_MODEL,
       max_tokens: 512,
       system:
         "You propose a short list (1-4) of concise topical tags for a handwritten note, based on its " +
