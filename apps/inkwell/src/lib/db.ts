@@ -226,6 +226,28 @@ if (!noteColumns.some((c) => c.name === "google_doc_id")) {
   db.exec(`ALTER TABLE notes ADD COLUMN google_doc_exported_at TEXT`);
 }
 
+// Rework in Google Docs (google/docsSync.ts). Once a note is exported, the
+// Doc becomes where the writer reworks the draft, so Inkwell has to (a)
+// never overwrite that work on a re-export and (b) read it back:
+// - google_doc_export_hash: fingerprint of the text Inkwell last wrote into
+//   the Doc. If the Doc's text no longer matches, someone edited it there.
+// - revised_text / revised_synced_at: the Doc's current text when it differs
+//   from what Inkwell exported - the note's reworked ("revised") version,
+//   indexed for search and preferred over the draft when answering
+//   questions. Null when the Doc hasn't been reworked.
+if (!noteColumns.some((c) => c.name === "revised_text")) {
+  db.exec(`ALTER TABLE notes ADD COLUMN google_doc_export_hash TEXT`);
+  db.exec(`ALTER TABLE notes ADD COLUMN revised_text TEXT`);
+  db.exec(`ALTER TABLE notes ADD COLUMN revised_synced_at TEXT`);
+}
+
+// note_chunks.source: 'draft' (the transcription) or 'revised' (the note's
+// reworked Google Doc text). Existing rows are all drafts.
+const chunkColumns = db.prepare(`PRAGMA table_info(note_chunks)`).all() as { name: string }[];
+if (!chunkColumns.some((c) => c.name === "source")) {
+  db.exec(`ALTER TABLE note_chunks ADD COLUMN source TEXT NOT NULL DEFAULT 'draft'`);
+}
+
 // processing_jobs.page_id was added when the transcribe stage moved from
 // note-scoped to page-scoped (multi-page notes). Nullable so historical rows
 // from before this change (already terminal - succeeded/failed long ago)
@@ -366,6 +388,9 @@ export interface NoteRow {
   google_doc_id: string | null;
   google_doc_url: string | null;
   google_doc_exported_at: string | null;
+  google_doc_export_hash: string | null;
+  revised_text: string | null;
+  revised_synced_at: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -586,11 +611,47 @@ export const notesRepo = {
   // Records where a note's content was last exported to, so a later
   // export re-uses (updates) the same Google Doc instead of creating a
   // new one every time - see google/docsExport.ts.
-  setGoogleDocExport(id: string, docId: string, url: string, updatedAt: string): void {
+  // exportHash fingerprints the exported text (see docsExport.ts) so a
+  // later re-export can tell whether the Doc was edited since. Writing the
+  // draft into the Doc also means it no longer holds a separate revised
+  // version, so revised_text is cleared.
+  setGoogleDocExport(id: string, docId: string, url: string, exportHash: string, updatedAt: string): void {
     db.prepare(
-      `UPDATE notes SET google_doc_id = ?, google_doc_url = ?, google_doc_exported_at = ?, updated_at = ?
+      `UPDATE notes SET google_doc_id = ?, google_doc_url = ?, google_doc_exported_at = ?,
+         google_doc_export_hash = ?, revised_text = NULL, revised_synced_at = ?, updated_at = ?
        WHERE id = ?`
-    ).run(docId, url, updatedAt, updatedAt, id);
+    ).run(docId, url, updatedAt, exportHash, updatedAt, updatedAt, id);
+  },
+
+  // Records the note's revised text read back from its Google Doc (null =
+  // the Doc still matches the export). Deliberately leaves updated_at alone:
+  // a background check of the Doc isn't the note changing in Inkwell, and
+  // shouldn't reorder the Library.
+  setRevisedText(id: string, revisedText: string | null, syncedAt: string): void {
+    db.prepare(`UPDATE notes SET revised_text = ?, revised_synced_at = ? WHERE id = ?`).run(
+      revisedText,
+      syncedAt,
+      id
+    );
+  },
+
+  // Non-trashed notes linked to a Google Doc - the ones to check for rework.
+  listIdsWithGoogleDoc(): string[] {
+    return (
+      db
+        .prepare(`SELECT id FROM notes WHERE google_doc_id IS NOT NULL AND deleted_at IS NULL`)
+        .all() as { id: string }[]
+    ).map((r) => r.id);
+  },
+
+  // Notes whose Doc holds a reworked version - their draft passages are
+  // superseded when answering questions (search.ts).
+  idsWithRevisedText(): Set<string> {
+    return new Set(
+      (db.prepare(`SELECT id FROM notes WHERE revised_text IS NOT NULL`).all() as { id: string }[]).map(
+        (r) => r.id
+      )
+    );
   },
 
   // Permanently deletes the note row and (via ON DELETE CASCADE) its
@@ -653,7 +714,11 @@ export const notesRepo = {
     // deferred; this just confirms notes are durably saved and retrievable.
     const q = query.toLowerCase();
     return notes.filter((n) => {
-      const haystack = [n.title ?? "", ...n.segmentsCurrent.filter((s) => !s.crossedOut).map((s) => s.text)]
+      const haystack = [
+        n.title ?? "",
+        ...n.segmentsCurrent.filter((s) => !s.crossedOut).map((s) => s.text),
+        n.revised_text ?? "",
+      ]
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
@@ -1177,9 +1242,12 @@ export const processingJobsRepo = {
 };
 
 
+export type ChunkSource = "draft" | "revised";
+
 export interface ChunkForIndex {
   chunkIndex: number;
   pageNumber: number;
+  source: ChunkSource;
   text: string;
   embedding: Float32Array;
 }
@@ -1189,6 +1257,7 @@ export interface IndexedChunkRow {
   note_id: string;
   chunk_index: number;
   page_number: number;
+  source: ChunkSource;
   text: string;
 }
 
@@ -1215,8 +1284,8 @@ export const searchIndexRepo = {
   // one transaction, so a search never sees a half-rebuilt note.
   replaceForNote(noteId: string, chunks: ChunkForIndex[], contentHash: string, model: string, now: string): void {
     const insertChunk = db.prepare(
-      `INSERT INTO note_chunks (id, note_id, chunk_index, page_number, text, embedding, embedding_model, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO note_chunks (id, note_id, chunk_index, page_number, source, text, embedding, embedding_model, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertFts = db.prepare(`INSERT INTO note_chunks_fts (chunk_id, note_id, text) VALUES (?, ?, ?)`);
     db.transaction(() => {
@@ -1224,7 +1293,7 @@ export const searchIndexRepo = {
       db.prepare(`DELETE FROM note_chunks_fts WHERE note_id = ?`).run(noteId);
       for (const c of chunks) {
         const id = randomUUID();
-        insertChunk.run(id, noteId, c.chunkIndex, c.pageNumber, c.text, toBlob(c.embedding), model, now);
+        insertChunk.run(id, noteId, c.chunkIndex, c.pageNumber, c.source, c.text, toBlob(c.embedding), model, now);
         insertFts.run(id, noteId, c.text);
       }
       db.prepare(
@@ -1245,7 +1314,7 @@ export const searchIndexRepo = {
     if (folderId !== undefined) args.push(folderId);
     const rows = db
       .prepare(
-        `SELECT c.id, c.note_id, c.chunk_index, c.page_number, c.text, c.embedding
+        `SELECT c.id, c.note_id, c.chunk_index, c.page_number, c.source, c.text, c.embedding
          FROM note_chunks c JOIN notes n ON n.id = c.note_id
          WHERE n.deleted_at IS NULL AND c.embedding_model = ? ${folderCond}`
       )
@@ -1267,7 +1336,7 @@ export const searchIndexRepo = {
     args.push(limit);
     return db
       .prepare(
-        `SELECT c.id, c.note_id, c.chunk_index, c.page_number, c.text, bm25(note_chunks_fts) AS score
+        `SELECT c.id, c.note_id, c.chunk_index, c.page_number, c.source, c.text, bm25(note_chunks_fts) AS score
          FROM note_chunks_fts f
          JOIN note_chunks c ON c.id = f.chunk_id
          JOIN notes n ON n.id = c.note_id

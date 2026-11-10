@@ -105,6 +105,10 @@ interface Props {
   googleConfigured: boolean;
   googleConnected: boolean;
   initialGoogleDocUrl: string | null;
+  // The note's reworked version read back from its Google Doc, if any (see
+  // google/docsSync.ts). Shown read-only - the Doc is where it's edited.
+  initialRevisedText: string | null;
+  initialRevisedSyncedAt: string | null;
 }
 
 // Multi-page notes: each page transcribes independently (see jobs.ts), so
@@ -213,6 +217,8 @@ export function ReviewEditor({
   googleConfigured,
   googleConnected,
   initialGoogleDocUrl,
+  initialRevisedText,
+  initialRevisedSyncedAt,
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle ?? "");
@@ -226,6 +232,14 @@ export function ReviewEditor({
   const [exportingToGoogle, setExportingToGoogle] = useState(false);
   const [googleDocUrl, setGoogleDocUrl] = useState(initialGoogleDocUrl);
   const [googleExportError, setGoogleExportError] = useState<string | null>(null);
+  // Set when a re-export was refused because the Doc was edited in Google
+  // Docs - shows the "open it / export a separate copy" choice.
+  const [googleDocChanged, setGoogleDocChanged] = useState(false);
+  const [googleCopyUrl, setGoogleCopyUrl] = useState<string | null>(null);
+  const [revisedText, setRevisedText] = useState(initialRevisedText);
+  const [revisedSyncedAt, setRevisedSyncedAt] = useState(initialRevisedSyncedAt);
+  const [syncingFromGoogle, setSyncingFromGoogle] = useState(false);
+  const [googleSyncError, setGoogleSyncError] = useState<string | null>(null);
   const [pageStates, setPageStates] = useState<PageState[]>(() => pages.map(toPageState));
   const [folderId, setFolderId] = useState<string | null>(initialFolderId);
   const [tags, setTags] = useState(initialTags);
@@ -813,19 +827,57 @@ export function ReviewEditor({
   // last-saved content, not in-progress unsaved edits, same as how Save
   // itself works - this button doesn't implicitly save first, so an
   // unsaved edit isn't silently included.
-  async function handleExportToGoogle() {
+  //
+  // If the linked Doc was edited in Google Docs since the last export, the
+  // server refuses (409, code "doc_changed") rather than overwrite that
+  // rework; asCopy then writes the draft into a separate new Doc, leaving
+  // the note linked to the one being reworked.
+  async function handleExportToGoogle(asCopy = false) {
     setExportingToGoogle(true);
     setGoogleExportError(null);
     try {
-      const res = await fetch(`/api/notes/${noteId}/export-to-docs`, { method: "POST" });
+      const res = await fetch(`/api/notes/${noteId}/export-to-docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ asCopy }),
+      });
+      if (res.status === 409) {
+        const data = await res.clone().json().catch(() => null);
+        if (data?.code === "doc_changed") {
+          setGoogleDocChanged(true);
+          return;
+        }
+      }
       if (!res.ok) throw new Error(await extractErrorMessage(res, "Export failed."));
       const data = await res.json();
-      setGoogleDocUrl(data.url);
+      if (data.linked) setGoogleDocUrl(data.url);
+      else setGoogleCopyUrl(data.url);
+      setGoogleDocChanged(false);
       window.open(data.url, "_blank", "noopener,noreferrer");
     } catch (err) {
       setGoogleExportError(err instanceof Error ? err.message : "Export failed.");
     } finally {
       setExportingToGoogle(false);
+    }
+  }
+
+  // Reads the linked Doc now instead of waiting for the background check.
+  async function handleSyncFromGoogle() {
+    setSyncingFromGoogle(true);
+    setGoogleSyncError(null);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/sync-from-docs`, { method: "POST" });
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Couldn't read the Google Doc."));
+      const data = await res.json();
+      if (data.result === "doc_missing") {
+        setGoogleSyncError("The linked Google Doc no longer exists. The last version read from it is kept below.");
+      }
+      setRevisedText(data.revisedText);
+      setRevisedSyncedAt(data.revisedSyncedAt);
+    } catch (err) {
+      setGoogleSyncError(err instanceof Error ? err.message : "Couldn't read the Google Doc.");
+    } finally {
+      setSyncingFromGoogle(false);
     }
   }
 
@@ -1342,7 +1394,7 @@ export function ReviewEditor({
               (googleConnected ? (
                 <button
                   className="button secondary"
-                  onClick={handleExportToGoogle}
+                  onClick={() => handleExportToGoogle()}
                   disabled={exportingToGoogle}
                 >
                   {exportingToGoogle
@@ -1366,6 +1418,78 @@ export function ReviewEditor({
             <p className="toast error" role="alert">
               ⚠ {googleExportError}
             </p>
+          )}
+          {googleDocChanged && (
+            <div className="toast error docs-changed" role="alert">
+              <span>
+                ⚠ This note&apos;s Google Doc has been edited since you exported it, so Inkwell
+                didn&apos;t overwrite it. Your rework is safe.
+              </span>
+              <span className="docs-changed-actions">
+                {googleDocUrl && (
+                  <a className="button secondary" href={googleDocUrl} target="_blank" rel="noopener noreferrer">
+                    Open the Doc
+                  </a>
+                )}
+                <button
+                  className="button secondary"
+                  onClick={() => handleExportToGoogle(true)}
+                  disabled={exportingToGoogle}
+                >
+                  Export a separate copy
+                </button>
+              </span>
+            </div>
+          )}
+          {googleCopyUrl && (
+            <p className="muted">
+              Draft copy created:{" "}
+              <a href={googleCopyUrl} target="_blank" rel="noopener noreferrer">
+                open it
+              </a>
+              . This note stays linked to the Doc you&apos;re reworking.
+            </p>
+          )}
+
+          {googleDocUrl && (
+            <section className="card revised-panel">
+              <div className="revised-panel-header">
+                <h2>Revised in Google Docs</h2>
+                {googleConnected && (
+                  <button
+                    className="button secondary"
+                    onClick={handleSyncFromGoogle}
+                    disabled={syncingFromGoogle}
+                  >
+                    {syncingFromGoogle ? "Checking..." : "Check Google Docs now"}
+                  </button>
+                )}
+              </div>
+              {revisedText ? (
+                <>
+                  <p className="muted">
+                    Search and Ask use this reworked version for this note
+                    {revisedSyncedAt ? ` (last read ${new Date(revisedSyncedAt).toLocaleString()})` : ""}.
+                    Edit it in Google Docs; the draft above stays as you wrote it by hand.
+                  </p>
+                  <details>
+                    <summary>Show the revised text</summary>
+                    <div className="revised-text">{revisedText}</div>
+                  </details>
+                </>
+              ) : (
+                <p className="muted">
+                  The Doc still matches this draft. Rework it in Google Docs and the new version
+                  will show up here, checked every 15 minutes
+                  {revisedSyncedAt ? ` (last checked ${new Date(revisedSyncedAt).toLocaleString()})` : ""}.
+                </p>
+              )}
+              {googleSyncError && (
+                <p className="toast error" role="alert">
+                  ⚠ {googleSyncError}
+                </p>
+              )}
+            </section>
           )}
         </>
       )}

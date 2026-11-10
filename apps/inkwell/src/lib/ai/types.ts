@@ -175,6 +175,7 @@ export interface AnswerQuestionInput {
     sourceNumber: number;
     noteTitle: string;
     noteDate: string;
+    /** Draft page the passage came from; 0 for a note's revised (Google Docs) text. */
     pageNumber: number;
     text: string;
   }[];

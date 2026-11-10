@@ -514,7 +514,7 @@ export class ClaudeAIProvider implements AIProvider {
     const excerpts = input.sources
       .map(
         (s) =>
-          `[${s.sourceNumber}] From the note "${s.noteTitle}" (${s.noteDate}, page ${s.pageNumber}):\n${s.text}`
+          `[${s.sourceNumber}] From the note "${s.noteTitle}" (${s.noteDate}${s.pageNumber > 0 ? `, page ${s.pageNumber}` : ""}):\n${s.text}`
       )
       .join("\n\n");
 

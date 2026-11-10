@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { notesRepo, type Note } from "@/lib/db";
 import type { TranscriptSegment } from "@/lib/ai/types";
 import { getValidAccessToken } from "./oauth";
@@ -19,8 +20,31 @@ interface DocsCreateResponse {
   documentId: string;
 }
 
-interface DocsGetResponse {
-  body?: { content?: { endIndex: number }[] };
+// Only the parts of a Docs API document this module reads: each structural
+// element's end index (to clear the body) and the text inside paragraphs,
+// including paragraphs nested in tables / a table of contents.
+interface DocsStructuralElement {
+  endIndex: number;
+  paragraph?: { elements?: { textRun?: { content?: string } }[] };
+  table?: { tableRows?: { tableCells?: { content?: DocsStructuralElement[] }[] }[] };
+  tableOfContents?: { content?: DocsStructuralElement[] };
+}
+
+export interface DocsGetResponse {
+  body?: { content?: DocsStructuralElement[] };
+}
+
+// Carries the HTTP status so callers can tell "this Doc no longer exists"
+// (404) apart from a token, permission or network problem - only the former
+// may ever be treated as "the Doc is gone".
+export class DocsApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number
+  ) {
+    super(message);
+    this.name = "DocsApiError";
+  }
 }
 
 async function docsFetch<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
@@ -34,7 +58,7 @@ async function docsFetch<T>(path: string, accessToken: string, init?: RequestIni
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Google Docs API request failed (${res.status}): ${detail || res.statusText}`);
+    throw new DocsApiError(`Google Docs API request failed (${res.status}): ${detail || res.statusText}`, res.status);
   }
   return (await res.json()) as T;
 }
@@ -118,6 +142,68 @@ function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
   return { text, styles };
 }
 
+// --- Reading a Doc back, and telling whether it was edited -----------------
+//
+// Once exported, a Doc is where the writer reworks the draft. Inkwell keeps
+// a fingerprint of exactly what it last wrote (notes.google_doc_export_hash)
+// and compares the Doc's current text against it: equal means the Doc is
+// still Inkwell's copy of the draft; different means it was edited in
+// Google Docs. Comparing text (not the Docs revision id, which Google says
+// can change on its own) means formatting-only changes don't count, and a
+// draft that was exported and never touched is never mistaken for rework.
+
+function collectText(elements: DocsStructuralElement[] | undefined, out: string[]): void {
+  for (const el of elements ?? []) {
+    for (const part of el.paragraph?.elements ?? []) out.push(part.textRun?.content ?? "");
+    for (const row of el.table?.tableRows ?? []) {
+      for (const cell of row.tableCells ?? []) collectText(cell.content, out);
+    }
+    collectText(el.tableOfContents?.content, out);
+  }
+}
+
+export function extractDocText(doc: DocsGetResponse): string {
+  const out: string[] = [];
+  collectText(doc.body?.content, out);
+  return normalizeDocText(out.join(""));
+}
+
+// Whitespace-insensitive at the edges so the comparison only reacts to real
+// edits: Docs line breaks (\u000b) become newlines, trailing spaces and runs
+// of blank lines collapse, and the Doc's own trailing newline is dropped.
+export function normalizeDocText(text: string): string {
+  return text
+    .replace(/\r\n?|\u000b/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\s+$/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// The fingerprint ignores whitespace entirely (spaces, line and paragraph
+// breaks), so only a change in the words themselves counts as an edit -
+// adding a blank line between paragraphs in Docs isn't rework.
+export function hashDocText(text: string): string {
+  return createHash("sha256").update(normalizeDocText(text).replace(/\s+/g, " ")).digest("hex");
+}
+
+/** The text an export of this note writes into its Doc right now. */
+export function draftExportText(note: Note): string {
+  return buildDocBody(note).text;
+}
+
+/** What the Doc's text should look like if nobody has edited it there: the
+ *  fingerprint recorded at the last export, or - for notes exported before
+ *  fingerprints existed - the note's current draft text. */
+export function exportBaselineHash(note: Note): string {
+  return note.google_doc_export_hash ?? hashDocText(draftExportText(note));
+}
+
+export async function fetchDoc(docId: string, accessToken: string): Promise<DocsGetResponse> {
+  return docsFetch<DocsGetResponse>(`/${docId}`, accessToken);
+}
+
 // Style/bullet requests never shift any index (only insertText/
 // deleteContentRange do), so these can all be listed after one insertText
 // in any relative order and still land on the ranges computed above.
@@ -142,20 +228,59 @@ export class NothingToExportError extends Error {
   }
 }
 
-export async function exportNoteToGoogleDoc(note: Note): Promise<{ docId: string; url: string }> {
+// Thrown instead of re-exporting over a Doc that was edited in Google Docs
+// since Inkwell last wrote it - that Doc now holds the writer's rework, and
+// overwriting it with the draft would silently throw that work away.
+export class GoogleDocChangedError extends Error {
+  constructor(public readonly url: string | null) {
+    super(
+      "This note's Google Doc has been edited since you exported it. Exporting again would " +
+        "replace your edits with the draft, so Inkwell didn't. Open the Doc, or export a " +
+        "separate copy instead."
+    );
+    this.name = "GoogleDocChangedError";
+  }
+}
+
+export interface ExportOptions {
+  /** Write the draft into a brand-new Doc without relinking the note, so
+   *  the note stays connected to the Doc being reworked. */
+  asCopy?: boolean;
+}
+
+export async function exportNoteToGoogleDoc(
+  note: Note,
+  options: ExportOptions = {}
+): Promise<{ docId: string; url: string; linked: boolean }> {
   const { text, styles } = buildDocBody(note);
   if (!text) throw new NothingToExportError();
 
   const accessToken = await getValidAccessToken();
-  let docId = note.google_doc_id;
+  let docId = options.asCopy ? null : note.google_doc_id;
   const requests: Record<string, unknown>[] = [];
 
   if (docId) {
     // Re-export: update the same Doc in place (clear then rewrite) rather
     // than creating a new one on every click, so repeated exports stay one
-    // stable link the user can bookmark/share once.
+    // stable link - but only while the Doc is still Inkwell's own copy of
+    // the draft (see GoogleDocChangedError).
+    let existing: DocsGetResponse | null = null;
     try {
-      const existing = await docsFetch<DocsGetResponse>(`/${docId}`, accessToken);
+      existing = await fetchDoc(docId, accessToken);
+    } catch (err) {
+      // Only a Doc that no longer exists falls back to creating a fresh
+      // one. Anything else (expired access, no permission, offline) must
+      // fail: relinking the note to a new Doc here would quietly orphan the
+      // Doc the writer is reworking.
+      if (!(err instanceof DocsApiError && err.status === 404)) throw err;
+      docId = null;
+    }
+
+    if (existing) {
+      const docText = extractDocText(existing);
+      if (docText && hashDocText(docText) !== exportBaselineHash(note)) {
+        throw new GoogleDocChangedError(note.google_doc_url);
+      }
       const content = existing.body?.content ?? [];
       const endIndex = content.length > 0 ? content[content.length - 1].endIndex : 1;
       // An empty doc's body already ends at index 2 with nothing in between
@@ -164,17 +289,14 @@ export async function exportNoteToGoogleDoc(note: Note): Promise<{ docId: string
       if (endIndex > 2) {
         requests.push({ deleteContentRange: { range: { startIndex: 1, endIndex: endIndex - 1 } } });
       }
-    } catch {
-      // The Doc was likely deleted/trashed on Google's side since the last
-      // export - fall back to creating a fresh one instead of failing.
-      docId = null;
     }
   }
 
   if (!docId) {
+    const baseTitle = note.title ?? "Untitled note";
     const created = await docsFetch<DocsCreateResponse>("", accessToken, {
       method: "POST",
-      body: JSON.stringify({ title: note.title ?? "Untitled note" }),
+      body: JSON.stringify({ title: options.asCopy ? `${baseTitle} (draft copy)` : baseTitle }),
     });
     docId = created.documentId;
   }
@@ -188,6 +310,7 @@ export async function exportNoteToGoogleDoc(note: Note): Promise<{ docId: string
   });
 
   const url = `https://docs.google.com/document/d/${docId}/edit`;
-  notesRepo.setGoogleDocExport(note.id, docId, url, new Date().toISOString());
-  return { docId, url };
+  if (options.asCopy) return { docId, url, linked: false };
+  notesRepo.setGoogleDocExport(note.id, docId, url, hashDocText(text), new Date().toISOString());
+  return { docId, url, linked: true };
 }

@@ -19,6 +19,8 @@ export interface AskSource {
   noteId: string;
   noteTitle: string;
   pageNumber: number;
+  /** From the note's revised version in Google Docs rather than its draft. */
+  revised: boolean;
   text: string;
   cited: boolean;
 }
@@ -47,6 +49,7 @@ export async function POST(req: NextRequest) {
         noteTitle: note.title ?? "Untitled note",
         noteDate: new Date(note.created_at).toLocaleDateString("en-US", { dateStyle: "medium" }),
         pageNumber: chunk.page_number,
+        revised: chunk.source === "revised",
         text: chunk.text,
       },
     ];
@@ -61,7 +64,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await getAIProvider().answerQuestion({ question, sources });
+    // The model sees which passages are the reworked (canonical) version,
+    // via the title it's given; the UI shows the plain title plus a label.
+    const result = await getAIProvider().answerQuestion({
+      question,
+      sources: sources.map(({ revised, ...s }) => ({
+        ...s,
+        noteTitle: revised ? `${s.noteTitle} (revised version, from Google Docs)` : s.noteTitle,
+      })),
+    });
     const valid = new Set(sources.map((s) => s.sourceNumber));
     const cited = new Set(result.citedSources.filter((n) => valid.has(n)));
     // Also count any [n] the prose itself uses, in case citedSources missed one.

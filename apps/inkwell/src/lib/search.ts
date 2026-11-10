@@ -39,6 +39,8 @@ export interface SearchHit {
   snippet: string;
   /** Which retrievers found this note - drives the "why it matched" label. */
   matchedBy: MatchKind[];
+  /** The note has a reworked version in Google Docs (searched alongside its draft). */
+  revised: boolean;
   score: number;
 }
 
@@ -154,9 +156,19 @@ export async function searchNotes(query: string, folderId?: string | null): Prom
     }
   };
 
+  // A note's best passage from this retriever, preferring its revised
+  // (Google Docs) text over the draft when both matched - the rework is
+  // what the writer actually means now.
   const firstChunkText = (rows: IndexedChunkRow[]) => {
     const m = new Map<string, string>();
     for (const r of rows) if (!m.has(r.note_id)) m.set(r.note_id, r.text);
+    const revisedSeen = new Set<string>();
+    for (const r of rows) {
+      if (r.source === "revised" && !revisedSeen.has(r.note_id)) {
+        revisedSeen.add(r.note_id);
+        m.set(r.note_id, r.text);
+      }
+    }
     return m;
   };
 
@@ -172,6 +184,7 @@ export async function searchNotes(query: string, folderId?: string | null): Prom
       note,
       snippet: e.snippet ?? visibleText(note.segmentsCurrent),
       matchedBy: (["exact", "keyword", "meaning"] as MatchKind[]).filter((k) => e.matchedBy.has(k)),
+      revised: note.revised_text !== null,
       score: e.score,
     });
   }
@@ -182,14 +195,21 @@ export async function searchNotes(query: string, folderId?: string | null): Prom
  *  chunks (not whole notes - a question is usually answered by one or two
  *  passages, and handing Claude only those keeps answers focused and cheap),
  *  rank-fused the same way as searchNotes. */
+//
+// For a note reworked in Google Docs, only its revised passages are used:
+// the draft is superseded, and answering story questions ("does this
+// contradict chapter 3?") from a version the writer has since rewritten
+// would give confident, wrong answers.
 export async function retrieveChunksForQuestion(question: string, limit = 8): Promise<RetrievedChunk[]> {
   const [semantic, keyword] = await Promise.all([
     safeSemanticChunks(question),
     Promise.resolve(keywordChunks(question)),
   ]);
+  const revisedNotes = notesRepo.idsWithRevisedText();
+  const current = (row: IndexedChunkRow) => row.source === "revised" || !revisedNotes.has(row.note_id);
   const byChunk = new Map<string, RetrievedChunk>();
   const add = (rows: IndexedChunkRow[]) =>
-    rows.forEach((row, i) => {
+    rows.filter(current).forEach((row, i) => {
       const existing = byChunk.get(row.id);
       const bump = 1 / (RRF_K + i + 1);
       if (existing) existing.score += bump;
@@ -199,6 +219,7 @@ export async function retrieveChunksForQuestion(question: string, limit = 8): Pr
           note_id: row.note_id,
           chunk_index: row.chunk_index,
           page_number: row.page_number,
+          source: row.source,
           text: row.text,
           score: bump,
         });

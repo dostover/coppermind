@@ -241,6 +241,9 @@ export default async function LibraryPage({
                         {MATCH_LABELS[k]}
                       </span>
                     ))}
+                    {hitByNote.get(note.id)!.revised && (
+                      <span className="match-kind match-revised">Revised in Docs</span>
+                    )}
                   </p>
                 )}
                 {note.tags.length > 0 && (

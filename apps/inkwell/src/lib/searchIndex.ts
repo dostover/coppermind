@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { notesRepo, searchIndexRepo, type Note } from "./db";
+import { notesRepo, searchIndexRepo, type ChunkSource, type Note } from "./db";
 import { getEmbeddingProvider } from "./embeddings";
 import type { TranscriptSegment } from "./ai/types";
 
@@ -19,7 +19,9 @@ const CHUNK_MAX_WORDS = 220;
 
 export interface NoteChunk {
   chunkIndex: number;
+  /** The draft page it came from; 0 for revised text, which has no pages. */
   pageNumber: number;
+  source: ChunkSource;
   text: string;
 }
 
@@ -61,20 +63,33 @@ function splitLongLine(line: string): string[] {
 // Packs consecutive lines into ~CHUNK_TARGET_WORDS passages, never across a
 // page boundary (so a citation can point at one page). Lines are joined
 // with newlines, preserving the note's own structure in what Claude sees.
+// A note reworked in Google Docs (notes.revised_text) also gets passages
+// from that revised text, marked source 'revised' - kept alongside the
+// draft's so a search still finds a passage that was cut in the rework.
 export function chunkNote(note: Note): NoteChunk[] {
   const chunks: NoteChunk[] = [];
-  for (const page of note.pages) {
-    if (page.status !== "ready_for_review" || page.transcriptionRemoved) continue;
+  const pack = (lines: string[], pageNumber: number, source: ChunkSource) => {
     let buffer: string[] = [];
     const flush = () => {
-      if (buffer.length) chunks.push({ chunkIndex: chunks.length, pageNumber: page.page_number, text: buffer.join("\n") });
+      if (buffer.length) chunks.push({ chunkIndex: chunks.length, pageNumber, source, text: buffer.join("\n") });
       buffer = [];
     };
-    for (const line of pageLines(page.segmentsCurrent).flatMap(splitLongLine)) {
+    for (const line of lines.flatMap(splitLongLine)) {
       if (buffer.length && wordCount([...buffer, line].join(" ")) > CHUNK_TARGET_WORDS) flush();
       buffer.push(line);
     }
     flush();
+  };
+  for (const page of note.pages) {
+    if (page.status !== "ready_for_review" || page.transcriptionRemoved) continue;
+    pack(pageLines(page.segmentsCurrent), page.page_number, "draft");
+  }
+  if (note.revised_text) {
+    const lines = note.revised_text
+      .split("\n")
+      .map((l) => l.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    pack(lines, 0, "revised");
   }
   return chunks;
 }
@@ -88,7 +103,15 @@ function embeddingInput(note: Note, chunk: NoteChunk): string {
 
 function hashContent(note: Note, chunks: NoteChunk[], model: string): string {
   return createHash("sha256")
-    .update(JSON.stringify({ model, title: note.title ?? "", chunks: chunks.map((c) => [c.pageNumber, c.text]) }))
+    .update(
+      JSON.stringify({
+        model,
+        title: note.title ?? "",
+        // Draft chunks hash exactly as they did before revised text existed,
+        // so adding the feature didn't make every note look stale.
+        chunks: chunks.map((c) => (c.source === "revised" ? [c.pageNumber, c.text, "revised"] : [c.pageNumber, c.text])),
+      })
+    )
     .digest("hex");
 }
 
