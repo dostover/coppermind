@@ -14,6 +14,7 @@ interface Source {
   noteId: string;
   noteTitle: string;
   pageNumber: number;
+  revised?: boolean;
   text: string;
   cited: boolean;
 }
@@ -104,7 +105,11 @@ export function AskAnswer({ question }: { question: string }) {
             <li key={s.sourceNumber} id={`ask-source-${s.sourceNumber}`} value={s.sourceNumber}>
               <Link href={`/notes/${s.noteId}`}>
                 <strong>{s.noteTitle}</strong>
-                {s.pageNumber > 1 ? <span className="muted"> · page {s.pageNumber}</span> : null}
+                {s.revised ? (
+                  <span className="muted"> · revised in Google Docs</span>
+                ) : s.pageNumber > 1 ? (
+                  <span className="muted"> · page {s.pageNumber}</span>
+                ) : null}
               </Link>
               <p className="muted">“{excerpt(s.text)}”</p>
             </li>

@@ -8,6 +8,8 @@ import { getHandwritingContext, recordHandwritingCorrection, updateHandwritingPr
 import { CONFIDENCE_THRESHOLD } from "./config";
 import { derivePlaceholderTitle } from "./titleGen";
 import { findNotesNeedingIndex, indexNote } from "./searchIndex";
+import { syncRevisedFromGoogleDoc } from "./google/docsSync";
+import { GoogleNotConnectedError, isGoogleConnected } from "./google/oauth";
 // NOT a static top-level import of pdfPrep.ts (see runRasterizePdfJob below) -
 // this file is reached from src/instrumentation.ts (which starts the job
 // runner at server boot), and a static import here pulls pdf-to-img's whole
@@ -81,6 +83,13 @@ const STAGE_INDEX_NOTE = "index_note";
 // failure here only fails the job, never the note's pages - the saved text
 // is already safe, only learning from it is affected.
 const STAGE_EVALUATE_CORRECTIONS = "evaluate_corrections";
+
+// Reads a note's linked Google Doc back in and stores it as the note's
+// revised version when it was reworked there (google/docsSync.ts), then
+// re-indexes the note if that changed. Queued for every linked note at
+// startup and every DOC_SYNC_INTERVAL_MS, and run on demand from the review
+// screen. Note-level; like index_note, a failure only fails the job.
+const STAGE_SYNC_GOOGLE_DOC = "sync_google_doc";
 
 export interface PendingCorrection {
   segmentId: string;
@@ -333,7 +342,37 @@ const STAGE_RUNNERS: Record<string, (job: ProcessingJobRow) => Promise<void>> = 
     await indexNote(job.note_id);
   },
   [STAGE_EVALUATE_CORRECTIONS]: runEvaluateCorrectionsJob,
+  [STAGE_SYNC_GOOGLE_DOC]: async (job) => {
+    try {
+      const { needsReindex } = await syncRevisedFromGoogleDoc(job.note_id);
+      if (needsReindex) enqueueIndexNote(job.note_id);
+    } catch (err) {
+      // Disconnected since this was queued - nothing to read, not a failure.
+      if (err instanceof GoogleNotConnectedError) return;
+      throw err;
+    }
+  },
 };
+
+// Skipped if a check for this note is already waiting.
+export function enqueueGoogleDocSync(noteId: string): void {
+  if (processingJobsRepo.hasQueued(noteId, STAGE_SYNC_GOOGLE_DOC)) return;
+  processingJobsRepo.enqueue({
+    id: randomUUID(),
+    noteId,
+    pageId: null,
+    stage: STAGE_SYNC_GOOGLE_DOC,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+// Queues a check of every linked Doc. A no-op when Google isn't connected.
+function enqueueAllGoogleDocSyncs(): number {
+  if (!isGoogleConnected()) return 0;
+  const ids = notesRepo.listIdsWithGoogleDoc();
+  for (const id of ids) enqueueGoogleDocSync(id);
+  return ids.length;
+}
 
 // Called by the review screen's save (PATCH /api/notes/[id]) with every
 // correction that save made - one job per save, not per correction.
@@ -450,6 +489,12 @@ async function runOneJob(): Promise<boolean> {
       console.error(`Search indexing failed for note ${job.note_id} (non-fatal):`, message);
       return true;
     }
+    if (job.stage === STAGE_SYNC_GOOGLE_DOC) {
+      // The note itself is untouched - only its revised version may be a
+      // little out of date until the next check.
+      console.error(`Reading the Google Doc for note ${job.note_id} failed (non-fatal):`, message);
+      return true;
+    }
     if (job.stage === STAGE_EVALUATE_CORRECTIONS) {
       // Same reasoning as index_note: the save already succeeded, so the
       // note's pages are fine. Only this round of handwriting learning is
@@ -503,6 +548,10 @@ let runnerStarted = false;
 // 02-architecture.md §8) to scale beyond one process.
 const POLL_MS = 1000;
 const ORPHAN_AFTER_MS = 5 * 60 * 1000; // a 'running' job older than this is assumed crashed, not slow
+// How often linked Google Docs are re-read for rework. A handful of cheap
+// read requests per check; frequent enough that search catches up with a
+// writing session within the hour.
+const DOC_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
 export function startJobRunner(): void {
   if (runnerStarted) return;
@@ -524,6 +573,19 @@ export function startJobRunner(): void {
   } catch (err) {
     console.error("Search index startup check failed (non-fatal):", err);
   }
+
+  // Rework done in Google Docs since the server last ran, then periodically.
+  // Best-effort, same as the search check above.
+  const queueDocSyncs = () => {
+    try {
+      const queued = enqueueAllGoogleDocSyncs();
+      if (queued > 0) console.log(`Queued Google Docs checks for ${queued} note(s).`);
+    } catch (err) {
+      console.error("Queueing Google Docs checks failed (non-fatal):", err);
+    }
+  };
+  queueDocSyncs();
+  setInterval(queueDocSyncs, DOC_SYNC_INTERVAL_MS);
 
   const tick = () => {
     runOneJob()

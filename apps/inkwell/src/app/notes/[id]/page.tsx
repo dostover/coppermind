@@ -48,6 +48,8 @@ export default async function NotePage({
         googleConfigured={GOOGLE_OAUTH_CONFIGURED}
         googleConnected={isGoogleConnected()}
         initialGoogleDocUrl={note.google_doc_url}
+        initialRevisedText={note.revised_text}
+        initialRevisedSyncedAt={note.revised_synced_at}
       />
     </div>
   );

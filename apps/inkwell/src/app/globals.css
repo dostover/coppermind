@@ -1334,6 +1334,12 @@ main {
   color: var(--prussian-blue);
 }
 
+/* The note has a reworked version in Google Docs. */
+.match-kind.match-revised {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
 /* Answer panel for questions asked in the search box (AskAnswer.tsx). */
 .ask-answer {
   margin-bottom: 1.5rem;
@@ -1537,4 +1543,45 @@ main {
 .page-move-button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* Review screen: a note's reworked version read back from its Google Doc
+   (google/docsSync.ts). Read-only here - the Doc is where it's edited. */
+.revised-panel {
+  margin: 1.5rem 0;
+}
+
+.revised-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.revised-panel-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.revised-text {
+  white-space: pre-wrap;
+  margin-top: 0.75rem;
+  max-height: 28rem;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+/* Re-export refused because the Doc was edited: message plus the two ways
+   forward, wrapping under the text on narrow screens. */
+.docs-changed {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.docs-changed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }

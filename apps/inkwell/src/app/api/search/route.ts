@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       title: h.note.title,
       snippet: h.snippet,
       matchedBy: h.matchedBy,
+      revised: h.revised,
       score: h.score,
       createdAt: h.note.created_at,
       tags: h.note.tags.map((t) => t.name),

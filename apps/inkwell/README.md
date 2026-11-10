@@ -131,6 +131,19 @@ Tokens are stored in the same local SQLite database as everything else
 Disconnecting from `/library` only forgets them locally; to revoke access on
 Google's side too, visit https://myaccount.google.com/permissions.
 
+**Reworking a draft in Google Docs.** Once exported, the Doc is yours to
+rework - Inkwell keeps the handwritten draft as is and reads the Doc back:
+
+- **Re-export never overwrites your rework.** If the Doc's words changed
+  since Inkwell last exported it, re-export is refused; you can open the Doc
+  or export a separate copy of the draft (the note stays linked to the Doc
+  you're reworking).
+- **The reworked text comes back in.** Inkwell checks linked Docs at startup,
+  every 15 minutes, and when you click **Check Google Docs now** on a note.
+  A Doc whose words differ from the export becomes the note's *revised*
+  version, shown on the note, searched alongside the draft (results say
+  "Revised in Docs"), and used instead of the draft when you ask a question.
+
 ### Feature flags
 
 `src/lib/featureFlags.ts` has a small `flag(envVar, defaultValue)` helper for
@@ -170,7 +183,8 @@ src/
       notes/upload/route.ts       POST image -> creates + synchronously transcribes a note
       notes/[id]/route.ts         GET a note / PATCH corrections (triggers handwriting learning)
       notes/[id]/retry/route.ts   POST -> retries a failed transcription without re-uploading
-      notes/[id]/export-to-docs/route.ts   POST -> exports/re-exports the note to Google Docs
+      notes/[id]/export-to-docs/route.ts   POST -> exports/re-exports the note to Google Docs (refuses to overwrite a reworked Doc; {asCopy} for a separate copy)
+      notes/[id]/sync-from-docs/route.ts   POST -> reads the linked Doc now and returns the note's revised text
       notes/route.ts              GET ?q= plain substring filter (used for Trash)
       search/route.ts             GET ?q= hybrid search (exact + keyword + meaning)
       ask/route.ts                POST {question} -> cited answer from your notes
