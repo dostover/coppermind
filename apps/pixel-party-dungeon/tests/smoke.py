@@ -41,6 +41,7 @@ async def new_game(browser, players=2):
 async def play_battle(pg, max_steps=160):
     """Press Act for whoever's turn it is; end the turn when nothing is in reach."""
     keys = {"kb1": ("KeyE", "KeyF"), "kb2": ("Period", "Semicolon")}
+    idle = 0
     for _ in range(max_steps):
         st = await pg.evaluate("""() => { const C = window.__PPD.combat; if (!C) return null;
             return { phase: C.phase, isP: !!(C.actor && C.actor.isPlayer), ctrl: C.actor && C.actor.ctrl,
@@ -52,6 +53,11 @@ async def play_battle(pg, max_steps=160):
             await pg.keyboard.press(keys.get(st["pc"], keys["kb1"])[0])
         elif st["phase"] == "pturn" and st["isP"]:
             k = keys.get(st["ctrl"], keys["kb1"])
+            idle = 0 if st["ok"] and st["ok"] not in ("end", "run") else idle + 1
+            if idle > 12:  # a foe was knocked somewhere nobody can reach: run away, as a player would
+                await pg.evaluate("() => fleeCombat()")
+                await pg.wait_for_timeout(1700)
+                continue
             await pg.keyboard.press(k[0] if st["ok"] and st["ok"] not in ("end", "run") else k[1])
         await pg.wait_for_timeout(250)
     return False
@@ -70,6 +76,21 @@ async def main():
             if (!L.door || !L.entrance || isSolid(L.map[L.door.ty * MW + L.door.tx]) || isSolid(L.map[L.entrance.ty * MW + L.entrance.tx])) bad++; }
             startLevel(1, false); return bad; }""")
         check("300 generated levels have a clear entrance and exit", bad == 0, f"{bad} bad")
+
+        sz = await pg.evaluate("""() => { const G = window.__PPD; const out = [];
+            for (let n = 1; n <= G.maxLevel; n++) { let ok = true; const L = genLevel(n);
+              for (let i = 0; i < 40; i++) { const M = genLevel(n);
+                if (!M.guardChest || M.guardChest.guards.length < 2 || M.npcs.length < 2 || M.secretRooms.length < 1) ok = false;
+                if (M.objects.filter(o => o.secret).length < 1) ok = false; }
+              out.push({ rooms: L.cols * L.rows, npcs: L.npcs.length, ok }); }
+            startLevel(1, false); return out; }""")
+        rooms = [z["rooms"] for z in sz]
+        check("levels grow as you go, each with talks, a secret room and guarded treasure",
+              rooms == sorted(rooms) and rooms[0] > 16 and rooms[-1] > rooms[0] and all(z["ok"] for z in sz), str(sz))
+
+        r = await pg.evaluate("""() => { const G = window.__PPD; const L = G.L; const k = [...L.secretWalls][0];
+            const npc = L.npcs.find(m => m.def); return { wall: L.map[k] === CRACK, solid: isSolid(L.map[k]), helper: !!(npc && npc.def.choices.length === 2) }; }""")
+        check("secret rooms are sealed by cracked walls and helpers can talk", r["wall"] and r["solid"] and r["helper"], str(r))
 
         await pg.evaluate("""() => { const G = window.__PPD, p = G.players[0]; G.enemies.forEach(e => e.alive = false);
             G.enemies.push(mkEnemy('goblin', p.x + 20, p.y + p.h, 1), mkEnemy('slime', p.x + 40, p.y + p.h, 1));
@@ -101,6 +122,12 @@ async def main():
         r = await pg.evaluate("""() => { const G = window.__PPD, p = G.players[0]; giveItem(p, makeItem('ring', 2, 'spring', 'might')); restartLevel();
             return G.objects.filter(o => o.seed && o.seed.lost).map(o => o.seed.item.name).sort(); }""")
         check("gear found before a wipe waits in chests", r == ["Springy Ring of Might", "Steadfast Shield"], str(r))
+
+        r = await pg.evaluate("""() => { const G = window.__PPD, p = G.players[0], c = G.L.guardChest; G.enemies.forEach(e => { if (!e.guard) e.alive = false; });
+            c.x = p.x; c.y = p.y + p.h - c.h; const g0 = p.gold; openChest(c, p); const locked = !c.open;
+            c.guards.forEach(e => e.alive = false); openChest(c, p); return { locked, opened: c.open, gold: p.gold - g0 }; }""")
+        check("guarded treasure opens only after its guards poof", r["locked"] and r["opened"] and r["gold"] == 10, str(r))
+
 
         # Camp: rarity lock, pooled map for a chosen player, ready check
         await pg.evaluate("() => { const G = window.__PPD; G.players[0].gold = 100; G.players[1].gold = 100; completeLevel(); }")

@@ -332,8 +332,20 @@ kbd{font-family:var(--f-display);font-size:11px;background:var(--cave);border:1p
 /* =========================================================================
    Pixel Party Dungeon — prototype (spec phases 1–3 + Claude-written story)
    ========================================================================= */
-const T = 16, VW = 480, VH = 270, RW = 10, RH = 8, GW = 4, GH = 4;
-const MW = GW * RW + 2, MH = GH * RH + 2;
+const T = 16, VW = 480, VH = 270, RW = 10, RH = 8;
+/* Level size grows as the campaign goes on. Sizes are for a 10-level campaign
+   (levels 1-3 small, 4-7 medium, 8-10 large) and scale to shorter campaigns.
+   cols x rows of rooms; npcs = conversations per level; secrets = hidden rooms. */
+const LEVEL_SIZES = [
+  { upTo: 3, cols: 5, rows: 4, npcs: 2, secrets: 1 },
+  { upTo: 7, cols: 5, rows: 5, npcs: 2, secrets: 1 },
+  { upTo: 10, cols: 6, rows: 5, npcs: 3, secrets: 2 }
+];
+function levelSize(n, max = G.maxLevel) {
+  const eq = max > 1 ? 1 + Math.round((n - 1) * 9 / (max - 1)) : 1;
+  return LEVEL_SIZES.find(z => eq <= z.upTo) || LEVEL_SIZES[LEVEL_SIZES.length - 1];
+}
+let GW = 4, GH = 4, MW = GW * RW + 2, MH = GH * RH + 2;
 const E = 0, ROCK = 1, BED = 2, PLAT = 3, LAD = 4, SPIKE = 5, WATER = 6, CRACK = 7;
 const $ = s => document.querySelector(s);
 const rnd = n => Math.floor(Math.random() * n);
@@ -546,6 +558,27 @@ const TEMPLATES = [
   ['##########', '#..1..1..#', '#.......g#', '#11..e.11#', '#........#', '..........', '.p......b.', '##########'],
   ['##########', '#%%....%%#', '#%..c...%#', '#==....==#', '#....e...#', '..........', '..b....^..', '##########'],
   ['##########', '#....e...#', '#.H====H.#', '#.H....H.#', '#.H.gg.H.#', '..H....H..', '..........', '##########']
+];
+
+/* ---------------- Helper NPCs ----------------
+   Pre-written cave folk for extra conversations in each level (the story NPC is Gemini's).
+   Choice 1 (Heart) gives everyone a potion; choice 2 (Wits) gives everyone 15 gold. */
+const HELPERS = [
+  { name: 'Tumble', kind: 'a dizzy cave snail', greeting: 'Whoa! The walls keep spinning. Or is it me?',
+    choices: [{ text: 'Hold still. We will steady you.', stat: 'Heart' }, { text: 'Look at one spot on the wall.', stat: 'Wits' }],
+    success: ['Tumble smiles and shares a fizzy potion with everyone.', '"It worked!" Tumble hands out shiny coins.'], fail: 'Tumble sneezes glitter all over you. Sparkly!' },
+  { name: 'Nib', kind: 'a tiny stone troll', greeting: 'I lost my pebble collection. All of it. Again.',
+    choices: [{ text: 'We will help you start a new one!', stat: 'Heart' }, { text: 'Did you check your pockets?', stat: 'Wits' }],
+    success: ['Nib gives everyone a potion he was saving for a rainy day.', 'The pebbles were in his pocket! He pays you in gold.'], fail: 'Nib hugs you. He is very heavy. Oof.' },
+  { name: 'Moss', kind: 'a shy mushroom sprite', greeting: 'Eep! Please do not step on my friends.',
+    choices: [{ text: 'We promise to walk very softly.', stat: 'Heart' }, { text: 'Let us make a path around them.', stat: 'Wits' }],
+    success: ['Moss glows happily and gives everyone a potion.', 'Moss shows you where some lost coins are buried.'], fail: 'A mushroom puffs spores at you. You all sneeze at once.' },
+  { name: 'Rook', kind: 'a grumpy cave crow', greeting: 'Caw. Shiny things are mine. What do YOU want?',
+    choices: [{ text: 'Just to say you have lovely feathers.', stat: 'Heart' }, { text: 'Trade you a riddle for a shiny thing?', stat: 'Wits' }],
+    success: ['Rook fluffs up proudly and drops a potion for each of you.', 'Rook loves the riddle and pays you in gold coins.'], fail: 'Rook steals your hat, then gives it back. Rude.' },
+  { name: 'Wisp', kind: 'a lost lantern moth', greeting: 'It is so dark down here. Which way is the light?',
+    choices: [{ text: 'Stay close to us. We will keep you safe.', stat: 'Heart' }, { text: 'Light rises. Follow the warm air up!', stat: 'Wits' }],
+    success: ['Wisp shines brighter and gives everyone a potion.', 'Wisp flutters off and leaves a trail of gold dust behind.'], fail: 'Wisp lands on your nose. It tickles!' }
 ];
 
 /* ---------------- Audio ---------------- */
@@ -1038,7 +1071,8 @@ function tileAt(tx, ty) { if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return B
 function setTile(tx, ty, t) { if (tx <= 0 || ty <= 0 || tx >= MW - 1 || ty >= MH - 1) return; G.L.map[ty * MW + tx] = t; G.L.dirty = true; }
 const isSolid = t => t === ROCK || t === BED || t === CRACK;
 function genLevel(n) {
-  const L = { n, map: new Uint8Array(MW * MH).fill(BED), rope: new Uint8Array(MW * MH), enemies: [], objects: [], decor: [], npcs: [], fires: new Map(), door: null, entrance: null, biome: n >= 3 ? 'crystal' : 'mines', dirty: true, canvas: null };
+  const Z = levelSize(n); GW = Z.cols; GH = Z.rows; MW = GW * RW + 2; MH = GH * RH + 2;
+  const L = { size: Z, cols: GW, rows: GH, secretRooms: [], secretWalls: new Set(), guardChest: null, n, map: new Uint8Array(MW * MH).fill(BED), rope: new Uint8Array(MW * MH), enemies: [], objects: [], decor: [], npcs: [], fires: new Map(), door: null, entrance: null, biome: n >= 3 ? 'crystal' : 'mines', dirty: true, canvas: null };
   const rooms = []; for (let y = 0; y < GH; y++) { rooms.push([]); for (let x = 0; x < GW; x++) rooms[y].push({ path: false, up: false, down: false }); }
   let cx = rnd(GW), cy = 0; rooms[0][cx].path = true; const start = { cx, cy }; let dir = Math.random() < .5 ? -1 : 1, guard = 0;
   while (guard++ < 60) {
@@ -1048,6 +1082,9 @@ function genLevel(n) {
   }
   while (cy < GH - 1) { rooms[cy][cx].down = true; cy++; rooms[cy][cx].up = true; rooms[cy][cx].path = true; }
   const exitR = { cx, cy }; const spawns = [];
+  // Secret rooms: side rooms sealed by cracked walls (bash or bomb them open), full of gold
+  const sideRooms = []; for (let ry = 0; ry < GH; ry++) for (let rx = 0; rx < GW; rx++) if (!rooms[ry][rx].path) sideRooms.push({ rx, ry });
+  for (let k = 0; k < Z.secrets && sideRooms.length; k++) { const r = sideRooms.splice(rnd(sideRooms.length), 1)[0]; rooms[r.ry][r.rx].secret = true; }
   for (let ry = 0; ry < GH; ry++) for (let rx = 0; rx < GW; rx++) {
     const R = rooms[ry][rx]; let tpl = pick(TEMPLATES); if (Math.random() < .5) tpl = tpl.map(r => [...r].reverse().join(''));
     const isStart = rx === start.cx && ry === start.cy; const ox = 1 + rx * RW, oy = 1 + ry * RH;
@@ -1058,11 +1095,11 @@ function genLevel(n) {
         case '1': t = Math.random() < .5 ? ROCK : E; break;
         case 'p': L.objects.push(mkObj('pot', tx, ty)); break; case 'b': L.objects.push(mkObj('barrel', tx, ty)); break;
         case 'c': L.objects.push(mkObj('chest', tx, ty)); break; case 'g': L.objects.push(mkObj('gold', tx, ty)); break; case 'r': L.objects.push(mkObj('ropeItem', tx, ty)); break;
-        case 'e': if (!isStart) spawns.push({ tx, ty }); break;
+        case 'e': if (!isStart) spawns.push({ tx, ty, rx, ry }); break;
       }
       L.map[ty * MW + tx] = t;
     }
-    for (const y of [5, 6]) for (const x of [0, RW - 1]) { const i = (oy + y) * MW + ox + x; if (isSolid(L.map[i])) L.map[i] = E; }
+    for (const y of [5, 6]) for (const x of [0, RW - 1]) { const i = (oy + y) * MW + ox + x; if (R.secret) { L.map[i] = CRACK; L.secretWalls.add(i); } else if (isSolid(L.map[i])) L.map[i] = E; }
     if (R.down) for (const x of [4, 5]) for (let y = 5; y < RH; y++) L.map[(oy + y) * MW + ox + x] = E;
     if (R.up) for (const x of [4, 5]) for (let y = 0; y < 5; y++) L.map[(oy + y) * MW + ox + x] = E;
     if (Math.random() < .6) { const tx = ox + 1 + rnd(8), ty = oy + 1 + rnd(3); if (L.map[ty * MW + tx] === E) L.decor.push({ kind: 'torch', tx, ty }); }
@@ -1080,24 +1117,57 @@ function genLevel(n) {
     if (!out.length) { const x = 2; L.map[(oy + 6) * MW + ox + x] = E; L.map[(oy + 7) * MW + ox + x] = ROCK; out.push({ tx: ox + x, ty: oy + 6, x }); }
     return out;
   };
+  // Which rooms can be walked to without breaking a secret wall
+  const reach = new Set([start.cy * GW + start.cx]), q = [start];
+  while (q.length) { const { cx: x, cy: y } = q.shift(); const R = rooms[y][x]; const nb = [];
+    for (const dx of [-1, 1]) { const nx = x + dx; if (nx >= 0 && nx < GW && !R.secret && !rooms[y][nx].secret) nb.push({ cx: nx, cy: y }); }
+    if (R.down) nb.push({ cx: x, cy: y + 1 }); if (R.up) nb.push({ cx: x, cy: y - 1 });
+    for (const m of nb) { const k = m.cy * GW + m.cx; if (!reach.has(k)) { reach.add(k); q.push(m); } } }
+  const canReach = (rx, ry) => reach.has(ry * GW + rx);
+  for (let ry = 0; ry < GH; ry++) for (let rx = 0; rx < GW; rx++) {
+    const R = rooms[ry][rx];
+    if (R.secret) {
+      L.secretRooms.push({ rx, ry, found: false });
+      const spots = floorSpot(rx, ry); for (let k = 0; k < 4 && spots.length; k++) { const sp = spots.splice(rnd(spots.length), 1)[0]; const g = mkObj('gold', sp.tx, sp.ty); g.val = 20; g.secret = true; L.objects.push(g); }
+    } else if (!R.path && canReach(rx, ry) && Math.random() < .7) {
+      const sp = pick(floorSpot(rx, ry)); L.objects.push(mkObj('gold', sp.tx, sp.ty));
+    }
+  }
   L.entrance = pick(floorSpot(start.cx, start.cy));
   const ds = floorSpot(exitR.cx, exitR.cy); L.door = ds.sort((a, b) => Math.abs(b.x - 4.5) - Math.abs(a.x - 4.5))[0];
   if (exitR.cx === start.cx && exitR.cy === start.cy && L.door.tx === L.entrance.tx) L.door = ds[ds.length - 1];
   L.objects = L.objects.filter(o => Math.abs(o.x / T - L.door.tx) > 1 || Math.abs(o.y / T - L.door.ty) > 1);
   const types = L.biome === 'crystal' ? ['bat', 'bat', 'slime', 'goblin'] : ['goblin', 'goblin', 'slime', 'bat'];
   const farFromStart = (tx, ty) => Math.abs(tx - L.entrance.tx) > 7 || Math.abs(ty - L.entrance.ty) > 4;
-  for (const s of spawns) { if (Math.random() < .6 && farFromStart(s.tx, s.ty)) L.enemies.push(mkEnemy(pick(types), s.tx * T + 3, (s.ty + 1) * T, n)); }
+  for (const s of spawns) { if (rooms[s.ry][s.rx].secret) continue; if (Math.random() < .6 && farFromStart(s.tx, s.ty)) L.enemies.push(mkEnemy(pick(types), s.tx * T + 3, (s.ty + 1) * T, n)); }
   const pathRooms = []; for (let ry = 0; ry < GH; ry++) for (let rx = 0; rx < GW; rx++) if (rooms[ry][rx].path && !(rx === start.cx && ry === start.cy)) pathRooms.push({ rx, ry });
-  let tries = 0; while (L.enemies.length < 3 + n && tries++ < 30) {
+  const minFoes = Math.round((3 + n) * GW * GH / 16);
+  let tries = 0; while (L.enemies.length < minFoes && tries++ < 60) {
     const r = pick(pathRooms); if (!r) break; const sp = pick(floorSpot(r.rx, r.ry)); if (!farFromStart(sp.tx, sp.ty)) continue;
     L.enemies.push(mkEnemy(pick(['goblin', 'slime', 'goblin']), sp.tx * T + 3, (sp.ty + 1) * T, n));
   }
-  if (n === 1 && G.story) {
-    const cands = pathRooms.filter(r => !(r.rx === exitR.cx && r.ry === exitR.cy)); const r = cands.length ? pick(cands) : { rx: start.cx, ry: start.cy };
-    const sp = pick(floorSpot(r.rx, r.ry));
-    L.npcs.push({ name: G.story.npc.name, kind: G.story.npc.kind, x: sp.tx * T + 3, y: (sp.ty + 1) * T - 14, w: 10, h: 14, talked: false, spr: heroSprites('miner', { outfit: 1, skin: 2, hair: 5 }) });
+  // Conversations: the story NPC on level 1, plus pre-written helpers, spread over different rooms
+  const npcDefs = []; if (n === 1 && G.story) npcDefs.push(null);
+  const helpers = HELPERS.slice().sort(() => Math.random() - .5); while (npcDefs.length < Z.npcs && helpers.length) npcDefs.push(helpers.pop());
+  const npcRooms = pathRooms.filter(r => !(r.rx === exitR.cx && r.ry === exitR.cy)).concat(sideRooms.filter(r => canReach(r.rx, r.ry))).sort(() => Math.random() - .5);
+  const NPC_LOOKS = [{ outfit: 1, skin: 2, hair: 5 }, { outfit: 6, skin: 0, hair: 2 }, { outfit: 2, skin: 4, hair: 7 }, { outfit: 7, skin: 1, hair: 3 }];
+  npcDefs.forEach((def, i) => {
+    const r = npcRooms[i % Math.max(1, npcRooms.length)] || { rx: start.cx, ry: start.cy }; const sp = pick(floorSpot(r.rx, r.ry));
+    const info = def || G.story.npc;
+    L.npcs.push({ def, name: info.name, kind: info.kind, x: sp.tx * T + 3, y: (sp.ty + 1) * T - 14, w: 10, h: 14, talked: false, spr: heroSprites('miner', NPC_LOOKS[i % NPC_LOOKS.length]) });
     L.enemies = L.enemies.filter(e => Math.abs(e.x - sp.tx * T) > 5 * T || Math.abs(e.y - sp.ty * T) > 2 * T);
-  }
+  });
+  // Guarded treasure room: a chest that opens only after its guards poof
+  { const used = new Set(L.npcs.map(m => Math.floor((m.x / T - 1) / RW) + ',' + Math.floor((m.y / T - 1) / RH)));
+    let cands = sideRooms.filter(r => canReach(r.rx, r.ry) && !used.has(r.rx + ',' + r.ry));
+    if (!cands.length) cands = pathRooms.filter(r => !(r.rx === exitR.cx && r.ry === exitR.cy) && !used.has(r.rx + ',' + r.ry));
+    if (cands.length) {
+      const r = pick(cands), spots = floorSpot(r.rx, r.ry).sort((a, b) => Math.abs(a.x - 4.5) - Math.abs(b.x - 4.5)); const sp = spots[0];
+      const c = mkObj('chest', sp.tx, sp.ty); c.guards = []; L.objects.push(c); L.guardChest = c;
+      const foes = L.biome === 'crystal' ? ['bat', 'slime', 'goblin'] : ['goblin', 'slime', 'goblin'];
+      const gn = 2 + (Z === LEVEL_SIZES[2] ? 1 : 0); const side = spots.filter(q => Math.abs(q.tx - sp.tx) >= 2);
+      for (let k = 0; k < gn; k++) { const g = side.length ? side[k % side.length] : sp; const e = mkEnemy(pick(foes), g.tx * T + 3 + k * 2, (g.ty + 1) * T, n); e.guard = true; c.guards.push(e); L.enemies.push(e); }
+    } }
   for (const s of (G.seeds || [])) {
     if (s.level !== n || s.claimed) continue;
     const cands = pathRooms.length ? pathRooms : [{ rx: start.cx, ry: start.cy }];
@@ -1232,6 +1302,11 @@ function explode(x, y, r = 30) {
   for (const o of G.objects) if (o.alive && !o.held) { const d = Math.hypot(cx(o) - x, cy(o) - y); if (d < r * 1.6) { if (o.kind === 'barrel' && o.fuse <= 0) o.fuse = .18; else if (o.kind === 'pot') breakPot(o); else { o.vx = sgn(cx(o) - x || 1) * 160; o.vy = -180; } } }
   checkCombatTrigger();
 }
+function foundSecret(o) {
+  const rx = Math.floor((o.x / T - 1) / RW), ry = Math.floor((o.y / T - 1) / RH);
+  const r = G.L.secretRooms.find(q => q.rx === rx && q.ry === ry); if (!r || r.found) return;
+  r.found = true; toast('A secret room! Piles of gold!'); confetti(o.x, o.y);
+}
 function breakPot(o) {
   o.alive = false; sparks(cx(o), cy(o), 10, '#c27a4a', 100); sfx('hit');
   if (Math.random() < .45) { const g = mkObj('gold', 0, 0); g.x = cx(o) - 3; g.y = o.y; g.vy = -100; G.objects.push(g); }
@@ -1344,6 +1419,7 @@ function useItem(p, it) {
 }
 function giveRandomItem(p) { const it = pick(['rope', 'bomb', 'potion', 'rope']); p.inv[it]++; return it; }
 function openChest(c, p) {
+  if (c.guards && c.guards.some(e => e.alive)) { floater(cx(c), c.y - 8, 'beat the guards first!', '#ff8a7a'); sfx('miss'); return; }
   if (c.seed) {
     const s = c.seed;
     if (s.owner !== null && s.owner !== p.id) { floater(cx(c), c.y - 8, `only ${G.players[s.owner].name} can open this`, G.players[s.owner].color); sfx('miss'); return; }
@@ -1351,7 +1427,7 @@ function openChest(c, p) {
     toast(s.lost ? `${p.name} gets their ${s.item.name} back!` : `${p.name} finds the treasure map chest!`); giveItem(p, JSON.parse(JSON.stringify(s.item))); return;
   }
   c.open = true; sfx('open'); sparks(cx(c), c.y, 16, '#ffd75e', 90);
-  toast(`${p.name} opens a chest! Everyone gets 10 gold and a piece of gear.`); sfx('coin');
+  toast(c.guards ? `${p.name} opens the guarded treasure! Everyone gets 10 gold and a piece of gear.` : `${p.name} opens a chest! Everyone gets 10 gold and a piece of gear.`); sfx('coin');
   G.players.filter(o => o.state !== 'ko').forEach(o => { o.gold += 10; if (Math.random() < .5) giveRandomItem(o); giveItem(o, rollItem(CHEST_ODDS)); });
 }
 
@@ -1380,7 +1456,7 @@ function updateObjects(dt) {
     if (o.kind === 'gold' || o.kind === 'ropeItem') {
       for (const q of G.players) { const ml = fxLvl(q, 'magnet'); if (!ml || q.state !== 'ok') continue; const dx = cx(q) - cx(o), dy = cy(q) - cy(o), d = Math.hypot(dx, dy); if (d < (ml > 1 ? 6 : 3) * T && d > 2) { o.x += dx / d * 140 * dt; o.y += dy / d * 140 * dt; o.vy = 0; break; } }
       const p = G.players.find(p => p.state === 'ok' && overlap(p, o));
-      if (p) { o.alive = false; if (o.kind === 'gold') { const v = 5 + rnd(3) * 5; p.gold += v; floater(cx(o), o.y - 4, '+' + v, '#ffd75e'); sfx('coin'); } else { p.inv.rope++; floater(cx(o), o.y - 4, '+1 rope', '#f4ecd8'); sfx('coin'); } }
+      if (p) { o.alive = false; if (o.kind === 'gold') { const v = o.val || 5 + rnd(3) * 5; if (o.secret) foundSecret(o); p.gold += v; floater(cx(o), o.y - 4, '+' + v, '#ffd75e'); sfx('coin'); } else { p.inv.rope++; floater(cx(o), o.y - 4, '+1 rope', '#f4ecd8'); sfx('coin'); } }
     }
     if (o.y > MH * T) o.alive = false;
   }
@@ -1750,7 +1826,7 @@ function updateCombat(dt, first) {
 
 /* ---------------- Dialogue ---------------- */
 function openDialogue(npc, p) {
-  const st = G.story.npc;
+  const st = npc.def || G.story.npc;
   if (npc.talked) { G.dialogue = { npc, owner: p, stage: 'result', text: `${npc.name} waves. "Good luck down there!"` }; renderDialogue(); return; }
   G.dialogue = { npc, owner: p, stage: 'choose', sel: 0, text: st.greeting, opts: [...st.choices.map((c, i) => ({ ...c, i })), { text: 'Good luck! (leave)', stat: null }] };
   renderDialogue();
@@ -1770,7 +1846,7 @@ function renderDialogue() {
   d.statKey = statKey; d.dcs = dcs;
 }
 function chooseDialogue() {
-  const d = G.dialogue, o = d.opts[d.sel], st = G.story.npc, p = d.owner;
+  const d = G.dialogue, o = d.opts[d.sel], st = d.npc.def || G.story.npc, p = d.owner;
   if (!o.stat) { d.npc.talked = true; d.stage = 'result'; d.text = `${d.npc.name}: "Okay! Come back if you change your mind."`; d.npc.talked = false; renderDialogue(); return; }
   const dc = d.dcs[o.i]; const bonus = p.stats[d.statKey[o.stat]];
   d.stage = 'rolling'; renderDialogue();
@@ -1972,7 +2048,9 @@ function drawObj(o) {
       const sc = o.seed ? (o.seed.owner === null ? '#ffd75e' : G.players[o.seed.owner].color) : null;
       ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y, 14, 10); ctx.fillStyle = o.open ? '#3d2614' : sc || '#8a5a32'; ctx.fillRect(x + 1, y + 1, 12, 4); ctx.fillStyle = sc ? shade(sc, .6) : '#6e4526'; ctx.fillRect(x + 1, y + 5, 12, 4);
       if (sc && !o.open && Math.floor(G.time * 4 + o.x) % 6 === 0) { ctx.fillStyle = '#fff'; ctx.fillRect(x + 11, y - 2, 1, 1); ctx.fillRect(x + 2, y - 1, 1, 1); }
-    } ctx.fillStyle = '#f0c34a'; ctx.fillRect(x + 6, y + 4, 2, 3); if (o.open) { ctx.fillStyle = '#ffd75e'; ctx.fillRect(x + 3, y + 2, 8, 2); } break;
+    } ctx.fillStyle = '#f0c34a'; ctx.fillRect(x + 6, y + 4, 2, 3);
+      if (o.guards && !o.open && o.guards.some(e => e.alive)) { ctx.fillStyle = '#1a1222'; ctx.fillRect(x + 4, y - 3, 6, 4); ctx.fillStyle = '#aab0c0'; ctx.fillRect(x + 5, y - 2, 4, 2); ctx.fillRect(x + 5, y + 2, 4, 4); ctx.fillStyle = '#1a1222'; ctx.fillRect(x + 6, y + 3, 2, 2); }
+      if (o.open) { ctx.fillStyle = '#ffd75e'; ctx.fillRect(x + 3, y + 2, 8, 2); } break;
     case 'gold': ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y + 1, 6, 4); ctx.fillStyle = '#f0c34a'; ctx.fillRect(x + 1, y, 4, 4); ctx.fillStyle = '#fff3b0'; ctx.fillRect(x + 1, y, 2, 1); if (Math.floor(G.time * 3 + o.x) % 5 === 0) { ctx.fillStyle = '#fff'; ctx.fillRect(x + 4, y - 2, 1, 1); } break;
     case 'ropeItem': ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y, 10, 8); ctx.fillStyle = '#c99a5e'; ctx.fillRect(x + 1, y + 1, 8, 6); ctx.fillStyle = '#7a5030'; ctx.fillRect(x + 3, y + 3, 4, 2); break;
     case 'bomb': ctx.fillStyle = '#1a1222'; ctx.fillRect(x, y + 1, 8, 7); ctx.fillStyle = '#3a3a46'; ctx.fillRect(x + 1, y + 2, 6, 5); ctx.fillStyle = '#6a6a7a'; ctx.fillRect(x + 2, y + 3, 2, 1); ctx.fillStyle = Math.floor(G.time * 14) % 2 ? '#ffd75e' : '#ff5a2a'; ctx.fillRect(x + 6, y - 1, 2, 2); break;
@@ -2028,6 +2106,7 @@ function render() {
   const tx0 = Math.max(0, Math.floor(camx / T)), tx1 = Math.min(MW - 1, Math.floor((camx + VW) / T)), ty0 = Math.max(0, Math.floor(camy / T)), ty1 = Math.min(MH - 1, Math.floor((camy + VH) / T));
   for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
     if (L.rope[ty * MW + tx]) { const x = tx * T - camx, y = ty * T - camy; ctx.fillStyle = '#c99a5e'; ctx.fillRect(x + 7, y, 2, T); ctx.fillStyle = '#7a5030'; for (let k = 0; k < T; k += 4) ctx.fillRect(x + 7, y + k, 2, 1); }
+    if (L.secretWalls.has(ty * MW + tx) && L.map[ty * MW + tx] === CRACK && Math.floor(G.time * 2 + tx * 7 + ty) % 7 === 0) { const x = tx * T - camx, y = ty * T - camy; ctx.fillStyle = '#ffe9a0'; ctx.fillRect(x + 7, y + 3, 1, 5); ctx.fillRect(x + 5, y + 5, 5, 1); }
     if (L.map[ty * MW + tx] === WATER) { const x = tx * T - camx, y = ty * T - camy; ctx.fillStyle = 'rgba(58,123,213,.55)'; ctx.fillRect(x, y, T, T); if (tileAt(tx, ty - 1) !== WATER) { ctx.fillStyle = '#9fd8ff'; const o = Math.floor(G.time * 4 + tx) % 4; ctx.fillRect(x, y + (o < 2 ? 1 : 2), T, 1); } }
   }
   // decor + doors

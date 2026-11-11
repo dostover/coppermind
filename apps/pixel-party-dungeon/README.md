@@ -50,9 +50,13 @@ design is a 10-level campaign.
 
 ## Highlights
 
-- **Spelunky-style levels.** Each level is a 4×4 grid of hand-drawn room
+- **Spelunky-style levels that grow.** Each level is a grid of hand-drawn room
   templates, randomly picked and mirrored, with a guaranteed path from the
-  entrance at the top to the exit at the bottom.
+  entrance at the top to the exit at the bottom. The grid grows as the
+  campaign goes on (20, then 25, then 30 rooms). Side rooms hold gold, one is
+  a guarded treasure room whose chest opens only after its guards poof, and
+  secret rooms full of gold hide behind cracked walls (bash or bomb them).
+  Each level has 2–3 cave folk to talk to.
 - **Chaos.** Fire spreads across wooden platforms and ladders and burns
   them away. Bombs and barrels blow holes in the rock and chain-react. Shoves
   and bouncy weapons send enemies into spikes or off ledges, where they take
@@ -98,7 +102,8 @@ screen.
 ## Tests
 
 `tests/smoke.py` drives the game headlessly in Chrome with Playwright. It
-checks level generation (300 levels), a full battle, the gear screen, treasure
+checks level generation (300 levels; growing sizes, secret rooms, guarded
+treasure and helper NPCs), a full battle, the gear screen, treasure
 maps and the ready check, wipe chests, fall damage, Run away, and saving and
 loading.
 
