@@ -1215,6 +1215,24 @@ export const processingJobsRepo = {
     );
   },
 
+  // Payloads of this stage's jobs in the given statuses, optionally for one
+  // note - used to find which data/pdf-sources files a rasterize_pdf job
+  // still needs (pdfSourceCleanup.ts).
+  listPayloads(stage: string, statuses: ProcessingJobRow["status"][], noteId?: string): string[] {
+    if (statuses.length === 0) return [];
+    const placeholders = statuses.map(() => "?").join(", ");
+    const noteCond = noteId === undefined ? "" : " AND note_id = ?";
+    const args: string[] = [stage, ...statuses, ...(noteId === undefined ? [] : [noteId])];
+    return (
+      db
+        .prepare(
+          `SELECT payload FROM processing_jobs
+           WHERE stage = ? AND status IN (${placeholders})${noteCond} AND payload IS NOT NULL`
+        )
+        .all(...args) as { payload: string }[]
+    ).map((r) => r.payload);
+  },
+
   markSucceeded(id: string, finishedAt: string): void {
     db.prepare(`UPDATE processing_jobs SET status = 'succeeded', finished_at = ? WHERE id = ?`).run(
       finishedAt,

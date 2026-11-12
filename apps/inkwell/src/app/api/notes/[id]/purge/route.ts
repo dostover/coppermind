@@ -2,6 +2,7 @@ import { unlink } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { notesRepo } from "@/lib/db";
+import { queuedPdfSourcesForNote, removePdfSources } from "@/lib/pdfSourceCleanup";
 
 // The actual permanent deletion, only reachable from Trash - this is the
 // logic that used to live directly on DELETE /api/notes/[id] before that
@@ -18,7 +19,12 @@ export async function DELETE(
   if (!note) return NextResponse.json({ error: "Note not found." }, { status: 404 });
 
   const pages = note.pages;
+  // Read before the delete: purging cascade-deletes this note's job rows,
+  // and with them the only record of which raw PDFs a still-queued
+  // rasterize_pdf job was going to render (B3).
+  const queuedPdfs = queuedPdfSourcesForNote(id);
   notesRepo.delete(id);
+  await removePdfSources(queuedPdfs);
 
   for (const page of pages) {
     if (page.imageRemoved) continue; // already deleted separately, nothing left to unlink
