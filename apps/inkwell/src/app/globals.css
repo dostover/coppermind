@@ -1681,3 +1681,40 @@ main {
 .service-why {
   font-size: 0.9rem;
 }
+
+/* Copy text (B2): per-line copy action, shown beside the focused line like
+   the magnifier, and a viewport-fixed "Copied" toast so the confirmation is
+   visible wherever on the page the copy was made. */
+.flow .line-copy {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.1rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--dusk-blue);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  vertical-align: middle;
+  align-self: center;
+}
+
+.flow .line-copy:hover,
+.flow .line-copy:focus-visible {
+  background: var(--accent-tint);
+  color: var(--prussian-blue);
+}
+
+.toast.copy-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 60;
+  margin: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  /* toastIn animates transform, which would fight the centering above. */
+  animation: none;
+}

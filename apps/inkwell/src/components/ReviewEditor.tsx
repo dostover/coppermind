@@ -7,7 +7,7 @@ import type { SourceRegion, TranscriptSegment } from "@/lib/ai/types";
 import type { FolderRow, NotePage, NoteTagView } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { extractErrorMessage } from "@/lib/fetchError";
-import { withoutCrossedOut } from "@/lib/crossedOut";
+import { visibleText, withoutCrossedOut } from "@/lib/crossedOut";
 
 // How many extra lines of context to show above and below the focused line
 // in the pop-out zoom's close-up (see verticalCrop() and popoutVisible
@@ -91,6 +91,53 @@ function toLines(segments: TranscriptSegment[]): Line[] {
     }
   });
   return lines;
+}
+
+// Copy text (B2): one line's text as it would be pasted - crossed-out words
+// left out (same rule as the saved note and exports, lib/crossedOut.ts), the
+// rest joined with the single space every renderer already uses between
+// segments of a line.
+function lineText(segments: TranscriptSegment[]): string {
+  return visibleText(segments).trim();
+}
+
+// The whole note as it would be pasted into Docs/Reedsy: every page in page
+// order, one line of handwriting per line of text, pages separated by a
+// blank line. Lines left empty by crossing-out are dropped rather than
+// leaving stray blank lines.
+function noteText(pages: { segments: TranscriptSegment[] }[]): string {
+  return pages
+    .map((p) =>
+      toLines(withoutCrossedOut(p.segments))
+        .map((line) => lineText(line.segments))
+        .filter(Boolean)
+        .join("\n")
+    )
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+// navigator.clipboard needs a secure context (localhost counts, a plain-http
+// LAN address doesn't) - the hidden-textarea fallback covers the latter.
+async function writeClipboard(text: string): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // fall through to the legacy path
+    }
+  }
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.setAttribute("readonly", "");
+  el.style.position = "fixed";
+  el.style.opacity = "0";
+  document.body.appendChild(el);
+  el.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(el);
+  if (!ok) throw new Error("Couldn't copy to the clipboard.");
 }
 
 interface Props {
@@ -261,6 +308,28 @@ export function ReviewEditor({
   // with the "keep" toggle - remembered so the toggle stays on them (as
   // "strike", to undo) instead of disappearing once they read as normal text.
   const [unstruckIds, setUnstruckIds] = useState<Set<string>>(new Set());
+  // "Copied" toast (B2) - transient, fixed to the viewport so it's visible
+  // whether the copy came from the bottom-of-page button or a line far up.
+  const [copyToast, setCopyToast] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const copyToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copyToastTimer.current) clearTimeout(copyToastTimer.current);
+  }, []);
+  async function copyToClipboard(text: string, what: string) {
+    try {
+      await writeClipboard(text);
+      setCopyToast({ kind: "success", text: `Copied ${what}` });
+    } catch (err) {
+      setCopyToast({ kind: "error", text: err instanceof Error ? err.message : "Couldn't copy." });
+    }
+    if (copyToastTimer.current) clearTimeout(copyToastTimer.current);
+    copyToastTimer.current = setTimeout(() => setCopyToast(null), 2500);
+  }
+  function handleCopyNote() {
+    const readyPages = pageStates.filter((p) => p.status === "ready_for_review" && !p.transcriptionRemoved);
+    void copyToClipboard(noteText(readyPages), "note text");
+  }
+
   function handleSegmentFocus(segmentId: string) {
     setActiveSegmentId(segmentId);
   }
@@ -1212,6 +1281,22 @@ export function ReviewEditor({
                     {lines.map((line) => (
                       <p key={line.segments[0].id} className="flow">
                         {renderLineSegments(page.id, line.segments)}
+                        {line.segments.some((s) => s.id === activeSegmentId) && (
+                          <button
+                            type="button"
+                            className="line-copy"
+                            // Same focus-keeping trick as the magnifier: the
+                            // button only exists while a segment of this line
+                            // is focused, so it must not steal that focus.
+                            onPointerDown={(e) => e.preventDefault()}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => void copyToClipboard(lineText(line.segments), "line")}
+                            title="Copy this line"
+                            aria-label="Copy this line"
+                          >
+                            Copy line
+                          </button>
+                        )}
                       </p>
                     ))}
                   </div>
@@ -1390,6 +1475,14 @@ export function ReviewEditor({
             <button className="button" onClick={handleSave} disabled={saving}>
               {saving ? "Saving..." : "Save"}
             </button>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={handleCopyNote}
+              title="Copy every page's text, without crossed-out words"
+            >
+              Copy text
+            </button>
             {googleConfigured &&
               (googleConnected ? (
                 <button
@@ -1494,6 +1587,14 @@ export function ReviewEditor({
         </>
       )}
 
+      {copyToast && (
+        <p
+          className={`toast copy-toast ${copyToast.kind}`}
+          role={copyToast.kind === "error" ? "alert" : "status"}
+        >
+          {copyToast.kind === "success" ? "✓" : "⚠"} {copyToast.text}
+        </p>
+      )}
       {savedMessage && (
         <p className="toast success" role="status">
           ✓ {savedMessage}
