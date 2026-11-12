@@ -15,3 +15,8 @@ export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
 export const GOOGLE_REDIRECT_URI =
   process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3000/api/integrations/google/callback";
 export const GOOGLE_OAUTH_CONFIGURED = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+
+// Same check getAIProvider() (src/lib/ai/index.ts) uses to pick Claude over
+// the mock provider - exposed as a boolean only, so pages like /settings can
+// say whether Anthropic is in use without ever touching the key itself.
+export const ANTHROPIC_CONFIGURED = Boolean(process.env.ANTHROPIC_API_KEY);

@@ -10,6 +10,7 @@ import { derivePlaceholderTitle } from "./titleGen";
 import { findNotesNeedingIndex, indexNote } from "./searchIndex";
 import { syncRevisedFromGoogleDoc } from "./google/docsSync";
 import { GoogleNotConnectedError, isGoogleConnected } from "./google/oauth";
+import { sweepOrphanedPdfSources } from "./pdfSourceCleanup";
 // NOT a static top-level import of pdfPrep.ts (see runRasterizePdfJob below) -
 // this file is reached from src/instrumentation.ts (which starts the job
 // runner at server boot), and a static import here pulls pdf-to-img's whole
@@ -269,6 +270,12 @@ async function runRasterizePdfJob(job: ProcessingJobRow): Promise<void> {
     throw new Error(
       `Rasterized ${rendered.length} page(s) but expected ${pageIds.length} for ${pdfPath}.`
     );
+  }
+
+  // Purged while rendering: nothing left to fill in, just drop the PDF.
+  if (!notesRepo.getById(job.note_id)) {
+    await unlink(pdfPath).catch(() => {});
+    return;
   }
 
   const now = new Date().toISOString();
@@ -560,6 +567,13 @@ export function startJobRunner(): void {
   const requeued = processingJobsRepo.requeueOrphanedRunning(ORPHAN_AFTER_MS);
   if (requeued > 0) {
     console.log(`Requeued ${requeued} processing job(s) left 'running' by a previous process.`);
+  }
+
+  // Raw PDFs no queued/running job needs any more (B3). Best-effort.
+  try {
+    sweepOrphanedPdfSources();
+  } catch (err) {
+    console.error("PDF source cleanup failed (non-fatal):", err);
   }
 
   // Search-index safety net: anything never indexed, edited while indexing

@@ -186,6 +186,17 @@ a:hover {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+/* Settings sits at the bottom of the rail with the toggle right under it;
+   the auto margin moves from the toggle to Settings so the two stay
+   together. */
+.sidebar a.sidebar-settings {
+  margin-top: auto;
+}
+
+.sidebar-settings + .sidebar-toggle {
+  margin-top: 0.4rem;
+}
+
 .sidebar-toggle:hover {
   background: var(--accent-tint);
   color: var(--accent-strong);
@@ -233,13 +244,13 @@ a:hover {
     position: static;
     flex-direction: row;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.25rem;
     padding: 0.85rem 1rem;
     overflow-x: auto;
   }
 
   .sidebar .brand {
-    padding: 0.4rem 0.75rem;
+    padding: 0.4rem 0.5rem;
   }
 
   .sidebar.collapsed .brand-label,
@@ -248,6 +259,26 @@ a:hover {
   }
 
   .sidebar-toggle {
+    display: none;
+  }
+
+  /* In the top bar Settings goes icon-only at the far right, so Capture and
+     Library keep their labels and all links fit a phone-width bar without
+     scrolling it sideways. (Auto top margin reset: in the row layout it
+     would push the link off the shared centre line.) */
+  /* Slightly tighter link padding in the top bar so brand, Capture,
+     Library and the Settings icon fit side by side at 390px. */
+  .sidebar a:not(.brand) {
+    padding: 0.55rem 0.5rem;
+  }
+
+  .sidebar a.sidebar-settings {
+    margin-top: 0;
+    margin-left: auto;
+    padding: 0.55rem;
+  }
+
+  .sidebar a.sidebar-settings .sidebar-label {
     display: none;
   }
 }
@@ -1584,4 +1615,69 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+/* Settings (03-ux-screens.md section 9): sectioned cards, one row per
+   outside service with an On/Off pill reusing the status-dot pattern. */
+.settings-section {
+  margin-bottom: 1.5rem;
+}
+
+.service-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.service-row {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.service-row:last-child {
+  padding-bottom: 0;
+}
+
+.service-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.service-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.15rem 0.65rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--muted);
+}
+
+.service-state .status-dot {
+  background: var(--border-strong);
+}
+
+.service-state.on {
+  background: var(--success-bg);
+  border-color: transparent;
+  color: var(--success);
+}
+
+.service-state.on .status-dot {
+  background: var(--success-dot);
+}
+
+.service-sends,
+.service-why {
+  margin: 0 0 0.25rem;
+}
+
+.service-why {
+  font-size: 0.9rem;
 }
