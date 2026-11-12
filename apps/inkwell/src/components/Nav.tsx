@@ -73,6 +73,19 @@ function LibraryIcon() {
   );
 }
 
+function SettingsIcon() {
+  return (
+    <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 7h10" />
+      <path d="M18 7h2" />
+      <circle cx="16" cy="7" r="2" />
+      <path d="M4 17h2" />
+      <path d="M10 17h10" />
+      <circle cx="8" cy="17" r="2" />
+    </svg>
+  );
+}
+
 function CollapseIcon({ collapsed }: { collapsed: boolean }) {
   return (
     <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -106,6 +119,19 @@ export function Nav() {
         <Link href="/library" className={linkClass("/library")}>
           <LibraryIcon />
           <span className="sidebar-label">Library</span>
+        </Link>
+        {/* Pinned to the bottom of the rail on desktop, just above the
+            collapse toggle - an account-wide place, not a content area, so
+            it stays out of the way of Capture/Library. In the mobile top
+            bar it simply follows Library. */}
+        <Link
+          href="/settings"
+          className={["sidebar-settings", linkClass("/settings")].filter(Boolean).join(" ")}
+          aria-label="Settings"
+          title="Settings"
+        >
+          <SettingsIcon />
+          <span className="sidebar-label">Settings</span>
         </Link>
         <button
           type="button"
