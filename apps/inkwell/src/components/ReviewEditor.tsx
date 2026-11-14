@@ -276,6 +276,9 @@ export function ReviewEditor({
     initialTitleSource === "ai" ? (initialTitle ?? "") : null
   );
   const [reorderingPages, setReorderingPages] = useState(false);
+  const [addingPages, setAddingPages] = useState(false);
+  const [addPagesError, setAddPagesError] = useState<string | null>(null);
+  const addPagesInputRef = useRef<HTMLInputElement | null>(null);
   const [exportingToGoogle, setExportingToGoogle] = useState(false);
   const [googleDocUrl, setGoogleDocUrl] = useState(initialGoogleDocUrl);
   const [googleExportError, setGoogleExportError] = useState<string | null>(null);
@@ -764,6 +767,28 @@ export function ReviewEditor({
       setErrorMessage(err instanceof Error ? err.message : "Save failed.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Adds pages to the end of this note (2026-11-13) - for a chapter written
+  // in instalments. The new pages transcribe in the background like any
+  // upload; the refresh below brings them in as unseeded pages (see
+  // applyIncomingPages), which starts the polling loop, while pages already
+  // on screen - and any unsaved edits on them - are left exactly as they are.
+  async function handleAddPages(files: File[]) {
+    if (files.length === 0) return;
+    setAddingPages(true);
+    setAddPagesError(null);
+    try {
+      const formData = new FormData();
+      for (const file of files) formData.append("images", file);
+      const res = await fetch(`/api/notes/${noteId}/pages`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Couldn't add those pages."));
+      router.refresh();
+    } catch (err) {
+      setAddPagesError(err instanceof Error ? err.message : "Couldn't add those pages.");
+    } finally {
+      setAddingPages(false);
     }
   }
 
@@ -1317,6 +1342,40 @@ export function ReviewEditor({
           </div>
         );
       })}
+
+      <div className="add-pages-block">
+        <input
+          ref={addPagesInputRef}
+          type="file"
+          multiple
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            // Copy out of the live FileList before resetting the input, so
+            // picking the same file again later still fires onChange.
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            void handleAddPages(files);
+          }}
+        />
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() => addPagesInputRef.current?.click()}
+          disabled={addingPages}
+        >
+          {addingPages ? "Adding pages…" : "+ Add pages"}
+        </button>
+        <p className="muted" style={{ margin: 0 }}>
+          Add photos of pages you&apos;ve written since. They go after page {pageStates.length}; the pages above keep
+          their text and edits.
+        </p>
+        {addPagesError && (
+          <p className="toast error" role="alert">
+            {addPagesError}
+          </p>
+        )}
+      </div>
 
       {popoutVisible && popoutPage && popoutRegion && (
         // A real modal again (2026-09-16: now that opening it is a
