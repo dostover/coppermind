@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
-import { notePagesRepo } from "@/lib/db";
+import db, { notePagesRepo } from "@/lib/db";
 import { enqueueNoteTranscribeJob, enqueueRasterizePdfJob } from "@/lib/jobs";
 import { PdfEmptyError, PdfTooLargeError, getPdfPageCount } from "@/lib/pdfPrep";
 
@@ -89,52 +89,70 @@ export async function prepareUploadedFiles(
   }
 }
 
-// Creates one note_pages row per prepared page, numbered from
-// firstPageNumber in order, then enqueues processing. Only pages still
-// 'uploaded' are ever transcribed (see jobs.ts's runBatchTranscribeJob and
+// Creates one note_pages row per prepared page, numbered in order from
+// firstPageNumber, then enqueues processing. Only pages still 'uploaded' are
+// ever transcribed (see jobs.ts's runBatchTranscribeJob and
 // enqueueNoteTranscribeJob), so when this adds pages to an existing note the
 // pages already there are never re-transcribed and their saved text is left
 // alone.
 //
-// Failure partway through does not lose already-saved pages or the note
-// itself (FR-3.8/FR-13.2) - each page is its own durable row, and a page
-// whose job later fails leaves that page in a recoverable 'error' state
-// with a per-page Retry action still available. A PDF's pages are grouped by
-// their shared source file (pdfPath) so one rasterize_pdf job can be
-// enqueued per uploaded PDF, covering exactly the placeholder rows created
-// for it, in order. When any PDF page is pending, the batch transcribe job
-// is enqueued later by jobs.ts's rasterize_pdf stage instead of here.
+// firstPageNumber can be a function, read inside the same synchronous
+// transaction as the inserts (better-sqlite3 is synchronous, so nothing else
+// can run in between). Adding pages passes "the note's last page + 1" this
+// way: two add requests arriving together used to both read the same last
+// page number while their image files were still being written, and the
+// second one failed on UNIQUE (note_id, page_number), losing its photos
+// (found in verification, 2026-11-13). Image files are now written first,
+// then every row is inserted in one transaction, so a failure leaves no
+// half-added pages stuck in 'uploaded' with no job queued - the request
+// fails as a whole and the files it wrote are removed.
+//
+// A PDF's pages are grouped by their shared source file (pdfPath) so one
+// rasterize_pdf job can be enqueued per uploaded PDF, covering exactly the
+// placeholder rows created for it, in order. When any PDF page is pending,
+// the batch transcribe job is enqueued later by jobs.ts's rasterize_pdf
+// stage instead of here. A page whose job later fails stays in a
+// recoverable 'error' state with a per-page Retry (FR-3.8/FR-13.2).
 export async function createPagesForNote(
   noteId: string,
   pages: PreparedPage[],
-  firstPageNumber: number,
+  firstPageNumber: number | (() => number),
   now: string
 ): Promise<string[]> {
-  const createdIds: string[] = [];
-  const pdfPageIdsByPath = new Map<string, string[]>();
-  for (let i = 0; i < pages.length; i++) {
-    const page = pages[i];
+  const planned = pages.map((page) => {
     const pageId = randomUUID();
-    const pageNumber = firstPageNumber + i;
+    const imagePath = page.kind === "image" ? `uploads/${pageId}.${page.ext}` : "";
+    return { page, pageId, imagePath };
+  });
 
-    if (page.kind === "pdfPlaceholder") {
-      notePagesRepo.create({ id: pageId, noteId, pageNumber, imagePath: "", createdAt: now });
-      const ids = pdfPageIdsByPath.get(page.pdfPath) ?? [];
-      ids.push(pageId);
-      pdfPageIdsByPath.set(page.pdfPath, ids);
-      createdIds.push(pageId);
-      continue;
+  const written: string[] = [];
+  try {
+    for (const { page, imagePath } of planned) {
+      if (page.kind !== "image") continue;
+      const absolutePath = path.join(process.cwd(), "public", imagePath);
+      await mkdir(path.dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, page.bytes);
+      written.push(absolutePath);
     }
 
-    const relativePath = `uploads/${pageId}.${page.ext}`;
-    const absolutePath = path.join(process.cwd(), "public", relativePath);
-    await mkdir(path.dirname(absolutePath), { recursive: true });
-    await writeFile(absolutePath, page.bytes);
-
-    notePagesRepo.create({ id: pageId, noteId, pageNumber, imagePath: relativePath, createdAt: now });
-    createdIds.push(pageId);
+    db.transaction(() => {
+      const first = typeof firstPageNumber === "function" ? firstPageNumber() : firstPageNumber;
+      planned.forEach(({ pageId, imagePath }, i) => {
+        notePagesRepo.create({ id: pageId, noteId, pageNumber: first + i, imagePath, createdAt: now });
+      });
+    })();
+  } catch (err) {
+    await Promise.all(written.map((f) => unlink(f).catch(() => {})));
+    throw err;
   }
 
+  const pdfPageIdsByPath = new Map<string, string[]>();
+  for (const { page, pageId } of planned) {
+    if (page.kind !== "pdfPlaceholder") continue;
+    const ids = pdfPageIdsByPath.get(page.pdfPath) ?? [];
+    ids.push(pageId);
+    pdfPageIdsByPath.set(page.pdfPath, ids);
+  }
   if (pdfPageIdsByPath.size > 0) {
     for (const [pdfPath, pageIds] of pdfPageIdsByPath) {
       enqueueRasterizePdfJob(noteId, pdfPath, pageIds);
@@ -142,5 +160,5 @@ export async function createPagesForNote(
   } else {
     enqueueNoteTranscribeJob(noteId);
   }
-  return createdIds;
+  return planned.map((p) => p.pageId);
 }

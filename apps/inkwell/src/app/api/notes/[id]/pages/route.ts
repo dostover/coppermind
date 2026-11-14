@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { notesRepo } from "@/lib/db";
+import { notePagesRepo, notesRepo } from "@/lib/db";
 import { createPagesForNote, prepareUploadedFiles, validateUploadedFiles } from "@/lib/pageUpload";
 
 // Adds pages to the end of an existing note (2026-11-13) - for a chapter
@@ -31,15 +31,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const prepared = await prepareUploadedFiles(files);
   if ("error" in prepared) return NextResponse.json({ error: prepared.error }, { status: 400 });
 
-  // Re-read after the (possibly slow) file preparation above, so the page
-  // numbers follow whatever the note's last page is now.
+  // The last page number is read inside createPagesForNote's insert
+  // transaction, not here, so two add requests arriving together can't both
+  // claim the same page numbers.
   const current = notesRepo.getById(id);
   if (!current || current.deleted_at) {
     return NextResponse.json({ error: "Note not found." }, { status: 404 });
   }
-  const lastPageNumber = current.pages.reduce((max, p) => Math.max(max, p.page_number), 0);
   const now = new Date().toISOString();
-  const pageIds = await createPagesForNote(id, prepared.pages, lastPageNumber + 1, now);
+  const lastPageNumber = () =>
+    notePagesRepo.listForNote(id).reduce((max, p) => Math.max(max, p.page_number), 0);
+  let pageIds: string[];
+  try {
+    pageIds = await createPagesForNote(id, prepared.pages, () => lastPageNumber() + 1, now);
+  } catch (err) {
+    console.error("Adding pages failed:", err);
+    return NextResponse.json({ error: "Couldn't add those pages - nothing was changed. Try again." }, { status: 500 });
+  }
 
   return NextResponse.json({ pageIds }, { status: 201 });
 }
