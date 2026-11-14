@@ -1,0 +1,45 @@
+import { NextRequest, NextResponse } from "next/server";
+import { notesRepo } from "@/lib/db";
+import { createPagesForNote, prepareUploadedFiles, validateUploadedFiles } from "@/lib/pageUpload";
+
+// Adds pages to the end of an existing note (2026-11-13) - for a chapter
+// written in instalments: upload the pages written so far, start correcting
+// them, then add the rest here as they are written. Same multipart body as
+// POST /api/notes/upload (repeated "images" fields, JPEG/PNG/WebP/PDF), in
+// the order sent. New pages are numbered after the note's current last page
+// and go through the normal transcribe job; pages already in the note are
+// never re-transcribed and keep their saved text. Returns the new page ids.
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const note = notesRepo.getById(id);
+  if (!note) return NextResponse.json({ error: "Note not found." }, { status: 404 });
+  if (note.deleted_at) {
+    return NextResponse.json({ error: "This note is in Trash - restore it before adding pages." }, { status: 409 });
+  }
+
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return NextResponse.json({ error: "Send the pages as multipart form data." }, { status: 400 });
+  }
+  const files = formData.getAll("images").filter((f): f is File => f instanceof File);
+
+  const invalid = validateUploadedFiles(files);
+  if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
+
+  const prepared = await prepareUploadedFiles(files);
+  if ("error" in prepared) return NextResponse.json({ error: prepared.error }, { status: 400 });
+
+  // Re-read after the (possibly slow) file preparation above, so the page
+  // numbers follow whatever the note's last page is now.
+  const current = notesRepo.getById(id);
+  if (!current || current.deleted_at) {
+    return NextResponse.json({ error: "Note not found." }, { status: 404 });
+  }
+  const lastPageNumber = current.pages.reduce((max, p) => Math.max(max, p.page_number), 0);
+  const now = new Date().toISOString();
+  const pageIds = await createPagesForNote(id, prepared.pages, lastPageNumber + 1, now);
+
+  return NextResponse.json({ pageIds }, { status: 201 });
+}
