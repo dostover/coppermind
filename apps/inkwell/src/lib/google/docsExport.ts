@@ -63,7 +63,7 @@ async function docsFetch<T>(path: string, accessToken: string, init?: RequestIni
   return (await res.json()) as T;
 }
 
-type StyleKind = "heading" | "bold" | "underline";
+type StyleKind = "bold" | "underline";
 
 interface StyleRange {
   startIndex: number;
@@ -84,8 +84,9 @@ interface StyleRange {
 // the text ("1.", "-", "†", "#"), so adding Docs heading styles or
 // bullet/numbered-list formatting on top duplicated them ("1. 1. ...") and
 // renumbered lines the writer had numbered themselves - the same reason the
-// review screen renders every line as plain text. The one heading this
-// export adds is its own "Page N" label on multi-page notes.
+// review screen renders every line as plain text. Pages are also written
+// one after another with no "Page N" label between them (2026-11-15): the
+// Doc is a draft to rework, and those labels were noise to delete by hand.
 
 // Groups a page's flat segment list into lines exactly the way the review
 // screen does (ReviewEditor.tsx's toLines): a new line starts wherever a
@@ -107,16 +108,14 @@ function groupIntoLines(segments: TranscriptSegment[]): TranscriptSegment[][] {
   return lines;
 }
 
-function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
+// legacyPageLabels rebuilds the text exports wrote before 2026-11-15, which
+// put a "Page N" line above each page of a multi-page note. It's only used to
+// recognise an untouched Doc from that era (see exportBaselineHash) - never
+// for writing a Doc.
+function buildDocBody(note: Note, legacyPageLabels = false): { text: string; styles: StyleRange[] } {
   let text = "";
   const styles: StyleRange[] = [];
   const multiPage = note.pages.length > 1;
-
-  const pushStyled = (segment: string, kind?: StyleKind) => {
-    const start = text.length;
-    text += segment + "\n";
-    if (kind) styles.push({ startIndex: start, endIndex: start + segment.length, kind });
-  };
 
   for (const page of note.pages) {
     // A page that's still transcribing or failed has nothing reviewable yet
@@ -124,7 +123,7 @@ function buildDocBody(note: Note): { text: string; styles: StyleRange[] } {
     // to decide what to render as editable content.
     if (page.status !== "ready_for_review") continue;
 
-    if (multiPage) pushStyled(`Page ${page.page_number}`, "heading");
+    if (legacyPageLabels && multiPage) text += `Page ${page.page_number}\n`;
 
     for (const line of groupIntoLines(withoutCrossedOut(page.segmentsCurrent))) {
       line.forEach((segment, i) => {
@@ -197,7 +196,9 @@ export function draftExportText(note: Note): string {
  *  fingerprint recorded at the last export, or - for notes exported before
  *  fingerprints existed - the note's current draft text. */
 export function exportBaselineHash(note: Note): string {
-  return note.google_doc_export_hash ?? hashDocText(draftExportText(note));
+  // Notes exported before fingerprints existed were also exported with "Page N"
+  // labels, so their untouched Doc still has them.
+  return note.google_doc_export_hash ?? hashDocText(buildDocBody(note, true).text);
 }
 
 export async function fetchDoc(docId: string, accessToken: string): Promise<DocsGetResponse> {
@@ -211,8 +212,6 @@ function stylesToRequests(styles: StyleRange[], baseIndex: number): Record<strin
   return styles.map((s) => {
     const range = { startIndex: baseIndex + s.startIndex, endIndex: baseIndex + s.endIndex };
     switch (s.kind) {
-      case "heading":
-        return { updateParagraphStyle: { range, paragraphStyle: { namedStyleType: "HEADING_2" }, fields: "namedStyleType" } };
       case "bold":
         return { updateTextStyle: { range, textStyle: { bold: true }, fields: "bold" } };
       case "underline":
