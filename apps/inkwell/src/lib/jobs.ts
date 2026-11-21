@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import type { ProcessingJobRow } from "./db";
-import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo, processingJobsRepo, handwritingExamplesRepo } from "./db";
+import { notesRepo, notePagesRepo, tagsRepo, noteTagsRepo, processingJobsRepo, handwritingExamplesRepo, settingsRepo } from "./db";
 import { getAIProvider } from "./ai";
 import { getHandwritingContext, recordHandwritingCorrection, updateHandwritingProfile } from "./handwritingProfile";
 import { CONFIDENCE_THRESHOLD } from "./config";
@@ -87,9 +87,12 @@ const STAGE_EVALUATE_CORRECTIONS = "evaluate_corrections";
 
 // Reads a note's linked Google Doc back in and stores it as the note's
 // revised version when it was reworked there (google/docsSync.ts), then
-// re-indexes the note if that changed. Queued for every linked note at
-// startup and every DOC_SYNC_INTERVAL_MS, and run on demand from the review
-// screen. Note-level; like index_note, a failure only fails the job.
+// re-indexes the note if that changed. Queued for every linked note once at
+// startup and, only when the Settings toggle "Check Google Docs in the
+// background" is on, every DOC_SYNC_INTERVAL_MS. Otherwise Docs are read
+// when it matters: opening the note, asking a question (google/docsRefresh.ts)
+// or "Check Google Docs now". Note-level; like index_note, a failure only
+// fails the job.
 const STAGE_SYNC_GOOGLE_DOC = "sync_google_doc";
 
 export interface PendingCorrection {
@@ -555,9 +558,9 @@ let runnerStarted = false;
 // 02-architecture.md §8) to scale beyond one process.
 const POLL_MS = 1000;
 const ORPHAN_AFTER_MS = 5 * 60 * 1000; // a 'running' job older than this is assumed crashed, not slow
-// How often linked Google Docs are re-read for rework. A handful of cheap
-// read requests per check; frequent enough that search catches up with a
-// writing session within the hour.
+// How often linked Google Docs are re-read for rework when background
+// checks are switched on in Settings (off by default). The timer always
+// runs; each tick reads the setting, so flipping it needs no restart.
 const DOC_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
 export function startJobRunner(): void {
@@ -588,18 +591,19 @@ export function startJobRunner(): void {
     console.error("Search index startup check failed (non-fatal):", err);
   }
 
-  // Rework done in Google Docs since the server last ran, then periodically.
-  // Best-effort, same as the search check above.
-  const queueDocSyncs = () => {
+  // Rework done in Google Docs since the server last ran, then periodically
+  // if background checks are on. Best-effort, same as the search check above.
+  const queueDocSyncs = (reason: "startup" | "timer") => {
     try {
+      if (reason === "timer" && !settingsRepo.getDocsBackgroundCheck()) return;
       const queued = enqueueAllGoogleDocSyncs();
       if (queued > 0) console.log(`Queued Google Docs checks for ${queued} note(s).`);
     } catch (err) {
       console.error("Queueing Google Docs checks failed (non-fatal):", err);
     }
   };
-  queueDocSyncs();
-  setInterval(queueDocSyncs, DOC_SYNC_INTERVAL_MS);
+  queueDocSyncs("startup");
+  setInterval(() => queueDocSyncs("timer"), DOC_SYNC_INTERVAL_MS);
 
   const tick = () => {
     runOneJob()

@@ -955,8 +955,10 @@ export function ReviewEditor({
     }
   }
 
-  // Reads the linked Doc now instead of waiting for the background check.
-  async function handleSyncFromGoogle() {
+  // Reads the linked Doc now. Runs on its own when the note opens (quiet:
+  // a failed read there just leaves the last version shown, without an
+  // error), and from "Check Google Docs now".
+  async function handleSyncFromGoogle({ quiet = false }: { quiet?: boolean } = {}) {
     setSyncingFromGoogle(true);
     setGoogleSyncError(null);
     try {
@@ -969,11 +971,21 @@ export function ReviewEditor({
       setRevisedText(data.revisedText);
       setRevisedSyncedAt(data.revisedSyncedAt);
     } catch (err) {
-      setGoogleSyncError(err instanceof Error ? err.message : "Couldn't read the Google Doc.");
+      if (!quiet) setGoogleSyncError(err instanceof Error ? err.message : "Couldn't read the Google Doc.");
     } finally {
       setSyncingFromGoogle(false);
     }
   }
+
+  // Opening a note reworked in Google Docs reads its Doc, so the revised
+  // version shown here (and used by search) is current. Once per open.
+  const checkedDocOnOpen = useRef(false);
+  useEffect(() => {
+    if (checkedDocOnOpen.current || !googleConnected || !initialGoogleDocUrl) return;
+    checkedDocOnOpen.current = true;
+    void handleSyncFromGoogle({ quiet: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per open, by design
+  }, []);
 
   async function handleDelete() {
     const ok = window.confirm("Move this note to Trash? You can restore it from Trash later.");
@@ -1610,7 +1622,7 @@ export function ReviewEditor({
                 {googleConnected && (
                   <button
                     className="button secondary"
-                    onClick={handleSyncFromGoogle}
+                    onClick={() => handleSyncFromGoogle()}
                     disabled={syncingFromGoogle}
                   >
                     {syncingFromGoogle ? "Checking..." : "Check Google Docs now"}
@@ -1632,7 +1644,7 @@ export function ReviewEditor({
               ) : (
                 <p className="muted">
                   The Doc still matches this draft. Rework it in Google Docs and the new version
-                  will show up here, checked every 15 minutes
+                  will show up here: Inkwell reads the Doc when you open this note or ask a question
                   {revisedSyncedAt ? ` (last checked ${new Date(revisedSyncedAt).toLocaleString()})` : ""}.
                 </p>
               )}
