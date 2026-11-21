@@ -18,6 +18,9 @@ import { visibleText, withoutCrossedOut } from "@/lib/crossedOut";
 // kept both, since the pop-out's close-up needs exactly the same "focused
 // line plus N lines of context" crop.
 const ZOOM_CONTEXT_LINES = 2;
+// Close-up height bounds, in grid rows (see verticalCrop).
+const ZOOM_MIN_ROWS = 1 + 2 * ZOOM_CONTEXT_LINES;
+const ZOOM_MAX_ROWS = 6;
 
 // Turns a segment's already-computed source region (see gridOverlay.ts's
 // regionFromCells - this reuses the exact geometry the .region-highlight box
@@ -39,11 +42,25 @@ const ZOOM_CONTEXT_LINES = 2;
 function verticalCrop(region: SourceRegion | undefined): { lineFraction: number; offsetY: number } {
   if (!region) return { lineFraction: 1, offsetY: 0 };
   const [, y, , h] = region.bbox;
-  const lineHeight = Math.max(h, 1 / GRID_ROWS);
-  const lineFraction = Math.min(1, lineHeight * (1 + 2 * ZOOM_CONTEXT_LINES));
+  const row = 1 / GRID_ROWS;
+  // The segment's own rows plus a row of context above and below, between
+  // ZOOM_MIN_ROWS and ZOOM_MAX_ROWS tall. Until 2026-11-21 this multiplied
+  // the segment's height by 1 + 2 * ZOOM_CONTEXT_LINES: fine for one-row
+  // segments, but segments now usually span two grid rows, which made the
+  // "close-up" 83% of the page - taller than the screen, so only its top
+  // part was visible.
+  const lineFraction = Math.min(1, Math.max(ZOOM_MIN_ROWS * row, Math.min(h + 2 * row, ZOOM_MAX_ROWS * row)));
   const center = y + h / 2;
   const offsetY = Math.min(Math.max(center - lineFraction / 2, 0), 1 - lineFraction);
   return { lineFraction, offsetY };
+}
+
+// The page photo's URL. Versioned by the page's updatedAt because a sideways
+// photo is rewritten upright in place when it's (re)transcribed
+// (pageOrientation.ts) - same path, new picture - and the browser would
+// otherwise keep showing the cached sideways one.
+function photoUrl(page: { imagePath: string; updatedAt: string }): string {
+  return `/${page.imagePath}?v=${encodeURIComponent(page.updatedAt)}`;
 }
 
 // New segment ids only ever need to be unique within this page's array -
@@ -832,6 +849,32 @@ export function ReviewEditor({
     }
   }
 
+  // A page photographed sideways and transcribed before photos were turned
+  // upright automatically: read it again, which turns the photo upright
+  // first (pageOrientation.ts). Replaces the page's transcription.
+  async function handleRereadUpright(pageId: string, pageNumber: number) {
+    const ok = window.confirm(
+      `Turn page ${pageNumber}'s photo upright and read it again? This replaces page ${pageNumber}'s ` +
+        "transcription, including any corrections you made to it."
+    );
+    if (!ok) return;
+    setRetryingPageIds((prev) => new Set(prev).add(pageId));
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/pages/${pageId}/reread`, { method: "POST" });
+      if (!res.ok) throw new Error(await extractErrorMessage(res, "Couldn't read the page again."));
+      router.refresh();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Couldn't read the page again.");
+    } finally {
+      setRetryingPageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(pageId);
+        return next;
+      });
+    }
+  }
+
   async function handleRetryPage(pageId: string) {
     setRetryingPageIds((prev) => new Set(prev).add(pageId));
     setErrorMessage(null);
@@ -1212,14 +1255,14 @@ export function ReviewEditor({
                           genuinely hard word may still need a closer look
                           than any fixed on-page size can give. */}
                       <a
-                        href={`/${page.imagePath}`}
+                        href={photoUrl(page)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="note-image-link"
                         title="Open full-size in a new tab"
                       >
                         <img
-                          src={`/${page.imagePath}`}
+                          src={photoUrl(page)}
                           alt="Uploaded handwritten page"
                           className="note-image"
                           // Both a ref callback and onLoad: a cached image
@@ -1251,6 +1294,24 @@ export function ReviewEditor({
                     </>
                   )}
                 </div>
+
+                {page.status === "ready_for_review" &&
+                  !page.imageRemoved &&
+                  (imgAspects[page.id] ?? 0) > 1 && (
+                    <div className="sideways-notice">
+                      <p className="muted">
+                        This photo is sideways, so its close-ups point at the wrong place.
+                      </p>
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => handleRereadUpright(page.id, page.pageNumber)}
+                        disabled={retryingPageIds.has(page.id)}
+                      >
+                        {retryingPageIds.has(page.id) ? "Starting…" : "Turn upright and read again"}
+                      </button>
+                    </div>
+                  )}
 
                 {page.status === "ready_for_review" && !page.imageRemoved && (
                   <button
@@ -1399,7 +1460,12 @@ export function ReviewEditor({
         // stopPropagation guard since every one of them does the same
         // thing.
         <div className="zoom-popout-backdrop" onClick={() => setPopoutSegmentId(null)}>
-          <div className="zoom-popout">
+          <div
+            className="zoom-popout"
+            // Never taller than the screen: the width shrinks so the crop's
+            // height stays within 85% of the viewport.
+            style={{ width: `min(100%, 1100px, calc(85vh * ${popoutAspect! / popoutCrop.lineFraction}))` }}
+          >
             <button type="button" className="zoom-popout-close" aria-label="Close close-up" onClick={() => setPopoutSegmentId(null)}>
               ×
             </button>
@@ -1408,7 +1474,7 @@ export function ReviewEditor({
               style={{ aspectRatio: `${popoutAspect! / popoutCrop.lineFraction}` }}
             >
               <img
-                src={`/${popoutPage.imagePath}`}
+                src={photoUrl(popoutPage)}
                 alt="Close-up of the highlighted handwriting"
                 className="zoom-popout-image"
                 style={{ transform: `translateY(-${popoutCrop.offsetY * 100}%)` }}

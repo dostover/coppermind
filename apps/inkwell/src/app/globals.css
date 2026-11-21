@@ -768,6 +768,18 @@ main {
    this went back to being a normal modal - a full-viewport backdrop that
    closes on any click, no pointer-events tricks needed - since there's no
    longer an everyday click for it to conflict with. */
+.sideways-notice {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+
+.sideways-notice p {
+  margin: 0 0 0.5rem;
+}
+
 .zoom-popout-backdrop {
   position: fixed;
   inset: 0;

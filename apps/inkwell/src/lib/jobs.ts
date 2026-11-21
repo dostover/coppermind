@@ -11,6 +11,7 @@ import { findNotesNeedingIndex, indexNote } from "./searchIndex";
 import { syncRevisedFromGoogleDoc } from "./google/docsSync";
 import { GoogleNotConnectedError, isGoogleConnected } from "./google/oauth";
 import { sweepOrphanedPdfSources } from "./pdfSourceCleanup";
+import { makeStoredPageUpright } from "./pageOrientation";
 // NOT a static top-level import of pdfPrep.ts (see runRasterizePdfJob below) -
 // this file is reached from src/instrumentation.ts (which starts the job
 // runner at server boot), and a static import here pulls pdf-to-img's whole
@@ -147,6 +148,17 @@ async function maybeSuggestTags(noteId: string, provider: ReturnType<typeof getA
   }
 }
 
+// Sideways photos are turned upright (and rewritten) before transcription,
+// so the AI's grid regions match the photo the review screen shows. Never
+// blocks transcription: on failure the photo is transcribed as it is.
+async function uprightBeforeTranscribing(imagePath: string, provider: ReturnType<typeof getAIProvider>): Promise<void> {
+  try {
+    if (await makeStoredPageUpright(imagePath, provider)) console.log(`Turned ${imagePath} upright.`);
+  } catch (err) {
+    console.error(`Checking which way up ${imagePath} is failed (non-fatal):`, err);
+  }
+}
+
 // Runs the transcribe stage for one page: real work moved out of the upload/
 // retry route handlers (which now just enqueue a job and return immediately)
 // so both entry points share one implementation. Throws on failure - the
@@ -168,6 +180,7 @@ async function runTranscribeJob(pageId: string): Promise<void> {
   }
 
   const provider = getAIProvider();
+  await uprightBeforeTranscribing(page.image_path, provider);
   const result = await provider.transcribe({
     imagePath: page.image_path,
     handwritingContext: getHandwritingContext(),
@@ -202,6 +215,7 @@ async function runBatchTranscribeJob(noteId: string): Promise<void> {
   if (pending.length === 0) return; // nothing left for this job to do
 
   const provider = getAIProvider();
+  for (const p of pending) await uprightBeforeTranscribing(p.image_path, provider);
   const result = await provider.transcribeBatch({
     pages: pending.map((p) => ({ pageId: p.id, imagePath: p.image_path })),
     handwritingContext: getHandwritingContext(),
