@@ -138,8 +138,11 @@ rework - Inkwell keeps the handwritten draft as is and reads the Doc back:
   since Inkwell last exported it, re-export is refused; you can open the Doc
   or export a separate copy of the draft (the note stays linked to the Doc
   you're reworking).
-- **The reworked text comes back in.** Inkwell checks linked Docs at startup,
-  every 15 minutes, and when you click **Check Google Docs now** on a note.
+- **The reworked text comes back in.** Inkwell reads a linked Doc when you
+  open its note, reads any Doc not checked in the last two minutes before
+  answering a question, checks them all once at startup, and reads one on
+  demand with **Check Google Docs now**. To also check every 15 minutes, turn
+  on **Check Google Docs in the background** in Settings (off by default).
   A Doc whose words differ from the export becomes the note's *revised*
   version, shown on the note, searched alongside the draft (results say
   "Revised in Docs"), and used instead of the draft when you ask a question.

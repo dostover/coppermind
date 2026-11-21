@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { notesRepo } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import { retrieveChunksForQuestion } from "@/lib/search";
+import { refreshLinkedDocsBeforeUse } from "@/lib/google/docsRefresh";
 
 // Ask a question of the whole library (FR-10.4): retrieve the most relevant
 // passages (search.ts), then have the AI answer from those passages only,
@@ -37,6 +38,11 @@ export async function POST(req: NextRequest) {
   if (question.length > MAX_QUESTION_LENGTH) {
     return NextResponse.json({ error: "That question is too long." }, { status: 400 });
   }
+
+  // Answers prefer a note's reworked Google Docs text, so read any linked
+  // Doc not checked in the last couple of minutes first. Time-boxed and
+  // best-effort: on a slow or failed read, answer from what was last read.
+  await refreshLinkedDocsBeforeUse();
 
   const chunks = await retrieveChunksForQuestion(question);
   const sources = chunks.flatMap((chunk, i) => {

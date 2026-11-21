@@ -1,5 +1,7 @@
 import { ANTHROPIC_CONFIGURED, GOOGLE_OAUTH_CONFIGURED } from "@/lib/config";
 import { SEMANTIC_SEARCH_CONFIGURED } from "@/lib/embeddings";
+import { settingsRepo } from "@/lib/db";
+import { DocsBackgroundToggle } from "@/components/DocsBackgroundToggle";
 
 // Read env-derived flags at request time, not once at build time - adding a
 // key to .env.local and restarting must flip a service to On here.
@@ -47,6 +49,13 @@ export default function SettingsPage() {
   return (
     <div className="settings-page">
       <h1>Settings</h1>
+
+      {GOOGLE_OAUTH_CONFIGURED && (
+        <section className="card settings-section" aria-labelledby="docs-heading">
+          <h2 id="docs-heading">Google Docs</h2>
+          <DocsBackgroundToggle initialEnabled={settingsRepo.getDocsBackgroundCheck()} />
+        </section>
+      )}
 
       <section className="card settings-section" aria-labelledby="about-heading">
         <h2 id="about-heading">About: what Inkwell sends to outside services</h2>

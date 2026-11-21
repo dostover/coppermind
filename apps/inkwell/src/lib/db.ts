@@ -155,6 +155,14 @@ db.exec(`
     connected_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+
+  -- App preferences the writer changes on the Settings screen, as simple
+  -- key/value pairs (values are JSON). A missing key means the default.
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `);
 
 // Search index (RAG): each note's current transcription, split into
@@ -1161,6 +1169,28 @@ export interface ProcessingJobRow {
   created_at: string;
   payload: string | null;
 }
+
+// Settings screen preferences (app_settings). Typed getters/setters per
+// setting rather than a generic bag, so every default lives here.
+const DOCS_BACKGROUND_CHECK_KEY = "google_docs_background_check";
+
+export const settingsRepo = {
+  // Off by default: linked Docs are read when it matters (opening the note,
+  // asking a question, "Check Google Docs now"), not on a clock.
+  getDocsBackgroundCheck(): boolean {
+    const row = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get(DOCS_BACKGROUND_CHECK_KEY) as
+      | { value: string }
+      | undefined;
+    return row ? JSON.parse(row.value) === true : false;
+  },
+
+  setDocsBackgroundCheck(enabled: boolean, now: string): void {
+    db.prepare(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    ).run(DOCS_BACKGROUND_CHECK_KEY, JSON.stringify(enabled), now);
+  },
+};
 
 export const processingJobsRepo = {
   // pageId is nullable: a per-page job (STAGE_TRANSCRIBE, used for retry)

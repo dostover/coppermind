@@ -1623,6 +1623,15 @@ main {
   margin-bottom: 1.5rem;
 }
 
+.settings-toggle label {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-toggle .muted {
+  margin: 0.4rem 0 0;
+}
+
 .service-list {
   list-style: none;
   margin: 1rem 0 0;
