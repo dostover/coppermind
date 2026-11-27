@@ -245,6 +245,30 @@ type RawSegment = Omit<TranscribeOutput["segments"][number], "id" | "reviewRequi
 
 // Shared by transcribe() and transcribeBatch(): turns one page's raw
 // tool-call output into the app's TranscribeOutput shape.
+// The model's structured reply can come back incomplete: if it runs out of
+// output room (stop_reason "max_tokens") partway through the tool call, the
+// tool input arrives missing fields - e.g. no "pages" array at all - and the
+// old code crashed with "Cannot read properties of undefined (reading
+// 'length')". These helpers turn that into a checked, explainable case.
+// Occasionally a nested array also arrives JSON-encoded as a string, so
+// that's accepted too.
+function readArrayField<T>(input: unknown, field: string): T[] | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  let value = (input as Record<string, unknown>)[field];
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  return Array.isArray(value) ? (value as T[]) : undefined;
+}
+
+function wasCutOff(message: Anthropic.Message): boolean {
+  return message.stop_reason === "max_tokens";
+}
+
 function finishPageOutput(
   raw: { segments: RawSegment[]; pageLevelNotes?: string[] },
   confidenceThreshold: number
@@ -344,7 +368,7 @@ export class ClaudeAIProvider implements AIProvider {
 
     const message = await this.client.messages.create({
       model: MODEL,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: TRANSCRIPTION_QUALITY_INSTRUCTIONS + " " + hintText,
       tools: [TRANSCRIBE_TOOL],
       tool_choice: { type: "tool", name: "record_transcription" },
@@ -371,12 +395,17 @@ export class ClaudeAIProvider implements AIProvider {
       throw new Error("Claude did not return a structured transcription (no tool_use block).");
     }
 
-    const raw = toolUse.input as {
-      segments: RawSegment[];
-      pageLevelNotes?: string[];
-    };
+    const segments = readArrayField<RawSegment>(toolUse.input, "segments");
+    if (!segments) {
+      throw new Error(
+        wasCutOff(message)
+          ? "This page has more writing than fits in one transcription reply. Try again, or split the photo into two."
+          : "Claude's transcription reply was incomplete (no segments). Try again."
+      );
+    }
+    const pageLevelNotes = readArrayField<string>(toolUse.input, "pageLevelNotes");
 
-    return finishPageOutput(raw, input.confidenceThreshold);
+    return finishPageOutput({ segments, pageLevelNotes }, input.confidenceThreshold);
   }
 
   // Combines every page of a note into ONE API call instead of one per page
@@ -442,27 +471,45 @@ export class ClaudeAIProvider implements AIProvider {
     });
 
     const toolUse = message.content.find((block) => block.type === "tool_use");
-    if (!toolUse || toolUse.type !== "tool_use") {
-      throw new Error("Claude did not return a structured transcription batch (no tool_use block).");
-    }
+    const rawPages =
+      toolUse && toolUse.type === "tool_use" ? readArrayField<unknown>(toolUse.input, "pages") : undefined;
+    const pageSegments = rawPages?.map((pageRaw) => readArrayField<RawSegment>(pageRaw, "segments"));
 
-    const raw = toolUse.input as {
-      pages: Array<{
-        segments: RawSegment[];
-        pageLevelNotes?: string[];
-      }>;
-    };
-
-    if (raw.pages.length !== prepared.length) {
-      throw new Error(
-        `Claude returned ${raw.pages.length} page result(s) for a ${prepared.length}-image batch request.`
-      );
+    // The combined reply is only usable if it's complete: one entry per
+    // image, each with its segments. A long note can run out of output room
+    // partway through (wasCutOff) and come back with pages missing. Rather
+    // than failing the whole note, fall back to one call per page - each
+    // page then gets its own full output budget. Costs a little more (the
+    // system prompt is resent per page) but only on notes that need it.
+    if (
+      wasCutOff(message) ||
+      !rawPages ||
+      !pageSegments ||
+      rawPages.length !== prepared.length ||
+      pageSegments.some((segs) => !segs)
+    ) {
+      const pages = [];
+      for (const p of input.pages) {
+        const result = await this.transcribe({
+          imagePath: p.imagePath,
+          handwritingContext: input.handwritingContext,
+          confidenceThreshold: input.confidenceThreshold,
+        });
+        pages.push({ pageId: p.pageId, ...result });
+      }
+      return { pages };
     }
 
     return {
-      pages: raw.pages.map((pageRaw, i) => ({
+      pages: rawPages.map((pageRaw, i) => ({
         pageId: prepared[i].pageId,
-        ...finishPageOutput(pageRaw, input.confidenceThreshold),
+        ...finishPageOutput(
+          {
+            segments: pageSegments[i] as RawSegment[],
+            pageLevelNotes: readArrayField<string>(pageRaw, "pageLevelNotes"),
+          },
+          input.confidenceThreshold
+        ),
       })),
     };
   }
