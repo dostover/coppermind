@@ -586,6 +586,15 @@ export function startJobRunner(): void {
     console.log(`Requeued ${requeued} processing job(s) left 'running' by a previous process.`);
   }
 
+  // Recompute the handwriting profile from the full correction history, so a
+  // change to how corrections are learned applies to past corrections too
+  // (not only after the next save). Cheap: pure computation over the rows.
+  try {
+    updateHandwritingProfile();
+  } catch (err) {
+    console.error("Handwriting profile refresh failed (non-fatal):", err);
+  }
+
   // Raw PDFs no queued/running job needs any more (B3). Best-effort.
   try {
     sweepOrphanedPdfSources();
