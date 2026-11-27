@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { GRID_COLS, GRID_ROWS, cellId, regionFromCells } from "./gridOverlay";
 import type {
+  DetectRotationInput,
+  DetectRotationOutput,
   AIProvider,
   AnswerQuestionInput,
   AnswerQuestionOutput,
@@ -261,6 +263,14 @@ export class MockAIProvider implements AIProvider {
   // DEMO_PAGES, since the transcription text this actually runs against is
   // whatever the mock transcriber produced - which may still be the
   // misread form early on.
+  // No vision here, so it can't tell which way is up. MOCK_PAGE_ROTATION lets
+  // a test exercise the rotate-and-rewrite path (pageOrientation.ts) anyway.
+  async detectPageRotation(_input: DetectRotationInput): Promise<DetectRotationOutput> {
+    const configured = Number(process.env.MOCK_PAGE_ROTATION ?? 0);
+    const rotation = ([0, 90, 180, 270] as const).find((r) => r === configured) ?? 0;
+    return { rotation };
+  }
+
   async generateTags(input: GenerateTagsInput): Promise<GenerateTagsOutput> {
     const KEYWORDS: { tag: string; variants: string[] }[] = [
       { tag: "Rilldale", variants: ["rilldale", "rilldaie"] },

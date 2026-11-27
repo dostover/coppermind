@@ -189,8 +189,22 @@ export interface AnswerQuestionOutput {
   confidence: "high" | "low" | "not_found";
 }
 
+// Which way up a photographed page is (pageOrientation.ts). Only asked for
+// photos that are wider than tall after EXIF orientation - a notebook page
+// is portrait, so a landscape photo was taken with the phone sideways.
+export interface DetectRotationInput {
+  /** A small JPEG of the photo, already EXIF-oriented. */
+  image: Buffer;
+}
+
+export interface DetectRotationOutput {
+  /** Degrees to turn the photo clockwise so its writing reads upright. */
+  rotation: 0 | 90 | 180 | 270;
+}
+
 export interface AIProvider {
   transcribe(input: TranscribeInput): Promise<TranscribeOutput>;
+  detectPageRotation(input: DetectRotationInput): Promise<DetectRotationOutput>;
   transcribeBatch(input: TranscribeBatchInput): Promise<TranscribeBatchOutput>;
   evaluateHandwritingCorrection(input: LearningEvalInput): Promise<LearningEvalOutput>;
   generateTags(input: GenerateTagsInput): Promise<GenerateTagsOutput>;

@@ -4,6 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prepareImageForVision } from "@/lib/imagePrep";
 import { GRID_COLS, GRID_ROWS, overlayGrid, regionFromCells } from "./gridOverlay";
 import type {
+  DetectRotationInput,
+  DetectRotationOutput,
   AIProvider,
   AnswerQuestionInput,
   AnswerQuestionOutput,
@@ -308,6 +310,27 @@ const ANSWER_TOOL: Anthropic.Tool = {
   },
 };
 
+// Which way up a sideways page photo is (pageOrientation.ts). A small
+// thumbnail and the light model: it only has to tell which edge the writing
+// starts from, not read it.
+const ROTATION_TOOL: Anthropic.Tool = {
+  name: "record_rotation",
+  description: "Record how far to turn the photo clockwise so the handwriting reads upright, left to right.",
+  input_schema: {
+    type: "object",
+    properties: {
+      rotation: {
+        type: "integer",
+        enum: [0, 90, 180, 270],
+        description:
+          "Degrees clockwise to rotate the image so the lines of writing run left to right with the tops " +
+          "of the letters up. 0 if it already reads upright.",
+      },
+    },
+    required: ["rotation"],
+  },
+};
+
 export class ClaudeAIProvider implements AIProvider {
   private client: Anthropic;
 
@@ -442,6 +465,28 @@ export class ClaudeAIProvider implements AIProvider {
         ...finishPageOutput(pageRaw, input.confidenceThreshold),
       })),
     };
+  }
+
+  async detectPageRotation(input: DetectRotationInput): Promise<DetectRotationOutput> {
+    const message = await this.client.messages.create({
+      model: LIGHT_MODEL,
+      max_tokens: 128,
+      tools: [ROTATION_TOOL],
+      tool_choice: { type: "tool", name: "record_rotation" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: input.image.toString("base64") } },
+            { type: "text", text: "This is a photo of a handwritten notebook page. Which way up is it?" },
+          ],
+        },
+      ],
+    });
+    const toolUse = message.content.find((block) => block.type === "tool_use");
+    const raw = toolUse && toolUse.type === "tool_use" ? (toolUse.input as { rotation?: unknown }).rotation : 0;
+    const rotation = ([0, 90, 180, 270] as const).find((r) => r === raw) ?? 0;
+    return { rotation };
   }
 
   async evaluateHandwritingCorrection(input: LearningEvalInput): Promise<LearningEvalOutput> {
